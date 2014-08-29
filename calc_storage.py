@@ -222,7 +222,7 @@ def truncate_data():
 	name='profile_corrected.df'
 	frequency_mins_out=30
 	lag=0 #(calculated lag in number of time steps - system displacement / flow rate)
-	bin_size=6 # Number of samples over which to average (defaults to 2 if 0 entered)
+	bin_size=8 # Number of samples over which to average (defaults to 2 if 0 entered)
 		
 	# Import data
 	df=pd.read_pickle(os.path.join(path,name))
