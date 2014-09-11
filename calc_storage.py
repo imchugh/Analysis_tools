@@ -1,4 +1,3 @@
-import netCDF4
 import os
 import numpy as np
 import pandas as pd
@@ -11,7 +10,7 @@ import pdb
 def stitch_data():
 
 	# Set parameters
-	path='C:\Offline_data_processing\Data\Whroo\Profile data'
+	path='/home/imchugh/Processing/Whroo/Profile data'
 	name1='Whroo_profile_IRGA_avg.dat.backup'
 	name2='Whroo_profile_IRGA_avg.dat'
 	name_ancillary1='Whroo_profile_Slow_avg.dat.backup'
@@ -77,7 +76,7 @@ def stitch_data():
 def correctCO2_data():
 	
 	# Set parameters
-	path='C:\Offline_data_processing\Data\Whroo\Profile data'
+	path='/home/imchugh/Processing/Whroo/Profile data'
 	name='profile_uncorrected.df'
 	baddata_dates=['2013-08-24','2013-10-29']
 	badcoeff_dates=['2012-06-28 11:00:00','2012-10-17 12:50:00']
@@ -162,7 +161,7 @@ def correctCO2_data():
 def correctTa_data():
 	
 	# Set parameters
-	path='C:\Offline_data_processing\Data\Whroo\Profile data'
+	path='/home/imchugh/Processing/Whroo/Profile data'
 	name='slow_profile_uncorrected.df'
 	baddata1m_dates=['2012-10-20','2013-04-10']
 	baddata8m_dates=['2013-07-18','2014-05-08']
@@ -218,12 +217,12 @@ def correctTa_data():
 def truncate_data():
 	
 	# Set parameters
-	path='C:\Offline_data_processing\Data\Whroo\Profile data'
+	path='/home/imchugh/Processing/Whroo/Profile data'
 	name='profile_corrected.df'
 	frequency_mins_out=30
 	lag=0 #(calculated lag in number of time steps - system displacement / flow rate)
-	bin_size=8 # Number of samples over which to average (defaults to 2 if 0 entered)
-		
+	bin_size=10 # Number of samples over which to average (defaults to 2 if 0 entered)
+	
 	# Import data
 	df=pd.read_pickle(os.path.join(path,name))
 	
@@ -235,10 +234,10 @@ def truncate_data():
 	arr=np.unique(temp_df['mins']) # Array containing all unique values of mins
 	select_arr=np.arange(bin_size)-((bin_size-2)/2)+lag # Create window of indices to acceptable values
 	valid_arr=arr[select_arr] # Create window of acceptable values
-		
+	
 	# Create boolean to retrieve central timestamp for each averaged observation
 	temp_df['valid_tstmp']=temp_df['mins']==0
-	
+
 	# Create boolean to retrieve appropriate data for averaging interval (bin size)
 	if select_arr[0]<0:
 		temp_df['valid_cases']=(temp_df['mins']>=valid_arr[0])|(temp_df['mins']<=valid_arr[-1])
@@ -272,15 +271,14 @@ def truncate_data():
 	
 	# Create the output df and do the averaging
 	out_df_index=temp_df['Timestamp'][temp_df['valid_tstmp']]
-	out_df=df.groupby('grp').mean()
+     	out_df=df.groupby('grp').mean()
 	out_df.index=out_df_index
-	
 	out_df.to_pickle(os.path.join(path,'profile_truncated.df'))
 	
 def process_data():
 
 	# Set parameters
-	path='C:\Offline_data_processing\Data\Whroo\Profile data'
+	path='/home/imchugh/Processing/Whroo/Profile data'
 	name='profile_truncated.df'
 	name_ancillary='slow_profile_corrected.df'
 	r=8.3143 # Universal gas constant
@@ -325,23 +323,23 @@ def process_data():
 			df[Ta_layer_list[i]]=(ancillary_df[Ta_cols_list[i]]+ancillary_df[Ta_cols_list[i-1]])/2
 				
 	# Create the output df
-	CO2_dels_list=['del_'+str(i) for i in CO2_cols_list]
+	CO2_dels_list=['del_'+str(i) for i in CO2_layer_list]
 	CO2_stor_list=['CO2_stor_'+str(i)+'m' for i in layer_thickness]
 	outdf_cols_list=CO2_dels_list+CO2_stor_list+Ta_layer_list+['ps']
 	out_df=pd.DataFrame(index=df.index[1:],columns=outdf_cols_list)
 	out_df[Ta_layer_list]=df[Ta_layer_list][1:]
 	out_df['ps']=ancillary_df['ps'][1:]
-	
+ 
 	# Calculate CO2 time deltas for each layer
 	for i in xrange(len(CO2_cols_list)):
 		out_df[CO2_dels_list[i]]=df[CO2_layer_list[i]]-df[CO2_layer_list[i]].shift()
 		
 	# Do the storage calculation for each layer, scaling to umol m-2 s-1 over layer thickness
-	for i in xrange(len(CO2_cols_list)):	
-		out_df[CO2_stor_list[i]]=(out_df['ps'][1:]*10**2/(r*(K_con+out_df[Ta_layer_list[i]][1:]))*
-								  out_df[CO2_dels_list[i]]/(frequency_mins_out*60)*layer_thickness[i])
-	
-	# Sum all heights and remove sums where any height was nan
+	for i in xrange(len(CO2_cols_list)):
+           out_df[CO2_stor_list[i]]=(out_df['ps']*10**2/(r*(K_con+out_df[Ta_layer_list[i]]))*
+                                     out_df[CO2_dels_list[i]]/(frequency_mins_out*60)*layer_thickness[i])
+
+	#Sum all heights and remove sums where any height was nan
 	out_df['CO2_stor_tot']=out_df[CO2_stor_list].sum(axis=1)
 	out_df['CO2_stor_tot']=out_df['CO2_stor_tot'][~np.isnan(out_df[CO2_stor_list]).any(axis=1)]
 				
