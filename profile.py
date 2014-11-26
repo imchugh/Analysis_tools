@@ -21,19 +21,16 @@ def profile_run():
     cf=ConfigObj(cf_path_name)
     work_file_path=os.path.join(cf['files']['input_path'],cf['files']['input_file'])
     d=io.xlsx_to_pandas(work_file_path)
-    print work_file_path
-    return d
-
-def truncate_profile_data():
     
-    frequency_mins_out=30
-    lag=0 #(calculated lag in number of time steps - system displacement / flow rate)
-    bin_size=6 # Number of samples over which to average (defaults to 2 if 0 entered)
+    CO2_df=d[cf['variables']['sheets']['CO2']]
+    freq_CO2=pd.infer_freq(CO2_df)
+    df_trunc=truncate_profile_data(CO2_df, int(cf['options']['freq']))
+    
+    return df_trunc
 
-    print 'Truncating data to '+str(frequency_mins_out)+' frequency:'
-		
-    # Import data
-    df=pd.read_pickle(os.path.join(path,profile_name))
+def truncate_profile_data(CO2_df, freq, lag, bin_size):
+    
+    print 'Truncating data to '+str(freq)+' frequency:'
 	
     # Find the time window to be used given the lag and bin size settings above
     temp_df=pd.DataFrame(index=df.index)
