@@ -6,7 +6,9 @@ Created on Mon Sep 15 09:29:43 2014
 """
 
 import Tkinter, tkFileDialog
+from configobj import ConfigObj
 import netCDF4
+import numpy as np
 import pandas as pd
 import datetime as dt
 import xlrd
@@ -19,6 +21,10 @@ def file_select_dialog():
     file_in = tkFileDialog.askopenfilename(initialdir='')
     root.destroy()
     return file_in
+
+def read_config_file(file_in):
+    
+    return ConfigObj(file_in)
 
 def OzFluxQCnc_to_pandasDF(file_in):
     
@@ -49,7 +55,7 @@ def OzFluxQCnc_to_pandasDF(file_in):
 #    XL_CELL_BOOLEAN: 4 (INT)
 #    XL_CELL_ERROR: 5 (INTERNAL EXCEL CODE)
 #    XL_CELL_BLANK: 6 (EMPTY STRING)
-def xlsx_to_pandas(file_in,header=True,header_row=0,skiprows_after_header=0,date_col=True,reindex=True):
+def xlsx_to_pandas(file_in,header=True,header_row=0,skiprows_after_header=0,date_col=True,regularise=True,worksheets=[]):
 
     xl_book=xlrd.open_workbook(file_in)
     
@@ -58,18 +64,21 @@ def xlsx_to_pandas(file_in,header=True,header_row=0,skiprows_after_header=0,date
     start_date='1900-01-01'
     end_date='2100-01-01'    
     
-    for sheet_name in xl_book.sheet_names():
+    if not worksheets:
+        get_sheets=xl_book.sheet_names()
+    else:
+        get_sheets=worksheets
+    
+    for sheet_name in get_sheets:
 
         sheet=xl_book.sheet_by_name(sheet_name)
-        
-        print sheet_name        
-        
+       
         rows=sheet.nrows
         cols=sheet.ncols
         
         if rows==0: print 'Could not find any valid rows'
         if cols==0: print 'Could not find any valid columns'
-        
+
         if rows!=0 and cols!=0:
             if header==True:
                 if date_col==True:
@@ -83,8 +92,10 @@ def xlsx_to_pandas(file_in,header=True,header_row=0,skiprows_after_header=0,date
                             print 'Error in sheet '+sheet_name+' at row '+str(i)+'; missing or invalid datetime stamp! Skipping...'
                     df=pd.DataFrame(columns=column_names[1:],index=index)
                     for i in range(1,cols):
-                        df[column_names[i]]=sheet.col_values(i)[header_row+skiprows_after_header+1:]
-                    if reindex==True:
+                        arr=np.array(sheet.col_values(i)[header_row+skiprows_after_header+1:])
+                        arr[arr=='']='-9999'
+                        df[column_names[i]]=arr.astype(np.float)
+                    if regularise==True:
                         df_freq=pd.infer_freq(df.index)
                         df_ind=pd.date_range(start=df.index[0],end=df.index[-1],freq=df_freq)
                         df=df.reindex(df_ind)
