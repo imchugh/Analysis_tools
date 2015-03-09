@@ -35,18 +35,43 @@ def line_plot(df,d):
     plt.legend(loc='lower left')
     plt.show()
 
+def line_plot_w_points(df,d):
+    
+    fig=plt.figure(figsize=(16,8))
+    fig.patch.set_facecolor('white')
+    mark_count=0
+    for i,var in enumerate(df.columns):
+        if not var in d['as_markers']:
+            plt.plot(df.index,df[var],label=var,color=d['colors'][i],linewidth=1)
+        else:
+            plt.plot(df.index,df[var],marker=d['marker_style'][mark_count],label=var,color=d['colors'][i],markersize=10)
+            mark_count +=1
+    plt.title(d['title'],fontsize=24)
+    plt.xlabel(d['xlab'],fontsize=18)
+    plt.ylabel(d['ylab'],fontsize=18)
+    plt.tick_params(labelsize=14)
+    plt.xticks(rotation=45)
+    for i in d['vert_line']:
+            plt.axvline(x=i,color='black',linestyle='dotted',linewidth=0.5)
+    for i in d['hor_line']:
+            plt.axhline(y=i,color='black',linestyle='-')
+    plt.legend(loc='lower right')
+    plt.show()    
+
 def one_ax_dict_set():
     """
     Returns dictionary required to run the two y axis algorithm above
     """
     d={}
 
-    d['title']='Whroo vs Riggs NEE\n'
+    d['title']='Whroo LAI (LAI2200, Canon hemi and MODIS)\n'
     d['xlab']='\nDate'
-    d['ylab']='$NEE\/(gC\/m^{-2}d^{-1})$'
-    d['colors']=['blue','red']
-    d['vert_line']=['2012-04-01','2012-07-01','2012-10-01','2013-01-01','2013-04-01','2013-07-01','2013-10-01']
-    d['hor_line']=[0]
+    d['ylab']= '$LAI\/(m^{2}m^{-2})$'# '$NEE\/(gC\/m^{-2}d^{-1})$'
+    d['colors'] = ['b','r','g','m','c','y','k'] # ['b','g','r','c','m','y','k'] # matplotlib default
+    d['as_markers']=['Lai_Canon_hemi','Lai_LAI2000']
+    d['marker_style']=['o','s']
+    d['vert_line']=[]#['2012-04-01','2012-07-01','2012-10-01','2013-01-01','2013-04-01','2013-07-01','2013-10-01']
+    d['hor_line']=[]
     
     return d
 
