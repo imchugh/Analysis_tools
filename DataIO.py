@@ -38,7 +38,7 @@ def OzFluxQCnc_to_pandasDF(file_in):
         ndims=len(nc_obj.variables[i].shape)
         if ndims==3:
             d_data[i]=nc_obj.variables[i][:,0,0]
-        elif ndims==1:    
+        elif ndims==1:
             d_data[i]=nc_obj.variables[i][:]
     nc_obj.close()
     
