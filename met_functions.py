@@ -23,8 +23,10 @@ def q_to_e(q,p=101.3):
     returns vapour pressure in kPa"""
     return (q*28.97)/28.97*p
    
-# Estimate clear sky radiation and optimise k for site obs data
-def Insol_calc(date_time,k,GMT_zone,latit,longit):
+# Estimate clear sky radiation
+def Insol_calc(date_time,k,GMT_zone,latit,longit,ALT_m):
+    
+    d = {}    
     
     DOY = date_time.timetuple().tm_yday
     hour = date_time.hour
@@ -43,29 +45,18 @@ def Insol_calc(date_time,k,GMT_zone,latit,longit):
     zenith = np.arccos(np.sin(np.radians(latit)) * np.sin(decl) + 
              np.cos(np.radians(latit)) * np.cos(decl) * np.cos(hr_angle))
    
-    pdb.set_trace()    
-    
+    # Check if night - if yes, return   
     if zenith > np.pi/2:
         return 0             
  
-  
     # Calculate optical air mass term for all valid Z 
-    array_m=(np.exp(-1*ALT_m/8343.5)/(np.cos(array_z_msk)+0.15*
-            (np.degrees(90-array_z_msk)+3.855)**-1.253)) # Wunderlich (1972)           
+    m = (np.exp(-1 * ALT_m / 8343.5) / (np.cos(zenith) + 0.15 *
+         (np.degrees(90 - zenith) + 3.855)** -1.253)) # Wunderlich (1972)
+   
+    # Instantaneous clear sky surface radiation in Wm-2
+    Kdown = TOArad * np.exp(-k * m) * np.cos (zenith)
     
-    # Instantaneous clear sky surface radiation in Wm-2 for each minute of the day
-    array_Kdown_clr_mins=array_TOArad.reshape(len(array_TOArad),1)*np.exp(-k*array_m)*np.cos(array_z_msk)
+    d['solar_noon'] = 
     
-    # Aggregate one-minute instantaneous clear sky rad to period average
-    array_Kdown_clr_hr=np.empty([len(DOY),1440/rec_length])
-    for i in xrange(len(DOY)):
-        array_temp=array_Kdown_clr_mins[i][:].reshape(1440/rec_length,rec_length) # Temporary bins
-        array_Kdown_clr_hr[i][:]=np.ma.mean(array_temp,axis=1) # Average bin content  
-    
-    # Aggregate to daily
-    array_Kdown_clr_daily=(array_Kdown_clr_hr*(rec_length*60.0/10**6)).sum(axis=1)
-        
-    if boolOutput==False:
-        return array_Kdown_clr_daily # Result for optimisation
-    else:
-        return array_Kdown_clr_daily,array_Kdown_clr_hr    # Output of final data
+    pdb.set_trace()    
+  
