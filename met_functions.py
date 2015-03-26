@@ -6,7 +6,6 @@ Created on Mon Nov  3 11:16:19 2014
 """
 import pdb
 import numpy as np
-import datetime as dt
 
 # Humidity functions and conversions
 def es(t=20):
@@ -24,14 +23,33 @@ def q_to_e(q,p=101.3):
     return (q*28.97)/28.97*p
    
 # Estimate clear sky radiation
-def Insol_calc(date_time,k,GMT_zone,latit,longit,ALT_m):
+def Insol_calc(date_time, GMT_zone, latit, longit, ALT_m, k):
+    """
+    Pass array of date_times in datetime format, GMT_zone in decimal hours, 
+    lat and long in decimal degrees and altitude in m; extinction coefficient 
+    is unitless, with range 0-1 \n
+    Currently does not include solar disk diameter or refraction corrections
     
-    d = {}    
+    Refs:
     
-    DOY = date_time.timetuple().tm_yday
-    hour = date_time.hour
-    minute = date_time.minute
+    DiLaura, D. L. (1984), IES Calculation Procedures Committee Recommended
+    practice for the calculation of daylight availability, J. Illuminating
+    Engineering Soc. of North America, 13(4), 381-392.
     
+    Duffie, J. and W. Beckman (1980). Solar Engineering of Thermal Processes. 
+    New York, John Wiley and Sons.
+    
+    Wunderlich, W. (1972), Heat and Mass Transfer between a Water Surface
+    and the Atmosphere, Report No 14, Report Publication No. 0-6803,
+    Water Resources Research Laboratory, TennesseeValleyAuthority,Division
+    of Water Control Planning, Engineering Laboratory, Norris, TN.
+    """
+    
+    # Get date and time components
+    DOY = np.array([i.timetuple().tm_yday for i in date_time])
+    hour = np.array([i.hour for i in date_time])
+    minute = np.array([i.minute for i in date_time])
+
     # Calculate equation of time correction, solar noon, declination and TOA radiation
     EqofTime = 0.17 * np.sin(4 * np.pi * (DOY-80) / 373) - 0.129 * np.sin(2 * np.pi *(DOY-8) / 355) # DiLaura (1984)
     solar_noon = 12 + (GMT_zone * 15.0 - longit) / 360 * 24 - EqofTime # Me
@@ -44,19 +62,22 @@ def Insol_calc(date_time,k,GMT_zone,latit,longit,ALT_m):
     # Calculate solar zenith angle
     zenith = np.arccos(np.sin(np.radians(latit)) * np.sin(decl) + 
              np.cos(np.radians(latit)) * np.cos(decl) * np.cos(hr_angle))
-   
-    # Check if night - if yes, return   
-    if zenith > np.pi/2:
-        return 0             
- 
-    # Calculate optical air mass term for all valid Z 
-    m = (np.exp(-1 * ALT_m / 8343.5) / (np.cos(zenith) + 0.15 *
+    zenith_msk = np.ma.masked_greater_equal(zenith, np.pi / 2) # Mask night values
+
+    # Calculate optical air mass term
+    m = (np.exp(-1 * ALT_m / 8343.5) / (np.cos(zenith_msk) + 0.15 *
          (np.degrees(90 - zenith) + 3.855)** -1.253)) # Wunderlich (1972)
-   
-    # Instantaneous clear sky surface radiation in Wm-2
-    Kdown = TOArad * np.exp(-k * m) * np.cos (zenith)
+    # Instantaneous clear sky surface radiation in Wm-2 (Beer-Lambert variant)
+    Kdown = (TOArad * np.exp(-k * m) * np.cos (zenith_msk)).filled(0)
+    m = m.filled(np.nan)
     
-    d['solar_noon'] = 
+    d = {}    
+    d['solar_noon'] = solar_noon
+    d['declination'] = decl
+    d['TOA_radiation'] = TOArad
+    d['zenith'] = zenith
+    d['optical_air_mass'] = m
+    d['Kdown'] = Kdown
     
-    pdb.set_trace()    
+    return d
   
