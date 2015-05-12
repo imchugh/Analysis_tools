@@ -14,13 +14,18 @@ def es(t=20):
     
 def VPD(e,t):
     """Pass temperature (t) in celsius and vapour pressure (e) in kPa;
-    returns vapour pressure deficit in kPa"""    
+       returns vapour pressure deficit in kPa"""    
     return 0.611*10**(7.5*t/(237.3+t)) - e
     
-def q_to_e(q,p=101.3):
+def q_to_e(q, p=101.3):
     """Pass specific humidity (q) in g.kg-1, barometric pressure (p) in kpa;
-    returns vapour pressure in kPa"""
+       returns vapour pressure in kPa"""
     return (q*28.97)/28.97*p
+    
+def Ah_to_e(Ah, Ta):
+    """Pass absolute humidity (Ah) in g.m-3 and air temperature in celsius;
+       returns vapour pressure in kPa"""
+    return Ah / 18 * (Ta + 273.15) * 8.3143 / 10**3
    
 # Estimate clear sky radiation
 def Insol_calc(date_time, GMT_zone, latit, longit, ALT_m, k):

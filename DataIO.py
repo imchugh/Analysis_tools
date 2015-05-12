@@ -14,8 +14,8 @@ import datetime as dt
 import xlrd
 import pdb
 
-# Prompt user for configuration file and get it, then return file path
 def file_select_dialog():
+    """ Open a file select dialog to get path for file retrieval"""
     
     root = Tkinter.Tk(); root.withdraw()
     file_in = tkFileDialog.askopenfilename(initialdir='')
@@ -29,7 +29,7 @@ def read_config_file(file_in):
 def OzFluxQCnc_to_pandasDF(file_in):
     
     nc_obj=netCDF4.Dataset(file_in)
-    
+
     dates_list=[dt.datetime(*xlrd.xldate_as_tuple(elem,0)) for elem in nc_obj.variables['xlDateTime']]    
     
     d_data={}
@@ -42,8 +42,10 @@ def OzFluxQCnc_to_pandasDF(file_in):
             d_data[i]=nc_obj.variables[i][:]
     nc_obj.close()
     
-    df=pd.DataFrame(d_data,index=dates_list)    
+    df=pd.DataFrame(d_data,index=dates_list)        
     
+    df.replace(-9999, np.nan, inplace = True)    
+
     return df, d_attr
 
 # Multiple sheets are returned as dictionary (pandas dataframe) objects
@@ -102,6 +104,4 @@ def xlsx_to_pandas(file_in,header=True,header_row=0,skiprows_after_header=0,date
                     d[sheet_name]=df
         else:
             d[sheet_name]=pd.DataFrame()
-    return d
-
-        
+    return d          
