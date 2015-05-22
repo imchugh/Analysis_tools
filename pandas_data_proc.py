@@ -27,7 +27,7 @@ def daily_mean(df,expr):
         cols=[df.name]
     else:
         cols=df.columns
-    daily_df=df.groupby([lambda x: x.year, lambda y: y.dayofyear]).std()*eval(expr)
+    daily_df=df.groupby([lambda x: x.year, lambda y: y.dayofyear]).mean()*eval(expr)
     daily_df=daily_df.reset_index()
     daily_df.index=(daily_df['level_0'].apply(lambda x: dt.datetime(x,1,1))+
                     daily_df['level_1'].apply(lambda x: dt.timedelta(int(x)-1)))
