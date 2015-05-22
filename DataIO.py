@@ -48,15 +48,10 @@ def OzFluxQCnc_to_pandasDF(file_in):
 
     return df, d_attr
 
-# Multiple sheets are returned as dictionary (pandas dataframe) objects
-# Note XLRD cell type codes:
-#    XL_CELL_EMPTY: 0
-#    XL_CELL_TEXT: 1 (STRING)
-#    XL_CELL_NUMBER: 2 (FLOAT)
-#    XL_CELL_DATE: 3 (FLOAT)
-#    XL_CELL_BOOLEAN: 4 (INT)
-#    XL_CELL_ERROR: 5 (INTERNAL EXCEL CODE)
-#    XL_CELL_BLANK: 6 (EMPTY STRING)
+def pandas_to_nc(file_in, file_out):
+    
+    return
+
 def xlsx_to_pandas(file_in,header=True,header_row=0,skiprows_after_header=0,date_col=True,regularise=True,worksheets=[]):
 
     xl_book=xlrd.open_workbook(file_in)
@@ -105,3 +100,13 @@ def xlsx_to_pandas(file_in,header=True,header_row=0,skiprows_after_header=0,date
         else:
             d[sheet_name]=pd.DataFrame()
     return d          
+    
+    # Multiple sheets are returned as dictionary (pandas dataframe) objects
+    # Note XLRD cell type codes:
+    #    XL_CELL_EMPTY: 0
+    #    XL_CELL_TEXT: 1 (STRING)
+    #    XL_CELL_NUMBER: 2 (FLOAT)
+    #    XL_CELL_DATE: 3 (FLOAT)
+    #    XL_CELL_BOOLEAN: 4 (INT)
+    #    XL_CELL_ERROR: 5 (INTERNAL EXCEL CODE)
+    #    XL_CELL_BLANK: 6 (EMPTY STRING)
