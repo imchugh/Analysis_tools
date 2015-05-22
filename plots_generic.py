@@ -11,7 +11,55 @@ Pass dictionary containing the following parameters:
 """
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pdb
+
+def line_plot_test(x_series, y_series, **options):
+    """
+    Produces single axis plot
+    
+    Keyword args are:
+    'colors': specify color cycle (otherwise default) (list of color strings)
+    'xlim': limits of x axis (list of ints)
+    'ylim': limits of y axis (list of ints)
+    'title': plot title (string)
+    'vert_line'
+    """
+    
+    fig = plt.figure(figsize=(16,8))
+    fig.patch.set_facecolor('white')
+    ax = plt.gca()
+    
+    # Set colors
+    if 'colors' in options.keys():
+        ax.set_color_cycle(options['colors'])
+    
+    # Plot    
+    plt.plot(x_series,y_series)
+    
+    # Set limits
+    if 'xlim' in options.keys():
+        ax.set_xlim(options['xlim'])
+    if 'ylim' in options.keys():
+        ax.set_xlim(options['ylim'])
+
+    # Set labels    
+    if 'title' in options.keys():    
+        plt.title(options['title'],fontsize=24)
+    if 'xlab' in options.keys():    
+        plt.xlabel(options['xlab'],fontsize=18)
+    if 'ylab' in options.keys():    
+        plt.xlabel(options['ylab'],fontsize=18)    
+
+    # Set lines
+
+#    if 'vert_line' in options.keys():
+        
+    plt.tick_params(labelsize=14)
+    plt.xticks(rotation=45)
+    plt.legend(loc='lower left')
+    plt.show()
+
 
 def line_plot(df,d):
     fig=plt.figure(figsize=(16,8))
@@ -64,14 +112,14 @@ def one_ax_dict_set():
     """
     d={}
 
-    d['title']='Whroo LAI (LAI2200, Canon hemi and MODIS)\n'
+    d['title']='Whroo Cumulative NEE'
     d['xlab']='\nDate'
-    d['ylab']= '$LAI\/(m^{2}m^{-2})$'# '$NEE\/(gC\/m^{-2}d^{-1})$'
+    d['ylab']= '$NEE\/(gC\/m^{-2}d^{-1})$'
     d['colors'] = ['b','r','g','m','c','y','k'] # ['b','g','r','c','m','y','k'] # matplotlib default
-    d['as_markers']=['Lai_Canon_hemi','Lai_LAI2000']
+    # d['as_markers']=['Lai_Canon_hemi','Lai_LAI2000']
     d['marker_style']=['o','s']
     d['vert_line']=[]#['2012-04-01','2012-07-01','2012-10-01','2013-01-01','2013-04-01','2013-07-01','2013-10-01']
-    d['hor_line']=[]
+    d['hor_line']=[0]
     
     return d
 
