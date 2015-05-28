@@ -130,7 +130,7 @@ def get_data(file_in,variables_dict,options_dict):
             d[met_sheet]['T_default']=20
             variables_dict[met_sheet]['T_vars']='[T_default]'
         if 'p_vars' in defaults_list:
-            d[met_sheet]['p_default']=1013
+            d[met_sheet]['p_default']=101.3
             variables_dict[met_sheet]['p_vars']='[p_default]'
     
     # Drop the 'met' item from the variables dictionary if present
@@ -328,7 +328,8 @@ def process_data(df,levels_dict,layers_dict,freq_dict,paths_dict):
         source_var_Ta=layers_dict['Ta'][layers[i]]
         source_var_p=layers_dict['p'][layers[i]]
         target_var=C_molar_dens_list[i]
-        df[C_molar_dens_list[i]]=(df[source_var_p]*10**2/(r*(K_con+df[source_var_Ta]))* # Gas molar density
+        pdb.set_trace()
+        df[C_molar_dens_list[i]]=(df[source_var_p]*10**3/(r*(K_con+df[source_var_Ta]))* # Gas molar density
                                   df[source_var_Cc]* # C molar density
                                   layers[i]) # Volume-integrated C molar density
         
