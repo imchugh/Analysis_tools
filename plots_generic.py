@@ -16,48 +16,87 @@ import pdb
 
 def line_plot_test(x_series, y_series, **options):
     """
-    Produces single axis plot
-    
+    Produces single axis plot;
+    x_series must be a 1D array (or pandas series)
+    y_series may be 2D, but first dimension must match x_series
     Keyword args are:
     'colors': specify color cycle (otherwise default) (list of color strings)
     'xlim': limits of x axis (list of ints)
     'ylim': limits of y axis (list of ints)
     'title': plot title (string)
-    'vert_line'
+    'vert_line': vertical lines on plot
+    'hor_line': horizontal lines on plot
+    'var_labels': variable names to be shown in legend
+    'line_style': line styles to be used (must be of same length as # of series)
+    'line_width': line widths to be used (must be of same length as # of series)
     """
     
+    # Instantiate plot
     fig = plt.figure(figsize=(16,8))
     fig.patch.set_facecolor('white')
     ax = plt.gca()
-    
+
     # Set colors
     if 'colors' in options.keys():
         ax.set_color_cycle(options['colors'])
     
-    # Plot    
-    plt.plot(x_series,y_series)
-    
+    # Generate and plot line objects
+    lineObjects = plt.plot(x_series,y_series)
+
     # Set limits
     if 'xlim' in options.keys():
         ax.set_xlim(options['xlim'])
     if 'ylim' in options.keys():
-        ax.set_xlim(options['ylim'])
+        ax.set_ylim(options['ylim'])
 
-    # Set labels    
+    # Set title layout    
     if 'title' in options.keys():    
-        plt.title(options['title'],fontsize=24)
-    if 'xlab' in options.keys():    
-        plt.xlabel(options['xlab'],fontsize=18)
-    if 'ylab' in options.keys():    
-        plt.xlabel(options['ylab'],fontsize=18)    
-
-    # Set lines
-
-#    if 'vert_line' in options.keys():
+        plt.title(options['title'],fontsize=30,y=1.03)
         
-    plt.tick_params(labelsize=14)
-    plt.xticks(rotation=45)
-    plt.legend(loc='lower left')
+    # Set axis labels        
+    if 'xlab' in options.keys():
+        ax.set_xlabel(options['xlab'], fontsize = 30)
+        ax.xaxis.set_label_coords(0.5, -0.065)
+    if 'ylab' in options.keys():
+        ax.set_ylabel(options['ylab'], fontsize = 30)
+        ax.yaxis.set_label_coords(-0.06, 0.5)
+        
+    # Set reference lines
+    if 'vert_line' in options.keys():
+        for i in options['vert_line']:
+            plt.axvline(x=i,color='black',linestyle='dotted',linewidth=0.5)
+    if 'hor_line' in options.keys():
+        for i in options['hor_line']:
+            plt.axhline(y=i,color='black',linestyle='-')
+
+    # Set line properties
+    if 'line_style' in options.keys():
+        if len(options['line_style']) != len(lineObjects):
+            print 'Wrong number of line styles supplied for assignment to series'
+        else:
+            for i, line in enumerate(lineObjects):
+                plt.setp(line, linestyle = options['line_style'][i])
+
+    if 'line_width' in options.keys():
+        if len(options['line_width']) != len(lineObjects):
+            print 'Wrong number of line widths supplied for assignment to series'
+        else:
+            for i, line in enumerate(lineObjects):
+                plt.setp(line, linewidth = options['line_width'][i])
+
+    # Set legend
+    if 'var_labels' in options.keys():
+        if len(options['var_labels']) != len(lineObjects):
+            print 'Wrong number of variable labels supplied for assignment to series'
+        else:
+            for i, line in enumerate(lineObjects):
+                plt.setp(line, label = options['var_labels'][i])
+    plt.legend(fontsize=16, loc = [0.9,0.6], frameon=False)
+    
+    # Other    
+    plt.tick_params(labelsize=18)
+    plt.xticks(rotation=0)
+    plt.tight_layout()
     plt.show()
 
 
