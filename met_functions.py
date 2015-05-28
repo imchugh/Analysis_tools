@@ -26,6 +26,12 @@ def Ah_to_e(Ah, Ta):
     """Pass absolute humidity (Ah) in g.m-3 and air temperature in celsius;
        returns vapour pressure in kPa"""
     return Ah / 18 * (Ta + 273.15) * 8.3143 / 10**3
+
+def Lv(t):
+    """Pass temperature in C; returns Lv in J g-1;
+    note: valid for range -25 to +40C"""
+   
+    return 2500.8 -2.36 * t + 0.0016 * t**2 - 0.00006 * t**3  
    
 # Estimate clear sky radiation
 def Insol_calc(date_time, GMT_zone, latit, longit, ALT_m, k):
