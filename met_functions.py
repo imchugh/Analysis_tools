@@ -57,6 +57,10 @@ def Insol_calc(date_time, GMT_zone, latit, longit, ALT_m, k):
     """
     
     # Get date and time components
+    try: 
+        iter(date_time)
+    except:
+        date_time = [date_time]
     DOY = np.array([i.timetuple().tm_yday for i in date_time])
     hour = np.array([i.hour for i in date_time])
     minute = np.array([i.minute for i in date_time])
