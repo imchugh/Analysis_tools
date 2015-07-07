@@ -277,3 +277,172 @@ def calc_plot_solar():
     daily_df = daily_df.join(new_df)
 
     return daily_df
+    
+    data_min = 364
+
+def plot_BOM_rainfall():
+
+    avg_int = [1971,2000]
+    
+    years_compare = [2011,2012,2013,2014]
+    
+    plot_compare = ['climatol']
+    
+    exclude_noQC = False
+    
+    df = pd.read_csv('/home/imchugh/Analysis/Whroo/Data/External/BOM_088109_precip_all.csv')
+    
+    df.index = [dt.datetime(df.loc[i, 'Year'],df.loc[i, 'Month'],df.loc[i, 'Day'])
+                for i in df.index]
+    
+    cols_list = df.columns
+    
+    # Remove data which has not been QC'd
+    if exclude_noQC:
+        df[cols_list[-3]] = np.where(df[cols_list[-1]]=='Y', df[cols_list[-3]], np.nan)
+    
+    # Calculate amount of missing data and monthly sums for each requested year
+    yrs_data_list = []
+    for yr in years_compare:
+    
+        num_days_obs = df.loc[str(yr), cols_list[-3]].groupby(lambda x: x.year).count().loc[yr]
+        num_days_yr = 365 if yr % 4 != 0 else 366
+        print str(num_days_yr - num_days_obs) + ' days of observations missing from year ' + str(yr)
+        temp_df = df.loc[str(yr), cols_list[-3]].groupby(lambda x: x.month).sum()
+        temp_df.name = str(yr)
+        yrs_data_list.append(temp_df)
+    
+    monthly_df = pd.concat(yrs_data_list, axis = 1)
+    
+    
+    # Calculate standard climatology for site using specified averaging interval
+    climatol = df.loc[str(avg_int[0]): str(avg_int[1]), cols_list[-3]].groupby([lambda x: x.dayofyear]).mean()
+    climatol.index = [(dt.datetime(2010,1,1) + dt.timedelta(i - 1)).month for i in climatol.index]
+    monthly_df['climatol_' + str(avg_int[0]) + '-' + str(avg_int[1])] = climatol.groupby(level=0).sum().round(1)
+    
+    # Calculate mean for all available years    
+    num_records = df[cols_list[-3]].groupby([lambda x: x.year]).count()
+    full_years = list(num_records[num_records >= data_min].index)
+    full_df = pd.concat([df.loc[str(i)] for i in full_years])
+    monthly_df['all_avail_data'] = (full_df[cols_list[-3]].groupby([lambda x: x.month]).sum() / len(full_years)).round(1)
+    
+    print 'The following years had required minimum number of days of obs (' + str(data_min) + '):'
+    print full_years
+    
+    # Do plotting
+    fig = plt.figure(figsize=(12,8))
+    fig.patch.set_facecolor('white')
+    
+    width = 0.3
+    x_series = np.linspace(0.5, 11.5, 12)
+    var_name = [i for i in df.columns if 'climatol in i'] if plot_compare == 'climatol' else 'all_avail_data'
+    LT_annual_mean = monthly_df[var_name].sum().round(1)
+    
+    for i, yr in enumerate(years_compare):
+        
+        sbplt = i + 1 + 220
+        ax = fig.add_subplot(sbplt)
+        
+        annual_mean = monthly_df[str(yr)].sum().round(1)
+        
+        LT = plt.bar(x_series, monthly_df[var_name], width, color = '0.2')
+        annual = plt.bar(x_series + width, monthly_df[str(yr)], width, color = '0.6')
+        
+        ax.set_title(str(yr), fontsize=20, y=1.03)
+        
+        if i == 0:
+            ax.legend((LT, annual), ('1971-2000', 'year'), bbox_to_anchor=(0.5, 0.99), 
+                      frameon=False, fontsize=14)
+        if i == 0:
+            ax.text(7, 159, 'Climatology: ' + str(LT_annual_mean) + 'mm', fontsize=14)
+            ax.text(7, 143, 'Annual: ' + str(annual_mean) + 'mm', fontsize=14)
+        else:
+            ax.text(8, 159, 'Annual: ' + str(annual_mean) + 'mm', fontsize=14)        
+                
+        ax.set_xlim([0, 12.6])
+        ax.set_xticks(x_series+width)
+        if i > 1:    
+            ax.set_xticklabels(['J','F','M','A','M','J','J','A','S','O','N','D'])
+        else:
+            ax.xaxis.set_visible(False)
+        ax.set_ylim([0, 180])    
+        if i%2 == 0:    
+            ax.set_ylabel('Rainfall (mm)', fontsize=16)
+    
+        plt.setp(ax.get_xticklabels(), fontsize=14)
+        plt.setp(ax.get_yticklabels(), fontsize=12)
+        
+    #plt.figlegend((LT, annual), ('1971-2000', 'year'), 'center', ncol=2, frameon = False, fontsize=10)
+    plt.tight_layout()
+    plt.savefig('/home/imchugh/Analysis/Whroo/Images/mangalore_annual_precip_2011_2014.png', bbox_inches='tight')
+    
+def plot_LAI():
+
+    file_in = '/media/Data/Dropbox/Data_sites non flux/MODIS_cutout_timeseries/' \
+               'Whroo.MOD15A2.Lai_1km.dat'
+    
+    hemi_LAI_dict = {'2012-04-04': 0.82,
+                     '2012-07-17': 0.90,
+                     '2012-10-16': 0.97,
+                     '2013-01-29': 0.94,
+                     '2013-04-24': 0.82,
+    #                 '2013-11-28': 0.52,
+                     '2014-07-23': 1.01,
+                     '2015-03-18': 1.01,
+    #                 '2015-06-25': 0.57
+                     }
+                     
+    LAI2000_dict = {'2012-07-17': 0.90,
+                    '2012-10-16': 0.97,
+                    '2013-11-28': 0.81,
+                    '2014-05-02': 0.95,
+                    '2014-06-11': 0.96,
+    #                '2014-07-23': 0.85,
+    #                '2014-11-12': 0.71
+                    }
+    
+    df = pd.read_csv(file_in, skiprows = [0, 2, 3], parse_dates = ['TIMESTAMP'], 
+                     index_col = 'TIMESTAMP', na_values=-9999)
+                     
+    short_df = df.loc['2012':].copy()
+    short_df[short_df.N_AVE < 9] = np.nan
+    new_index = pd.date_range(short_df.index[0], short_df.index[-1], freq = 'D')
+    short_df = short_df.reindex(new_index)
+    short_df['Lai_1km'] = short_df['Lai_1km'].interpolate()
+    short_df['Lai_1km_run'] = pd.rolling_mean(short_df.Lai_1km, 30, center = True)
+    short_df['hemi_cam'] = np.nan
+    
+    for date in hemi_LAI_dict.keys():
+        short_df.loc[date, 'hemi_cam'] = hemi_LAI_dict[date]
+    short_df['LAI2000'] = np.nan
+    for date in LAI2000_dict.keys():
+        short_df.loc[date, 'LAI2000'] = LAI2000_dict[date]
+    
+    fig = plt.figure(figsize = (16, 8))
+    fig.patch.set_facecolor('white')
+    
+    plt.plot(short_df.index, short_df.Lai_1km, color = '0.6', linewidth = 0.5)
+    plt.plot(short_df.index, short_df.Lai_1km_run, color = '0.4', linewidth = 2, 
+             label = 'MOD15A2')
+    plt.plot(short_df.index, short_df.hemi_cam, 'o', mew = 1.5,
+             markersize = 12, markeredgecolor = 'black', markerfacecolor = 'none',
+             label = 'DHP')
+    plt.plot(short_df.index, short_df.LAI2000, '^', markeredgewidth = 1.5,
+             markersize = 12, markeredgecolor = 'black', markerfacecolor = 'none',
+             label = 'LAI2200')
+    plt.xlim(['2012-01-01',short_df.index[-1]])
+    plt.tick_params(axis = 'y', labelsize = 14)
+    plt.tick_params(axis = 'x', labelsize = 14)
+    plt.xlabel('$Date$', fontsize = 22, labelpad = 10)
+    plt.ylabel('$LAI\/(m^{2}m^{-2})$', fontsize = 22, labelpad = 10)
+    plt.xticks(['2012-01-01', '2012-04-01', '2012-07-01', '2012-10-01',
+                '2013-01-01', '2013-04-01', '2013-07-01', '2013-10-01',
+                '2014-01-01', '2014-04-01', '2014-07-01', '2014-10-01',
+                '2015-01-01', '2015-04-01'], ['Jan', 'Apr', 'Jul', 'Oct',
+                                              'Jan', 'Apr', 'Jul', 'Oct',
+                                              'Jan', 'Apr', 'Jul', 'Oct',
+                                              'Jan', 'Apr'])
+    [plt.axvline(line, color = 'black') for line in ['2013-01-01', '2014-01-01', '2015-01-01']]
+    plt.legend(fontsize = 14, loc = [0.03, 0.8], numpoints = 1)
+    plt.tight_layout()
+    plt.show()        
