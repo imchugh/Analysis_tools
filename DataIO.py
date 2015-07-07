@@ -26,7 +26,7 @@ def read_config_file(file_in):
     
     return ConfigObj(file_in)
 
-def OzFluxQCnc_to_pandasDF(file_in):
+def OzFluxQCnc_to_pandasDF(file_in, var_list = None):
     
     nc_obj=netCDF4.Dataset(file_in)
 
@@ -34,15 +34,19 @@ def OzFluxQCnc_to_pandasDF(file_in):
     
     d_data={}
     d_attr=nc_obj.__dict__
-    for i in nc_obj.variables.keys():
-        ndims=len(nc_obj.variables[i].shape)
-        if ndims==3:
-            d_data[i]=nc_obj.variables[i][:,0,0]
-        elif ndims==1:
-            d_data[i]=nc_obj.variables[i][:]
+
+    if var_list == None: 
+        var_list = nc_obj.variables.keys()
+
+    for var in var_list:
+        ndims = len(nc_obj.variables[var].shape)
+        if ndims == 3:
+            d_data[var] = nc_obj.variables[var][:, 0, 0]
+        elif ndims == 1:
+            d_data[var] = nc_obj.variables[var][:]
     nc_obj.close()
     
-    df=pd.DataFrame(d_data,index=dates_list)        
+    df = pd.DataFrame(d_data, index = dates_list)
     
     df.replace(-9999, np.nan, inplace = True)    
 
