@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pdb
 
-def line_plot_test(x_series, y_series, **options):
+def line_plot(x_series, y_series, **options):
     """
     Produces single axis plot;
     x_series must be a 1D array (or pandas series)
@@ -91,7 +91,7 @@ def line_plot_test(x_series, y_series, **options):
         else:
             for i, line in enumerate(lineObjects):
                 plt.setp(line, label = options['var_labels'][i])
-    plt.legend(fontsize=16, loc = [0.9,0.6], frameon=False)
+            plt.legend(fontsize=16, loc = [0.9,0.7], frameon=False)
     
     # Other    
     plt.tick_params(labelsize=18)
@@ -99,8 +99,113 @@ def line_plot_test(x_series, y_series, **options):
     plt.tight_layout()
     plt.show()
 
+def bar_plot(x_series, y_series, **options):
+    
+    fig = plt.figure()
+    fig.patch.set_facecolor('white')
+    ax = fig.add_subplot(111)
+    
+    # Set bar width
+    if 'width' in options.keys():
+        width = options['width']
+    else:
+        width = 0.3
+    
+    # Create list for bar object containers
+    barObjects = []
+    
+    # Do the plotting
+    if len(np.shape(y_series)) != 1:
+        num_series = np.shape(y_series)[1]
+        for n in range(num_series):
+            barObjects.append(ax.bar(x_series + width * n, y_series[:, n], width))
+    else:
+        barObjects.append(ax.bar(x_series + width, y_series, width))
 
-def line_plot(df,d):
+    # Set title layout    
+    if 'title' in options.keys():    
+        ax.set_title(options['title'],fontsize=30,y=1.03)
+        
+    # Set axis labels        
+    if 'xlab' in options.keys():
+        ax.set_xlabel(options['xlab'], fontsize = 20)
+        ax.xaxis.set_label_coords(0.5, -0.065)
+    if 'ylab' in options.keys():
+        ax.set_ylabel(options['ylab'], fontsize = 20)
+        ax.yaxis.set_label_coords(-0.07, 0.5)
+
+    # Set category labels
+    if 'xticklabs' in options.keys():
+        ax.set_xticks(x_series + width)
+        ax.set_xticklabels(options['xticklabs'], fontsize = 12)
+
+    # Set bar properties    
+    if 'color' in options.keys():
+        for n, series in enumerate(barObjects):
+            for obj in series:
+                obj.set_color(options['color'][n])
+    
+    # Set legend
+    if 'var_labels' in options.keys():
+        if len(options['var_labels']) != len(barObjects):
+            print 'Wrong number of variable labels supplied for assignment to series'
+        else:
+            for i, series in enumerate(barObjects):
+                series.set_label(options['var_labels'][i])
+            plt.legend(fontsize=12, loc = [0.8,0.7], frameon=False)
+    
+    plt.show()
+
+def bar_example(x_series, y_series, **options):
+
+    fig = plt.figure()
+    fig.patch.set_facecolor('white')
+    ax = fig.add_subplot(111)
+    
+    N = 5
+    menMeans = y_series[:,0]
+    menStd =   (2, 3, 4, 1, 2)
+    
+    width = 0.35       # the width of the bars
+    
+    if len(np.shape(y_series)) != 1:
+        num_series = np.shape(y_series)[1]
+        for n in range(num_series):
+            barObjects.append(ax.bar(x_series + width * n, y_series[:, n]))
+    else:
+        barObjects.append(ax.bar(x_series + width, y_series))    
+    
+#    pdb.set_trace()
+    rects1 = ax.bar(x_series, menMeans, width, color='r', yerr=menStd)
+
+    
+    
+    womenMeans = y_series[:,1]
+    womenStd =   (3, 5, 2, 3, 3)
+    rects2 = ax.bar(x_series+width, womenMeans, width, color='y', yerr=womenStd)
+    
+    # add some text for labels, title and axes ticks
+    ax.set_ylabel('Scores')
+    ax.set_title('Scores by group and gender')
+    ax.set_xticks(x_series+width)
+    ax.set_xticklabels( ('G1', 'G2', 'G3', 'G4', 'G5') )
+    
+    ax.legend( (rects1[0], rects2[0]), ('Men', 'Women') )
+    
+    def autolabel(rects):
+        # attach some text labels
+        for rect in rects:
+            height = rect.get_height()
+            ax.text(rect.get_x()+rect.get_width()/2., 1.05*height, '%d'%int(height),
+                    ha='center', va='bottom')
+    
+    autolabel(rects1)
+    autolabel(rects2)
+    
+    plt.show()
+
+
+def line_plot_b(df,d):
     fig=plt.figure(figsize=(16,8))
     fig.patch.set_facecolor('white')
     for i,var in enumerate(df.columns):
