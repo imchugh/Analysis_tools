@@ -26,7 +26,7 @@ def do_plot(wd, ws):
     ax.bar(wd, ws, normed=True, opening=0.8, edgecolor='white')
     set_legend(ax)
 
-def do_contour_plot(wd, ws)    :
+def do_contour_plot(wd, ws):
     ax = new_axes()
     ax.contourf(wd, ws, bins = np.arange(0,8,1), cmap=cm.hot)
     set_legend(ax)
