@@ -73,7 +73,8 @@ def get_CO2_data():
  
     # Set locations   
     path = '/media/Data/Dropbox/Data/Logger data downloads 30minute/Whroo'
-    files = ['Whroo_profile_IRGA_avg.dat.backup' , 'Whroo_profile_IRGA_avg.dat']
+    files = ['Whroo_profile_IRGA_avg_1.dat' , 'Whroo_profile_IRGA_avg_2.dat',
+             'Whroo_profile_IRGA_avg_3.dat', 'Whroo_profile_IRGA_avg.dat']
 
     # Set var names
     CO2_names = ['Cc_LI840_1m', 'Cc_LI840_2m', 'Cc_LI840_4m', 'Cc_LI840_8m', 
@@ -107,13 +108,15 @@ def get_CO2_data():
     # concatenate everything
     df = pd.concat([df_dict[files[0]].loc[:last_1min_date].resample('2T'),
                     df_dict[files[0]].loc[first_2min_date:],
-                    df_dict[files[1]]])
+                    df_dict[files[1]],
+                    df_dict[files[2]],
+                    df_dict[files[3]]])
     df.drop_duplicates(inplace = True)
+    df.sort_index(inplace = True)
     df = df.reindex(pd.date_range(df.index[0], df.index[-1], freq = '2T'))
 
     # Correct the data for 1) no data; 2) wrong instrument scaling coefficients; 
     # 3) range checks; 4) reversed label assignment of CO2
-    # 1, 2 and 3 above
     for i in CO2_names:
         df.loc[baddata_dates[0]: baddata_dates[1], i] = np.nan
         df.loc[badcoeff_dates[0]: badcoeff_dates[1], i] = \
