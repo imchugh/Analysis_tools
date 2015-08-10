@@ -6,6 +6,7 @@ import pandas as pd
 from scipy import stats
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
+from matplotlib import gridspec
 import pdb
 import DataIO as io
 
@@ -116,9 +117,9 @@ def calculate_sigma_delta(configs, df):
     # Do the paired difference analysis (drop all cases containing any NaN)
     diff_df=pd.DataFrame({'Fc_mean':(df[Fc]+df[Fc].shift(records_per_day))/2,
                           'Fc_diff':df[Fc]-df[Fc].shift(records_per_day),
-        			  'Ta_diff':abs(df[Ta]-df[Ta].shift(records_per_day)),
-        			  'ws_diff':abs(df[ws]-df[ws].shift(records_per_day)),
-        			  'Fsd_diff':abs(df[Fsd]-df[Fsd].shift(records_per_day)),
+                		 'Ta_diff':abs(df[Ta]-df[Ta].shift(records_per_day)),
+            			 'ws_diff':abs(df[ws]-df[ws].shift(records_per_day)),
+            			 'Fsd_diff':abs(df[Fsd]-df[Fsd].shift(records_per_day)),
                           'Day_ind':(df[Fsd]+df[Fsd].shift(records_per_day))/2 > noct_threshold}).reset_index()
     diff_df.dropna(axis=0,how='any',inplace=True)
     
@@ -229,13 +230,21 @@ def random_error_generator(error_df):
 def myround(x,base=10):
     return int(base*round(x/base))
 
-# Histogram to check error distribution is approximately Laplacian
-def hist_plot(Fc_diff,ax):
-	
-    # Calculate scaling parameter for Laplace distribution over entire dataset (sigma / sqrt(2))
-    beta=(abs(Fc_diff-Fc_diff.mean())).mean()
+# Create two plot axes
+def main_plot(Fc_diff,cats_df,linreg_stats_df,num_classes):
+
+    fig = plt.figure(figsize=(12, 6))
+    fig.patch.set_facecolor('white')
+    gs = gridspec.GridSpec(1, 2, width_ratios=[1, 2])
+    ax1 = plt.subplot(gs[0])    
+    ax2 = plt.subplot(gs[1])
+    ax3=ax2.twinx()
+
+    ### Histogram ###    
     
-    # Calculate scaling parameter for Gaussian distribution over entire dataset (sigma)
+    # Calculate scaling parameter for Laplace (sigma / sqrt(2)) and Gaussian 
+    # (sigma) distributions over entire dataset 
+    beta=(abs(Fc_diff-Fc_diff.mean())).mean()
     sig=Fc_diff.std()
 
     # Get edge quantiles and range, then calculate Laplace pdf over range
@@ -246,62 +255,63 @@ def hist_plot(Fc_diff,ax):
     pdf_laplace=np.exp(-abs(x/beta))/(2.*beta)
 	    	
     # Plot normalised histogram with Laplacian and Gaussian pdfs
-    ax.hist(np.array(Fc_diff),bins=300,range=[x_low,x_high],normed=True,color='blue',edgecolor='none')
-    ax.plot(x,pdf_laplace,color='red',linewidth=2.5,label='Laplacian PDF')
-    ax.plot(x,mlab.normpdf(x,0,sig),color='green',linewidth=2.5,label='Gaussian PDF')
-    ax.set_xlabel(r'$\delta\/(\mu mol\/m^{-2} s^{-1}$)',fontsize=16)
-    ax.legend(loc='upper left')
-    ax.set_title('Random error distribution \n')
+    ax1.hist(np.array(Fc_diff), bins=200, range=[x_low,x_high], normed=True,
+            color='0.7', edgecolor='none')
+    ax1.plot(x,pdf_laplace,color='black', label='Laplacian')
+    ax1.plot(x,mlab.normpdf(x,0,sig),color='black', linestyle = '--', 
+            label='Gaussian')
+    ax1.set_xlabel(r'$\delta\/(\mu mol\/m^{-2} s^{-1}$)',fontsize=22)
+    ax1.set_ylabel('$Percent$', fontsize=22)
+    ax1.axvline(x=0, color = 'black', linestyle = ':')
+    ax1.tick_params(axis = 'x', labelsize = 14)
+    ax1.set_yticks([0, 0.1, 0.2, 0.3, 0.4])
+    ax1.tick_params(axis = 'y', labelsize = 14)
 
-# Linear regression plot - random error variance as function of flux magnitude (binned by user-set quantiles)
-def linear_plot(cats_df,linreg_stats_df,num_classes,ax):
-    
+    ### Line plot ###
+
     # Create series for regression lines
     influx_x=cats_df['Fc_mean'][cats_df['Fc_mean']<=0]
     influx_y=np.polyval([linreg_stats_df.ix['day'][0],linreg_stats_df.ix['day'][1]],influx_x)
     efflux_x=cats_df['Fc_mean'][cats_df['Fc_mean']>=0]
     efflux_y=np.polyval([linreg_stats_df.ix['noct'][0],linreg_stats_df.ix['noct'][1]],efflux_x)
     
+    # Do formatting
+    ax2.set_xlim(round(cats_df['Fc_mean'].iloc[0]),math.ceil(cats_df['Fc_mean'].iloc[-1]))
+    ax2.set_xlabel(r'$C\/flux\/(\mu molC\/m^{-2} s^{-1}$)',fontsize=22)
+    ax2.set_ylabel('$\sigma(\delta)\/(\mu molC\/m^{-2} s^{-1})$',fontsize=22)
+    ax2.yaxis.set_ticklabels([])
+    ax2.tick_params(axis='y', which='both', left='off', right='off')
+    ax3.spines['right'].set_position('zero')
+    ax3.set_yticks([1, 2, 3, 4, 5, 6, 7])
+    plt.setp(ax3.get_yticklabels()[-1], visible = False)
+
+
     # Do plotting
-    ax.plot(cats_df['Fc_mean'],cats_df['sig_del'],'ro')
-    ax.plot(influx_x,influx_y,color='blue')
-    ax.plot(efflux_x,efflux_y,color='blue')
-    ax.set_xlim(round(cats_df['Fc_mean'].iloc[0])-1,math.ceil(cats_df['Fc_mean'].iloc[-1])+1)
-    ax.set_xlabel(r'$C\/flux\/(\mu mol\/m^{-2} s^{-1}$)',fontsize=16)
-    ax.set_title('Random error SD binned over flux magnitude quantiles (n='+str(num_classes)+')\n')
+    ax2.plot(cats_df['Fc_mean'], cats_df['sig_del'], 'o', markerfacecolor='0.8',
+             markeredgecolor='black', markersize=6)
+    ax2.plot(influx_x,influx_y, linestyle=':', color='black')
+    ax2.plot(efflux_x,efflux_y, linestyle=':', color='black')
+
+#    ax.set_title('Random error SD binned over flux magnitude quantiles (n='+str(num_classes)+')\n')
     
     # Move axis and relabel
-    str_influx=('a='+str(round(linreg_stats_df.ix['day'][0],2))+
-                '\nb='+str(round(linreg_stats_df.ix['day'][1],2))+
-                '\nr$^2$='+str(round(linreg_stats_df.ix['day'][2],2))+
-                '\np='+str(round(linreg_stats_df.ix['day'][3],2))+
-                '\nSE='+str(round(linreg_stats_df.ix['day'][4],2)))
-    str_efflux=('a='+str(round(linreg_stats_df.ix['noct'][0],2))+
-                '\nb='+str(round(linreg_stats_df.ix['noct'][1],2))+
-                '\nr$^2$='+str(round(linreg_stats_df.ix['noct'][2],2))+
-                '\np='+str(round(linreg_stats_df.ix['noct'][3],2))+
-                '\nSE='+str(round(linreg_stats_df.ix['noct'][4],2)))
+    str_influx=('a = '+str(round(linreg_stats_df.ix['day'][0],2))+
+                '\nb = '+str(round(linreg_stats_df.ix['day'][1],2))+
+                '\nr = '+str(round(linreg_stats_df.ix['day'][2],2))+
+                '\np = '+str(round(linreg_stats_df.ix['day'][3],2))+
+                '\nSE = '+str(round(linreg_stats_df.ix['day'][4],2)))
+    str_efflux=('a = '+str(round(linreg_stats_df.ix['noct'][0],2))+
+                '\nb = '+str(round(linreg_stats_df.ix['noct'][1],2))+
+                '\nr = '+str(round(linreg_stats_df.ix['noct'][2],2))+
+                '\np = '+str(round(linreg_stats_df.ix['noct'][3],2))+
+                '\nSE = '+str(round(linreg_stats_df.ix['noct'][4],2)))
     props = dict(boxstyle='round', facecolor='white', alpha=0.5)
-    ax.text(0.05, 0.35, str_influx, transform=ax.transAxes, fontsize=12,
+    ax2.text(0.055, 0.28, str_influx, transform=ax2.transAxes, fontsize=12,
             verticalalignment='top',bbox=props)
-    ax.text(0.85, 0.35, str_efflux, transform=ax.transAxes, fontsize=12,
+    ax2.text(0.83, 0.28, str_efflux, transform=ax2.transAxes, fontsize=12,
             verticalalignment='top',bbox=props)        
-    ax.set_ylabel('$\sigma(\delta)$',fontsize=18)
-    ax.xaxis.set_ticks_position('bottom')
-    ax.yaxis.set_ticklabels([])
-    ax2=ax.twinx()
-    ax2.spines['right'].set_visible(True)
-    ax2.spines['right'].set_position('zero')
-    ax2.set_ylim(0,4.5)
-	
-# Create two plot axes
-def main_plot(Fc_diff,cats_df,linreg_stats_df,num_classes):
 
-    fig, (ax1, ax2) = plt.subplots(nrows=2)
-    fig.patch.set_facecolor('white')
-    hist_plot(Fc_diff, ax1)
-    linear_plot(cats_df,linreg_stats_df,num_classes,ax2)
     fig.tight_layout()
-    return fig
-    
+    fig.show()
+        
 #-----------------------------------------------------------------------------#
