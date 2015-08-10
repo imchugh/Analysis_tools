@@ -30,14 +30,16 @@ def get_configs():
                     'nan_value': -9999,
                     'QC_accept_code': 0,
                     'propagation_series': 'Fc',
-                    'error_generation_series': 'Fc'}
+                    'error_generation_series': 'Fc',
+                    'model_series': ''}
                     
     return configs_dict
 
 def get_data(configs_dict):
 
     # Specify file location and name
-    data_input_path = '/home/imchugh/Ozflux/Sites/Whroo/Data/Processed/all'
+    data_input_path = 'E:\\' 
+    # '/home/imchugh/Ozflux/Sites/Whroo/Data/Processed/all'
     data_input_file = 'Whroo_2011_to_2014_L6.nc'
     data_input_target = os.path.join(data_input_path, data_input_file)
 
@@ -50,7 +52,7 @@ def get_data(configs_dict):
     QC_dict = {'carbon_flux':'Fc_QCFlag',
                'solar_radiation':'Fsd_QCFlag',
                'temperature':'Ta_QCFlag',
-               'wind_speed': 'Ws_CSAT',
+               'wind_speed': 'Ws_CSAT_QCFlag',
                'friction_velocity': 'ustar_QCFlag'}
     newNames_dict = {'carbon_flux':'NEE',
                      'solar_radiation':'PAR',
@@ -74,7 +76,8 @@ def get_data(configs_dict):
     nc_obj.close()
 
     # Screen low ustar values
-    index = np.where(d[vars_dict['friction_velocity']] < 0.4)
+    index = np.where(d[vars_dict['friction_velocity']] < 
+                     configs_dict['ustar_threshold'])
     d[vars_dict['carbon_flux']][index] = np.nan
 
     # Replace configured error values with NaNs and remove data with unacceptable QC codes, 
