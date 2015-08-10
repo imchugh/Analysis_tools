@@ -6,10 +6,10 @@ Created on Thu Jul  2 14:34:44 2015
 """
 import pandas as pd
 
-import profile_mother as pm
+import profile_scripts as ps
 import DataIO as io
 
-reload (pm)
+reload (ps)
 
 configs_dict = {'met_file_in': '/home/imchugh/Ozflux/Sites/Whroo/Data/' \
                                'Processed/all/Whroo_2011_to_2014_L6.nc'}
@@ -27,13 +27,13 @@ outer_dict = {'C_names_dict': {'Cc_1': 'Cc_LI840_0.5m',
                                  'Cc_3': 4,
                                  'Cc_4': 8,
                                  'Cc_5': 16,
-                                 'Cc_6': 32}}
+                                 'Cc_6': 36}}
                 
               
 
-full_C_df = pm.get_CO2_data()
+full_C_df = ps.get_CO2_data()
 
-C_df = pm.truncate_data(full_C_df)
+C_df = ps.truncate_data(full_C_df)
 
 met_df = io.OzFluxQCnc_to_pandasDF(configs_dict['met_file_in'], ['Ta', 'ps'])[0]
 
@@ -45,7 +45,7 @@ C_df = C_df.reindex(new_index)
 met_df = met_df.reindex(new_index)
 df = C_df.join(met_df)
 
-storage_df = pm.process_data(df, outer_dict)
+storage_df = ps.process_data(df, outer_dict)
 
 storage_df.to_csv('/home/imchugh/Analysis/Whroo/Data/Flux_and_met/temp.csv',
                   index_label = 'date_time')
