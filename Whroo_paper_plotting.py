@@ -342,7 +342,7 @@ def plot_storage_all_levels_funct_ustar(correct_storage = False):
     0.2-0m s-1;
     """
 
-    num_cats = 30   
+    num_cats = 50   
     
     # Get data
     df, attr = get_data()
