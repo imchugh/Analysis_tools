@@ -63,13 +63,12 @@ def main():
     propagate_error = configs['options']['propagate_error']=='True'
     error_generator = configs['options']['error_generator']=='True'
 
+    # If error propagation, do it and report and save the results
     if propagate_error:
         years_df = propagate_random_error(error_df, configs)
-
-    # Report and output results    
-    print '\nAnnual uncertainty in gC m-2 (also saved at ' + results_out_path + '):'
-    print years_df
-    years_df.to_csv(os.path.join(results_out_path, 'annual_uncertainty.csv'))
+        print '\nAnnual uncertainty in gC m-2 (also saved at ' + results_out_path + '):'
+        print years_df
+        years_df.to_csv(os.path.join(results_out_path, 'annual_uncertainty.csv'))
     
     if error_generator:
         random_error_generator(error_df)
@@ -112,7 +111,16 @@ def calculate_sigma_delta(configs, df):
         
     # Remove low ustar obs
     if not ustar_threshold == 0:
-        df[Fc] = np.where(df[ustar] < ustar_threshold, np.nan, df[Fc])
+        df[Fc] = np.where((df[ustar] < ustar_threshold) & 
+                          (df[Fsd] < noct_threshold),
+                          np.nan, 
+                          df[Fc])
+    
+    # Make a day / night indicator variable
+    df['day_night'] = np.where(df[Fsd] < noct_threshold, 1, 0)
+    
+    # Make sure only quality obs data
+    df = df[df['Fc_QCFlag']==0]
     
     # Do the paired difference analysis (drop all cases containing any NaN)
     diff_df=pd.DataFrame({'Fc_mean':(df[Fc]+df[Fc].shift(records_per_day))/2,
@@ -120,9 +128,11 @@ def calculate_sigma_delta(configs, df):
                 		 'Ta_diff':abs(df[Ta]-df[Ta].shift(records_per_day)),
             			 'ws_diff':abs(df[ws]-df[ws].shift(records_per_day)),
             			 'Fsd_diff':abs(df[Fsd]-df[Fsd].shift(records_per_day)),
-                          'Day_ind':(df[Fsd]+df[Fsd].shift(records_per_day))/2 > noct_threshold}).reset_index()
+                          'Day_ind':df['day_night'] + df['day_night'].shift(records_per_day)}).reset_index()
     diff_df.dropna(axis=0,how='any',inplace=True)
-    
+    diff_df = diff_df[diff_df['Day_ind'] != 1]
+    diff_df['Day_ind'] = diff_df['Day_ind'] == 0
+
     # Find number of passed tuples, report, then drop everything except mean and difference of Fc tuples
     diff_df['pass_constraints'] = ((diff_df['Ta_diff'] < Ta_threshold) & 
                                    (diff_df['ws_diff'] < ws_threshold) &
@@ -139,7 +149,7 @@ def calculate_sigma_delta(configs, df):
     print 'Number of observations per bin = ' + str(n_per_class)
     
     # Calculate and report nocturnal and daytime share of data
-    day_classes = int(len(diff_df[diff_df['Day_ind']]) / float(len(diff_df)) * num_classes)
+    day_classes = int(len(diff_df[diff_df['Day_ind'] == 0]) / float(len(diff_df)) * num_classes)
     noct_classes = num_classes - day_classes
     print 'Total bins = ' + str(num_classes) + '; day bins = ' + str(day_classes) + '; nocturnal bins = ' + str(noct_classes)
 
@@ -157,8 +167,8 @@ def calculate_sigma_delta(configs, df):
         cats_df.loc[i, 'sig_del'] = (abs(diff_df.loc[i, 'Fc_diff'] - diff_df.loc[i, 'Fc_diff'].mean())).mean() * np.sqrt(2)
     
     # Remove daytime positive bin averages and nocturnal negative bin averages
-    cats_df['exclude'] = ((cats_df.Fc_mean > 0) & (cats_df.Day_ind)) | ((cats_df.Fc_mean < 0) & (cats_df.Day_ind==False))
-    cats_df = cats_df[['Fc_mean', 'sig_del', 'Day_ind']][~cats_df.exclude]
+#    cats_df['exclude'] = ((cats_df.Fc_mean > 0) & (cats_df.Day_ind)) | ((cats_df.Fc_mean < 0) & (cats_df.Day_ind==False))
+#    cats_df = cats_df[['Fc_mean', 'sig_del', 'Day_ind']][~cats_df.exclude]
     
     # Calculate linear fit for day and night values...
     linreg_stats_df = pd.DataFrame(columns = ['slope','intcpt','r_val','p_val','SE'], index = ['day','noct'])
@@ -313,5 +323,7 @@ def main_plot(Fc_diff,cats_df,linreg_stats_df,num_classes):
 
     fig.tight_layout()
     fig.show()
+    
+    return fig
         
 #-----------------------------------------------------------------------------#
