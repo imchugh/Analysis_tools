@@ -52,7 +52,7 @@ def main():
     df, d_attr = io.OzFluxQCnc_to_pandasDF(data_file_in)    
 
     # Calculate the sigma_delta regression coefficients
-    stats_df, error_df = calculate_sigma_delta(configs, df)
+    stats_df, error_df = calculate_sigma_delta(configs, df)    
     
     # Report and output results
     print '\nRegression results (also saved at ' + results_out_path+'):'
@@ -112,7 +112,11 @@ def calculate_sigma_delta(configs, df):
         
     # Remove low ustar obs
     if not ustar_threshold == 0:
-        df[Fc] = np.where(df[ustar] < ustar_threshold, np.nan, df[Fc])
+        df[Fc] = np.where((df[ustar] < ustar_threshold) & (df[Fsd] < 10), 
+                          np.nan, 
+                          df[Fc])
+    
+    df = df[df['Fc_QCFlag']==0]
     
     # Do the paired difference analysis (drop all cases containing any NaN)
     diff_df=pd.DataFrame({'Fc_mean':(df[Fc]+df[Fc].shift(records_per_day))/2,
@@ -130,37 +134,29 @@ def calculate_sigma_delta(configs, df):
     passed_tuples = len(diff_df[diff_df['pass_constraints']])	
     print (str(passed_tuples) +' of ' + str(total_tuples) + ' available tuples passed difference constraints (Fsd = ' +
   	     str(rad_threshold) + 'Wm^-2, Ta = ' + str(Ta_threshold) + 'C, ws = ' + str(ws_threshold) + 'ms^-1)\n')
-    diff_df = diff_df[['Fc_mean', 'Fc_diff', 'Day_ind']][diff_df['pass_constraints']]
+    diff_df = diff_df[['Fc_mean', 'Fc_diff']][diff_df['pass_constraints']]
     diff_df['Class'] = np.nan    
     
     # Calculate and report n for each bin
     n_per_class = int(len(diff_df) / num_classes)
     print 'Number of observations per bin = ' + str(n_per_class)
     
-    # Calculate and report nocturnal and daytime share of data
-    day_classes = int(len(diff_df[diff_df['Day_ind']]) / float(len(diff_df)) * num_classes)
-    noct_classes = num_classes - day_classes
-    print 'Total bins = ' + str(num_classes) + '; day bins = ' + str(day_classes) + '; nocturnal bins = ' + str(noct_classes)
-
     # Cut into desired number of quantiles and get the flux and flux error means for each category
     diff_df['Class'] = pd.qcut(diff_df['Fc_mean'], num_classes, labels = False)
     diff_df.index = diff_df['Class'].astype('int64')
     cats_df = pd.DataFrame({'Fc_mean':diff_df['Fc_mean'].groupby(diff_df['Class']).mean()})
     cats_df['sig_del'] = np.nan
-    cats_df.loc[:day_classes, 'Day_ind'] = True
-    cats_df.loc[day_classes:, 'Day_ind'] = False
+
     for i in cats_df.index:
         i = int(i)
         cats_df.loc[i, 'sig_del'] = (abs(diff_df.loc[i, 'Fc_diff'] - diff_df.loc[i, 'Fc_diff'].mean())).mean() * np.sqrt(2)
     
-    # Remove daytime positive bin averages and nocturnal negative bin averages
-#    cats_df['exclude'] = ((cats_df.Fc_mean > 0) & (cats_df.Day_ind)) | ((cats_df.Fc_mean < 0) & (cats_df.Day_ind==False))
-#    cats_df = cats_df[['Fc_mean', 'sig_del', 'Day_ind']][~cats_df.exclude]
-    
     # Calculate linear fit for day and night values...
     linreg_stats_df = pd.DataFrame(columns = ['slope','intcpt','r_val','p_val','SE'], index = ['day','noct'])
-    linreg_stats_df.loc['day'] = stats.linregress(cats_df['Fc_mean'][cats_df['Day_ind']], cats_df['sig_del'][cats_df['Day_ind']])
-    linreg_stats_df.loc['noct'] = stats.linregress(cats_df['Fc_mean'][cats_df['Day_ind'] == False], cats_df['sig_del'][cats_df['Day_ind']==False])
+    linreg_stats_df.loc['day'] = stats.linregress(cats_df['Fc_mean'][cats_df['Fc_mean'] < 0], 
+                                                  cats_df['sig_del'][cats_df['Fc_mean'] < 0])
+    linreg_stats_df.loc['noct'] = stats.linregress(cats_df['Fc_mean'][cats_df['Fc_mean'] > 0], 
+                                                   cats_df['sig_del'][cats_df['Fc_mean'] > 0])
 
     # Calculate the estimated sigma_delta for each datum
     error_df = pd.DataFrame(df[Fc])
