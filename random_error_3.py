@@ -133,6 +133,8 @@ def calculate_sigma_delta(data_dict, configs_dict):
                              np.roll(data_dict['noct_ind'], recs_per_day)}
     
     # Remove entire record if nan for any variable, then count available pairs
+    diff_dict['noct_ind'] = np.where(diff_dict['noct_ind'] == 1,
+                                     np.nan, diff_dict['noct_ind'])
     temp_array = np.empty([len(data_dict['Fc']), len(data_dict)])
     for i, var in enumerate(data_dict.keys()):
         temp_array[:, i] = data_dict[var]
@@ -141,14 +143,14 @@ def calculate_sigma_delta(data_dict, configs_dict):
     temp_array = temp_array[QCdata_index]
     diff_dict = {var: temp_array[:, i] for i, var in enumerate(data_dict.keys())}
     total_tuples = len(diff_dict['Fc'])
-
+    
     # Remove any values that don't pass the difference constraints
     pass_index = np.where((diff_dict['Ta_diff'] < 
                            configs_dict['temperature_difference_threshold']) & 
                           (diff_dict['ws_diff'] < 
                            configs_dict['windspeed_difference_threshold']) & 
-                          (diff_dict['Ta_diff'] < 
-                           configs_dict['temperature_difference_threshold']))
+                          (diff_dict['Fsd_diff'] < 
+                           configs_dict['radiation_difference_threshold']))
     for i, var in enumerate(diff_dict.keys()):
         diff_dict[var] = diff_dict[var][pass_index]
     
@@ -156,7 +158,7 @@ def calculate_sigma_delta(data_dict, configs_dict):
     passed_tuples = len(diff_dict['Fc'])
     print (str(passed_tuples) +' of ' + str(total_tuples) + 
            ' available tuples passed difference constraints (Fsd = ' +
-  	      str(rad_threshold) + 'Wm^-2, Ta = ' + str(Ta_threshold) + 
+  	      str(configs_dict[]rad_threshold) + 'Wm^-2, Ta = ' + str(Ta_threshold) + 
            'C, ws = ' + str(ws_threshold) + 'ms^-1)\n')
 
     diff_df['Class'] = np.nan    
