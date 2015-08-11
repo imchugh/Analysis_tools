@@ -92,24 +92,6 @@ def calculate_sigma_delta(data_dict, configs_dict):
     print '\nCalculating random error regression coefficients'
     print '------------------------------------------------\n'
     
-    # Unpack:
-    # Files
-#    results_out_path = configs['files']['results_out_path']
-#    # Variables
-#    Fc = configs['variables']['Fc']
-#    Fsd = configs['variables']['Fsd']    
-#    Ta = configs['variables']['Ta']
-#    ws = configs['variables']['ws']
-#    ustar = configs['variables']['ustar']
-#    # Options    
-#    Ta_threshold = int(configs['options']['temperature_difference_threshold'])
-#    ws_threshold = int(configs['options']['windspeed_difference_threshold'])
-#    rad_threshold = int(configs['options']['radiation_difference_threshold'])
-#    num_classes = int(configs['options']['averaging_bins'])
-#    noct_threshold = int(configs['options']['noct_threshold'])
-#    records_per_day = 1440/int(configs['options']['flux_period'])
-#    ustar_threshold = float(configs['options']['ustar_threshold'])
-
     # Calculate records per day from measurement interval
     recs_per_day = 1440 / configs_dict['measurement_interval']
     
@@ -158,44 +140,52 @@ def calculate_sigma_delta(data_dict, configs_dict):
     passed_tuples = len(diff_dict['Fc'])
     print (str(passed_tuples) +' of ' + str(total_tuples) + 
            ' available tuples passed difference constraints (Fsd = ' +
-  	      str(configs_dict[]rad_threshold) + 'Wm^-2, Ta = ' + str(Ta_threshold) + 
-           'C, ws = ' + str(ws_threshold) + 'ms^-1)\n')
+  	     str(configs_dict['radiation_difference_threshold']) + 'Wm^-2, Ta = ' + 
+           str(configs_dict['temperature_difference_threshold']) + 
+           'C, ws = ' + str(configs_dict['windspeed_difference_threshold']) + 
+           'ms^-1)\n')
 
-    diff_df['Class'] = np.nan    
-    
     # Calculate and report n for each bin
-    n_per_class = int(len(diff_df) / num_classes)
+    n_per_class = int(len(diff_dict['Fc']) / configs_dict['averaging_bins'])
     print 'Number of observations per bin = ' + str(n_per_class)
     
-    # Cut into desired number of quantiles and get the flux and flux error means for each category
-    diff_df['Class'] = pd.qcut(diff_df['Fc_mean'], num_classes, labels = False)
-    diff_df.index = diff_df['Class'].astype('int64')
-    cats_df = pd.DataFrame({'Fc_mean':diff_df['Fc_mean'].groupby(diff_df['Class']).mean()})
-    cats_df['sig_del'] = np.nan
-
-    for i in cats_df.index:
-        i = int(i)
-        cats_df.loc[i, 'sig_del'] = (abs(diff_df.loc[i, 'Fc_diff'] - diff_df.loc[i, 'Fc_diff'].mean())).mean() * np.sqrt(2)
-    
+    # Cut into desired number of quantiles and get the flux and flux error 
+    # means for each category
+    rslt_dict = {'Fc_mean': np.empty(configs_dict['averaging_bins']),
+                 'sig_del': np.empty(configs_dict['averaging_bins'])}
+    for i, num in enumerate(np.linspace(100.0 / configs_dict['averaging_bins'], 
+                                        100,
+                                        configs_dict['averaging_bins'])):
+        pctl = np.percentile(diff_dict['Fc'], num)
+        rslt_dict['Fc_mean'] = diff_dict['Fc'][diff_dict['Fc'] <= pctl].mean()                     
+        rslt_dict['sig_del'] = (abs(diff_dict['Fc_diff'] - diff_dict['Fc_diff']
+                                .mean())).mean() * np.sqrt(2)
+     
     # Calculate linear fit for day and night values...
-    linreg_stats_df = pd.DataFrame(columns = ['slope','intcpt','r_val','p_val','SE'], index = ['day','noct'])
-    linreg_stats_df.loc['day'] = stats.linregress(cats_df['Fc_mean'][cats_df['Fc_mean'] < 0], 
-                                                  cats_df['sig_del'][cats_df['Fc_mean'] < 0])
-    linreg_stats_df.loc['noct'] = stats.linregress(cats_df['Fc_mean'][cats_df['Fc_mean'] > 0], 
-                                                   cats_df['sig_del'][cats_df['Fc_mean'] > 0])
-
+    stats_list = ['slope','intcpt','r_val','p_val', 'SE'] 
+    stats_dict = {}
+    linreg_stats_list = stats.linregress(rslt_dict['Fc_mean']
+                                         [rslt_dict['Fc_mean'] < 0], 
+                                         rslt_dict['sig_del']
+                                         [rslt_dict['Fc_mean'] < 0])
+    stats_dict['neg'] = {stats_list[i]: linreg_stats_list[i] for i in range(5)}                                     
+    linreg_stats_list = stats.linregress(rslt_dict['Fc_mean']
+                                         [rslt_dict['Fc_mean'] > 0], 
+                                         rslt_dict['sig_del']
+                                         [rslt_dict['Fc_mean'] > 0])
+    stats_dict['pos'] = {stats_list[i]: linreg_stats_list[i] for i in range(5)}
+                                         
     # Calculate the estimated sigma_delta for each datum
-    error_df = pd.DataFrame(df[Fc])
-    error_df['sig_del'] = np.where(df[Fsd] >= noct_threshold,
-                                   (abs(df[Fc] * linreg_stats_df.loc['noct', 'slope']) + 
-                                    linreg_stats_df.loc['noct', 'intcpt']) / np.sqrt(2),
-                    		     (abs(df[Fc] * linreg_stats_df.loc['day', 'slope']) +
-                                    linreg_stats_df.loc['day', 'intcpt']) / np.sqrt(2))
+    data_dict['sig_del'] = np.where(data_dict['Fc'] > 0,
+                                    (data_dict['Fc'] * stats_dict['pos']['slope'] + 
+                                     stats_dict['pos']['intcpt']) / np.sqrt(2),
+                        		  (data_dict['Fc'] * stats_dict['neg']['slope'] + 
+                                     stats_dict['neg']['intcpt']) / np.sqrt(2))
     
     # Output plots
     print '\nPlotting: 1) PDF of random error'
     print '          2) sigma_delta (variance of random error) as a function of flux magnitude'
-    fig=main_plot(diff_df['Fc_diff'], cats_df, linreg_stats_df, num_classes)
+    fig = do_plots(diff_dict['Fc_diff'], rslt_dict, stats_dict, num_classes)
     fig.savefig(os.path.join(results_out_path, 'Random_error_plots.jpg'))    
     
     return linreg_stats_df, error_df
