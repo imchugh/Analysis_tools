@@ -13,33 +13,7 @@ import DataIO as io
 #-----------------------------------------------------------------------------#
 
 def main():
-    """
-    Pass the following arguments: 1) df containing non-gap filled QC'd Fc, Fsd, Ta, ws
-                                  2) config file (dictionary) containing options as 
-                                      specified below
-    
-    Returns the linear regression statistics for daytime and nocturnal data
-    
-    Dictionary should contain the following:
-        'results_out_path' (path for results to be written to)
-        'flux_freq' (frequency of flux data)
-        'averaging_bins' (for calculation of random error variance as function of flux magnitude)    
-        'radiation_difference_threshold' (the maximum allowable Fsd difference between Fc pairs;
-                                          see below for threshold values)
-        'temperature_difference_threshold' (as above)
-        'windspeed_difference_threshold' (as above)
-                                     
-    Algorithm from reference:
-        Hollinger, D.Y., Richardson, A.D., 2005. Uncertainty in eddy covariance measurements 
-        and its application to physiological models. Tree Physiol. 25, 873–885.
-    
-    Uses daily differencing procedure to estimate random error (note this will overestimate by factor of up to 2)
-    
-    Fc pairs must pass difference constraints as follows (as suggested in ref above):
-        Fsd:35W m^-2
-        Ta: 3C
-        ws: 1m s^-1
-    """    
+
     print 'Opening data file...'
     
     # Get config file name then go get it
@@ -86,45 +60,70 @@ def main():
 def calculate_sigma_delta(data_dict, configs_dict):
 
     """
-
-    """    
+    Pass the following arguments: 1) dict containing non-gap filled QC'd Fc, 
+                                     Fsd, Ta, ws
+                                  2) dict containing config options as 
+                                     specified below
+    
+    Returns the linear regression statistics for daytime and nocturnal data
+    
+    Config dictionary should contain the following:
+        'measurement_interval' (of fluxes)
+        'pos_averaging_bins' (number of bins for calculation of random error 
+                              variance as function of +ve flux magnitude)
+        'neg_averaging_bins' (number of bins for calculation of random error 
+                              variance as function of -ve flux magnitude)                              
+        'radiation_difference_threshold' (the maximum allowable Fsd difference 
+                                          between Fc pairs; see below for 
+                                          threshold values)
+        'temperature_difference_threshold' (as above)
+        'windspeed_difference_threshold' (as above)
+                                     
+    Algorithm from reference:
+        Hollinger, D.Y., Richardson, A.D., 2005. Uncertainty in eddy covariance measurements 
+        and its application to physiological models. Tree Physiol. 25, 873–885.
+    
+    Uses daily differencing procedure to estimate random error 
+    (note this will overestimate by factor of up to 2)
+    
+    Fc pairs must pass difference constraints as follows 
+    (as suggested in ref above):
+        Fsd:35W m^-2
+        Ta: 3C
+        ws: 1m s^-1
+    """      
     
     print '\nCalculating random error regression coefficients'
     print '------------------------------------------------\n'
-    
+    pdb.set_trace()
     # Calculate records per day from measurement interval
     recs_per_day = 1440 / configs_dict['measurement_interval']
-    
-    # Create a nocturnal indicator variable to separate night and day records
-    data_dict['noct_ind'] = np.where(data_dict['Fsd'] < 
-                                     configs_dict['noct_threshold'], 1, 0)
-        
-    # Do the paired differencing
+
+    # Do the paired differencing (absolute)
     diff_dict = {}
-    diff_dict = {'Fc_mean': (data_dict['Fc'] + 
-                             np.roll(data_dict['Fc'], recs_per_day)) / 2,
-                 'Fc_diff': data_dict['Fc'] -
-                            np.roll(data_dict['Fc'], recs_per_day),
-                 'Ta_diff': data_dict['Ta'] -
-                            np.roll(data_dict['Ta'], recs_per_day),
-                 'ws_diff': data_dict['ws'] -
-                            np.roll(data_dict['ws'], recs_per_day),
-                 'Fsd_diff': data_dict['Fsd'] -
-                             np.roll(data_dict['Fsd'], recs_per_day),
-                 'noct_ind': data_dict['noct_ind'] + 
-                             np.roll(data_dict['noct_ind'], recs_per_day)}
-    
+    diff_dict = {'Fc_mean': (data_dict[configs_dict['mean_flux_series']] + 
+                             np.roll(data_dict[configs_dict['mean_flux_series']], 
+                                     recs_per_day)) / 2,
+                 'Fc_diff_abs': abs(data_dict['Fc'] -
+                                    np.roll(data_dict['Fc'], recs_per_day)),
+                 'Fc_diff': (data_dict['Fc'] -
+                             np.roll(data_dict['Fc'], recs_per_day)),                
+                 'Ta_diff': abs(data_dict['Ta'] -
+                                np.roll(data_dict['Ta'], recs_per_day)),
+                 'ws_diff': abs(data_dict['ws'] -
+                                np.roll(data_dict['ws'], recs_per_day)),
+                 'Fsd_diff': abs(data_dict['Fsd'] -
+                                 np.roll(data_dict['Fsd'], recs_per_day))}
+
     # Remove entire record if nan for any variable, then count available pairs
-    diff_dict['noct_ind'] = np.where(diff_dict['noct_ind'] == 1,
-                                     np.nan, diff_dict['noct_ind'])
-    temp_array = np.empty([len(data_dict['Fc']), len(data_dict)])
-    for i, var in enumerate(data_dict.keys()):
-        temp_array[:, i] = data_dict[var]
-    temp_array = temp_array[recs_per_day:]
+    temp_array = np.empty([len(diff_dict['Fc_diff_abs']), len(diff_dict)])
+    for i, var in enumerate(diff_dict.keys()):
+        temp_array[:, i] = diff_dict[var]
+    temp_array = temp_array[recs_per_day:, :]
     QCdata_index = np.where(np.all(~np.isnan(temp_array), axis=1))    
     temp_array = temp_array[QCdata_index]
-    diff_dict = {var: temp_array[:, i] for i, var in enumerate(data_dict.keys())}
-    total_tuples = len(diff_dict['Fc'])
+    diff_dict = {var: temp_array[:, i] for i, var in enumerate(diff_dict.keys())}
+    total_tuples = str(len(diff_dict['Fc_diff_abs']))
     
     # Remove any values that don't pass the difference constraints
     pass_index = np.where((diff_dict['Ta_diff'] < 
@@ -135,60 +134,159 @@ def calculate_sigma_delta(data_dict, configs_dict):
                            configs_dict['radiation_difference_threshold']))
     for i, var in enumerate(diff_dict.keys()):
         diff_dict[var] = diff_dict[var][pass_index]
-    
+    passed_tuples = str(len(diff_dict['Fc_diff_abs']))
+               
+    # Separate out positive and negative values
+    neg_dict = {}
+    pos_dict = {}
+    for var in ['Fc_mean', 'Fc_diff_abs']:
+        neg_dict[var] = diff_dict[var][diff_dict['Fc_mean'] < 0]
+        pos_dict[var] = diff_dict[var][diff_dict['Fc_mean'] > 0]
+    dict_list = [neg_dict, pos_dict]
+
     # Report stats
-    passed_tuples = len(diff_dict['Fc'])
-    print (str(passed_tuples) +' of ' + str(total_tuples) + 
+    num_pos = str(len(pos_dict['Fc_diff_abs']))
+    num_pos_per_bin = str(int(float(num_pos) / configs_dict['pos_averaging_bins']))
+    num_neg = str(len(neg_dict['Fc_diff_abs']))
+    num_neg_per_bin = str(int(float(num_neg) / configs_dict['neg_averaging_bins']))
+    print (passed_tuples +' of ' + total_tuples + 
            ' available tuples passed difference constraints (Fsd = ' +
-  	     str(configs_dict['radiation_difference_threshold']) + 'Wm^-2, Ta = ' + 
+           str(configs_dict['radiation_difference_threshold']) + 'Wm^-2, Ta = ' + 
            str(configs_dict['temperature_difference_threshold']) + 
            'C, ws = ' + str(configs_dict['windspeed_difference_threshold']) + 
-           'ms^-1)\n')
+           'ms^-1):')
+    print ('    - ' + num_neg + ' records for Fc < 0 (' + num_neg_per_bin + 
+           ' records per bin)')
+    print ('    - ' + num_pos + ' records for Fc > 0 (' + num_pos_per_bin + 
+           ' records per bin)') 
 
-    # Calculate and report n for each bin
-    n_per_class = int(len(diff_dict['Fc']) / configs_dict['averaging_bins'])
-    print 'Number of observations per bin = ' + str(n_per_class)
-    
-    # Cut into desired number of quantiles and get the flux and flux error 
-    # means for each category
-    rslt_dict = {'Fc_mean': np.empty(configs_dict['averaging_bins']),
-                 'sig_del': np.empty(configs_dict['averaging_bins'])}
-    for i, num in enumerate(np.linspace(100.0 / configs_dict['averaging_bins'], 
-                                        100,
-                                        configs_dict['averaging_bins'])):
-        pctl = np.percentile(diff_dict['Fc'], num)
-        rslt_dict['Fc_mean'] = diff_dict['Fc'][diff_dict['Fc'] <= pctl].mean()                     
-        rslt_dict['sig_del'] = (abs(diff_dict['Fc_diff'] - diff_dict['Fc_diff']
-                                .mean())).mean() * np.sqrt(2)
-     
-    # Calculate linear fit for day and night values...
-    stats_list = ['slope','intcpt','r_val','p_val', 'SE'] 
+    # Create arrays to takes results of quantile categorisation
+    neg_array = np.empty([configs_dict['neg_averaging_bins'], 2])
+    pos_array = np.empty([configs_dict['pos_averaging_bins'], 2])
+    array_list = [neg_array, pos_array]
+    cond_list = ['neg', 'pos']
+    stats_list = ['slope','intcpt','r_val','p_val', 'SE']
     stats_dict = {}
-    linreg_stats_list = stats.linregress(rslt_dict['Fc_mean']
-                                         [rslt_dict['Fc_mean'] < 0], 
-                                         rslt_dict['sig_del']
-                                         [rslt_dict['Fc_mean'] < 0])
-    stats_dict['neg'] = {stats_list[i]: linreg_stats_list[i] for i in range(5)}                                     
-    linreg_stats_list = stats.linregress(rslt_dict['Fc_mean']
-                                         [rslt_dict['Fc_mean'] > 0], 
-                                         rslt_dict['sig_del']
-                                         [rslt_dict['Fc_mean'] > 0])
-    stats_dict['pos'] = {stats_list[i]: linreg_stats_list[i] for i in range(5)}
-                                         
-    # Calculate the estimated sigma_delta for each datum
-    data_dict['sig_del'] = np.where(data_dict['Fc'] > 0,
-                                    (data_dict['Fc'] * stats_dict['pos']['slope'] + 
-                                     stats_dict['pos']['intcpt']) / np.sqrt(2),
-                        		  (data_dict['Fc'] * stats_dict['neg']['slope'] + 
-                                     stats_dict['neg']['intcpt']) / np.sqrt(2))
+
+    # Now categorise on basis of percentiles and calculate means and sigmas
+    for i in range(2):
+        this_dict = dict_list[i]
+        this_array = array_list[i]
+        num_bins = np.shape(this_array)[0]
+        for j, num in enumerate(np.linspace(100.0 / num_bins, 100, num_bins)):
+            pctl_hi = np.percentile(this_dict['Fc_mean'], num)
+            pctl_lo = np.percentile(this_dict['Fc_mean'],
+                                    num - 100.0 / num_bins)
+            quantile_index = np.where((this_dict['Fc_mean'] > pctl_lo) &
+                                      (this_dict['Fc_mean'] <= pctl_hi))                                
+            this_array[j, 0] = this_dict['Fc_mean'][quantile_index].mean()
+            this_array[j, 1] = ((abs(this_dict['Fc_diff_abs'][quantile_index] - 
+                                     this_dict['Fc_diff_abs'][quantile_index].mean()))
+                                 .mean() * np.sqrt(2))
+                                  
+        # Calculate linear fit for positive and negative values...
+        linreg_stats_list = stats.linregress(this_array[:, 0],
+                                             this_array[:, 1]) 
+        stats_dict[cond_list[i]] = {stats_list[stat]: linreg_stats_list[stat] 
+                                    for stat in range(5)}
+
+    # Combine pos and neg arrays
+    combined_array = np.concatenate([neg_array, pos_array])
+    rslt_dict = {'Fc_mean': combined_array[:, 0],
+                 'sig_del': combined_array[:, 1]}
+
+    ### Plotting ###
+
+    # Instantiate plot
+    fig = plt.figure(figsize = (12, 6))
+    fig.patch.set_facecolor('white')
+    gs = gridspec.GridSpec(1, 2, width_ratios = [1, 2])
+    ax1 = plt.subplot(gs[0])    
+    ax2 = plt.subplot(gs[1])
+
+    ### Histogram ###    
     
+    # Calculate scaling parameter for Laplace (sigma / sqrt(2)) and Gaussian 
+    # (sigma) distributions over entire dataset 
+    beta = (abs(diff_dict['Fc_diff'] - diff_dict['Fc_diff'].mean())).mean()
+    sig = diff_dict['Fc_diff'].std()
+
+    # Get edge quantiles and range, then calculate Laplace pdf over range
+    x_low = myround(np.percentile(diff_dict['Fc_diff'], 0.5))
+    x_high = myround(np.percentile(diff_dict['Fc_diff'], 99.5))
+    x_range = (x_high - x_low)
+    x = np.arange(x_low, x_high, 1 / (x_range * 10.))
+    pdf_laplace  =np.exp(-abs(x / beta)) / (2. * beta)
+	    	
+    # Plot normalised histogram with Laplacian and Gaussian pdfs
+    ax1.hist(np.array(diff_dict['Fc_diff']), bins = 200, 
+             range = [x_low, x_high], normed = True, color = '0.7', 
+             edgecolor = 'none')
+    ax1.plot(x,pdf_laplace,color='black', label='Laplacian')
+    ax1.plot(x,mlab.normpdf(x,0,sig),color='black', linestyle = '--', 
+            label='Gaussian')
+    ax1.set_xlabel(r'$\delta\/(\mu mol\/m^{-2} s^{-1}$)',fontsize=22)
+    ax1.set_ylabel('$Percent$', fontsize=22)
+    ax1.axvline(x=0, color = 'black', linestyle = ':')
+    ax1.tick_params(axis = 'x', labelsize = 14)
+    ax1.set_yticks([0, 0.1, 0.2, 0.3, 0.4])
+    ax1.tick_params(axis = 'y', labelsize = 14)
+
+    ### Line plot ###
+
+    # Create series for regression lines
+    influx_x = np.append(neg_array[:, 0], np.array(0))
+    influx_y = np.polyval([stats_dict['neg']['slope'], 
+                           stats_dict['neg']['intcpt']],
+                           influx_x)
+    efflux_x = np.append(np.array(0), pos_array[:, 0])
+    efflux_y = np.polyval([stats_dict['pos']['slope'], 
+                           stats_dict['pos']['intcpt']],
+                           efflux_x)
+    
+    # Do formatting
+    ax2.set_xlim(round(rslt_dict['Fc_mean'][0]), 
+                 math.ceil(rslt_dict['Fc_mean'][-1]))
+    ax2.set_xlabel(r'$C\/flux\/(\mu molC\/m^{-2} s^{-1}$)',fontsize=22)
+    ax2.set_ylim([int(rslt_dict['sig_del'].min()), 
+                  math.ceil(rslt_dict['sig_del'].max())])
+    ax2.set_ylabel('$\sigma(\delta)\/(\mu molC\/m^{-2} s^{-1})$',fontsize=22)
+    ax2.tick_params('x', labelsize = 14)    
+    ax2.yaxis.set_ticklabels([])
+    ax2.tick_params(axis='y', which='both', left='off', right='off')
+    ax3 = ax2.twinx()
+    ax3.spines['right'].set_position('zero')
+    ax3.set_ylim(ax2.get_ylim())
+    ax3.tick_params(axis = 'y', labelsize = 14)
+    plt.setp(ax3.get_yticklabels()[0], visible = False)
+
+    # Do plotting
+    ax2.plot(rslt_dict['Fc_mean'], rslt_dict['sig_del'], 'o', 
+             markerfacecolor='0.8', markeredgecolor='black', markersize=6)
+    ax2.plot(influx_x, influx_y, linestyle=':', color='black')
+    ax2.plot(efflux_x, efflux_y, linestyle=':', color='black')
+    
+    fig.tight_layout()
+    fig.show()
+
+    return fig, stats_dict
+
+def calculate_sigdel(Fc_array, stats_dict):
+    
+    # Calculate the estimated sigma_delta for each datum
+    return np.where(Fc_array > 0, Fc_array * stats_dict['pos']['slope'] + 
+                                  stats_dict['pos']['intcpt'], 2)
+#                    Fc_array * stats_dict['pos']['slope'] + 
+#                        stats_dict['pos']['intcpt']) / np.sqrt(2),
+#                    Fc_array * stats_dict['neg']['slope'] + 
+#                        stats_dict['neg']['intcpt']) / np.sqrt(2))
+
     # Output plots
     print '\nPlotting: 1) PDF of random error'
     print '          2) sigma_delta (variance of random error) as a function of flux magnitude'
-    fig = do_plots(diff_dict['Fc_diff'], rslt_dict, stats_dict, num_classes)
-    fig.savefig(os.path.join(results_out_path, 'Random_error_plots.jpg'))    
+
     
-    return linreg_stats_df, error_df
+
 
 #-----------------------------------------------------------------------------#
 
@@ -238,89 +336,3 @@ def random_error_generator(error_df):
 
 def myround(x,base=10):
     return int(base*round(x/base))
-
-# Create two plot axes
-def main_plot(Fc_diff,cats_df,linreg_stats_df,num_classes):
-
-    fig = plt.figure(figsize=(12, 6))
-    fig.patch.set_facecolor('white')
-    gs = gridspec.GridSpec(1, 2, width_ratios=[1, 2])
-    ax1 = plt.subplot(gs[0])    
-    ax2 = plt.subplot(gs[1])
-    ax3=ax2.twinx()
-
-    ### Histogram ###    
-    
-    # Calculate scaling parameter for Laplace (sigma / sqrt(2)) and Gaussian 
-    # (sigma) distributions over entire dataset 
-    beta=(abs(Fc_diff-Fc_diff.mean())).mean()
-    sig=Fc_diff.std()
-
-    # Get edge quantiles and range, then calculate Laplace pdf over range
-    x_low=myround(Fc_diff.quantile(0.005))
-    x_high=myround(Fc_diff.quantile(0.995))
-    x_range=(x_high-x_low)
-    x=np.arange(x_low,x_high,1/(x_range*10.))
-    pdf_laplace=np.exp(-abs(x/beta))/(2.*beta)
-	    	
-    # Plot normalised histogram with Laplacian and Gaussian pdfs
-    ax1.hist(np.array(Fc_diff), bins=200, range=[x_low,x_high], normed=True,
-            color='0.7', edgecolor='none')
-    ax1.plot(x,pdf_laplace,color='black', label='Laplacian')
-    ax1.plot(x,mlab.normpdf(x,0,sig),color='black', linestyle = '--', 
-            label='Gaussian')
-    ax1.set_xlabel(r'$\delta\/(\mu mol\/m^{-2} s^{-1}$)',fontsize=22)
-    ax1.set_ylabel('$Percent$', fontsize=22)
-    ax1.axvline(x=0, color = 'black', linestyle = ':')
-    ax1.tick_params(axis = 'x', labelsize = 14)
-    ax1.set_yticks([0, 0.1, 0.2, 0.3, 0.4])
-    ax1.tick_params(axis = 'y', labelsize = 14)
-
-    ### Line plot ###
-
-    # Create series for regression lines
-    influx_x=cats_df['Fc_mean'][cats_df['Fc_mean']<=0]
-    influx_y=np.polyval([linreg_stats_df.ix['day'][0],linreg_stats_df.ix['day'][1]],influx_x)
-    efflux_x=cats_df['Fc_mean'][cats_df['Fc_mean']>=0]
-    efflux_y=np.polyval([linreg_stats_df.ix['noct'][0],linreg_stats_df.ix['noct'][1]],efflux_x)
-    
-    # Do formatting
-    ax2.set_xlim(round(cats_df['Fc_mean'].iloc[0]),math.ceil(cats_df['Fc_mean'].iloc[-1]))
-    ax2.set_xlabel(r'$C\/flux\/(\mu molC\/m^{-2} s^{-1}$)',fontsize=22)
-    ax2.set_ylabel('$\sigma(\delta)\/(\mu molC\/m^{-2} s^{-1})$',fontsize=22)
-    ax2.yaxis.set_ticklabels([])
-    ax2.tick_params(axis='y', which='both', left='off', right='off')
-    ax3.spines['right'].set_position('zero')
-    ax3.set_yticks([1, 2, 3, 4, 5, 6, 7])
-    plt.setp(ax3.get_yticklabels()[-1], visible = False)
-
-
-    # Do plotting
-    ax2.plot(cats_df['Fc_mean'], cats_df['sig_del'], 'o', markerfacecolor='0.8',
-             markeredgecolor='black', markersize=6)
-    ax2.plot(influx_x,influx_y, linestyle=':', color='black')
-    ax2.plot(efflux_x,efflux_y, linestyle=':', color='black')
-
-#    ax.set_title('Random error SD binned over flux magnitude quantiles (n='+str(num_classes)+')\n')
-    
-    # Move axis and relabel
-    str_influx=('a = '+str(round(linreg_stats_df.ix['day'][0],2))+
-                '\nb = '+str(round(linreg_stats_df.ix['day'][1],2))+
-                '\nr = '+str(round(linreg_stats_df.ix['day'][2],2))+
-                '\np = '+str(round(linreg_stats_df.ix['day'][3],2))+
-                '\nSE = '+str(round(linreg_stats_df.ix['day'][4],2)))
-    str_efflux=('a = '+str(round(linreg_stats_df.ix['noct'][0],2))+
-                '\nb = '+str(round(linreg_stats_df.ix['noct'][1],2))+
-                '\nr = '+str(round(linreg_stats_df.ix['noct'][2],2))+
-                '\np = '+str(round(linreg_stats_df.ix['noct'][3],2))+
-                '\nSE = '+str(round(linreg_stats_df.ix['noct'][4],2)))
-    props = dict(boxstyle='round', facecolor='white', alpha=0.5)
-    ax2.text(0.055, 0.28, str_influx, transform=ax2.transAxes, fontsize=12,
-            verticalalignment='top',bbox=props)
-    ax2.text(0.83, 0.28, str_efflux, transform=ax2.transAxes, fontsize=12,
-            verticalalignment='top',bbox=props)        
-
-    fig.tight_layout()
-    fig.show()
-        
-#-----------------------------------------------------------------------------#
