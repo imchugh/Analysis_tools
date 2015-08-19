@@ -359,7 +359,7 @@ def plot_estimated_storage_and_Fc_funct_ustar():
     ax1.tick_params(axis = 'x', labelsize = 14)
     ax1.tick_params(axis = 'y', labelsize = 14)
     ax2.tick_params(axis = 'y', labelsize = 14)
-    plt.setp(ax1.get_yticklabels()[0], visible = False)
+Niu    plt.setp(ax1.get_yticklabels()[0], visible = False)
     all_ser = ser_1 + ser_2 + ser_3 + ser_4 + ser_5
     labs = [ser.get_label() for ser in all_ser]
     ax1.legend(all_ser, labs, fontsize = 16, loc = [0.7,0.28], numpoints = 1)
