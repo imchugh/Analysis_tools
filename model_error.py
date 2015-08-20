@@ -6,6 +6,9 @@ Created on Mon Aug 17 14:37:38 2015
 """
 import pdb
 import numpy as np
+import sys
+sys.path.append('../Partitioning')
+import Partition_NEE_5 as pt
 
 def daytime_model_error(data_dict, configs_dict):
 
@@ -49,8 +52,13 @@ def daytime_model_error(data_dict, configs_dict):
     propn_error = error_array.std() * 2
     abs_error = abs(day_sum * propn_error)
                                    
-    return error_array# abs_error
+    return abs_error
     
-def nocturnal_model_error():
+def nocturnal_model_error(data_dict, configs_dict):
     
-    return
+    reload(pt)    
+    
+    # Return parameter and series dictionaries
+    param_dict, series_dict = pt.main(data_dict, configs_dict)
+    
+    return series_dict
