@@ -55,8 +55,8 @@ def regress_sigma_delta(data_dict, configs_dict):
 
     # Do the paired differencing (absolute)
     diff_dict = {}
-    diff_dict = {'Fc_mean': (data_dict[configs_dict['mean_flux_series']] + 
-                             np.roll(data_dict[configs_dict['mean_flux_series']], 
+    diff_dict = {'Fc_mean': (data_dict[configs_dict['mean_series']] + 
+                             np.roll(data_dict[configs_dict['mean_series']], 
                                      recs_per_day)) / 2,
                  'Fc_diff_abs': abs(data_dict['Fc'] -
                                     np.roll(data_dict['Fc'], recs_per_day)),
