@@ -53,7 +53,8 @@ def OzFluxQCnc_to_data_structure(file_in,
                                  var_list = None,
                                  fill_missing_with_nan = True,
                                  output_structure = None,
-                                 QC_accept_codes = []):
+                                 QC_accept_codes = [],
+                                 return_global_attr = False):
 
     """
     Pass the following args: 1) valid file path to .nc file
@@ -67,6 +68,7 @@ def OzFluxQCnc_to_data_structure(file_in,
                          QC_flag corresponding to the desired variables and 
                          screens out all records where the flag doesn't equal 
                          the accept code
+                     6) 'return_global_attr' - return global attributes as a dict
     
     Returns: 1) .nc file data as a dictionary (or pandas DataFrame - see above) 
                 of numpy arrays
@@ -95,6 +97,8 @@ def OzFluxQCnc_to_data_structure(file_in,
 
     if var_list == None: 
         var_list = all_var_list
+    else:
+        if not isinstance(var_list, list): var_list = [var_list]
 
     # Iterate through vars
     for var in var_list:
@@ -130,14 +134,17 @@ def OzFluxQCnc_to_data_structure(file_in,
         data_dict[var] = arr
         
     nc_obj.close()
-    
+
     if output_structure == 'pandas':
         output_structure = pd.DataFrame(data_dict, index = dates_array)
         output_structure.drop('date_time', axis = 1, inplace = True)
     else:
         output_structure = data_dict
 
-    return output_structure, attr_dict
+    if return_global_attr:
+        return output_structure, attr_dict
+    else:
+        return output_structure
 
 def config_to_dict(file_in):
     
