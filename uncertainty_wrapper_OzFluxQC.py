@@ -12,6 +12,7 @@ import pdb
 
 # My modules
 import DataIO as io
+import data_handling as data
 import random_error as rand_err
 import model_error as mod_err
 
@@ -55,6 +56,7 @@ def main():
     reload(rand_err)
     reload(mod_err)
     reload(io)
+    reload(data)
 
     # Unpack configs and open data file
     configs_master_dict = io.config_to_dict(io.file_select_dialog())
@@ -70,54 +72,60 @@ def main():
     years_array = np.array([date_.year for date_ in data_dict['date_time']])
     years_set_list = list(set(years_array))
     
-    test_0, test_1 = mod_err.nocturnal_model_error(data_dict, model_configs_dict)
+#    test_0, test_1 = mod_err.nocturnal_model_error(data_dict, model_configs_dict)
     
-    return test_1 
+#    return test_1 
     
-#    # Subset data and calculate daytime model error for each year
-#    model_error_dict = {'day': {}, 'night': {}}
-#    for year in years_set_list:
-#        year_index = years_array == year
-#        year_data_dict = {var: data_dict[var][year_index] 
-#                          for var in ['Fc', 'Fc_model', 'Fsd']}
-#        model_error_dict['day'][str(year)] = (mod_err.daytime_model_error
-#                                              (year_data_dict, 
-#                                               model_configs_dict))
-#    
-#        
-#    
-#    # Calculate the linear regression parameters of sigma_delta as a function 
-#    # of flux magnitude
-#    fig, stats_dict = rand_err.regress_sigma_delta(data_dict, random_configs_dict)
-#    fig.savefig(os.path.join(global_configs_dict['output_path'], 
-#                             'Random_error_plots.jpg'))
-#    
-#    # Calculate estimated sigma_delta for each data point, then remove records 
-#    # where no observational estimate is available (only has an effect if the 
-#    # propagation series is a model - which is recommended!!!)
-#    sig_del_array = (rand_err.estimate_sigma_delta
-#                        (data_dict[random_configs_dict['propagation_series']], 
-#                         stats_dict))
-#    sig_del_array = sig_del_array[~np.isnan(data_dict['Fc'])]
-#    obs_years_array = years_array[~np.isnan(data_dict['Fc'])]
-#    
-#    # Calculate random error estimates for each record where obs are available, 
-#    # then sum and scale appropriately to estimate annual error in gC m-2
-#    random_error_dict = {}
-#    for year in years_set_list:
-#        year_sig_del_array = sig_del_array[obs_years_array == year]
-#        random_error_dict[str(year)] = (rand_err.propagate_random_error
-#                                            (year_sig_del_array,
-#                                             random_configs_dict))
-#
-#    # Sum all error
-#    results_dict = {}
-#    results_dict['random_error'] = random_error_dict
-#    results_dict['daytime_model_error'] = model_error_dict['day']
-#    results_dict['combined_error'] = {}
-#    for year in years_set_list:
-#        results_dict['combined_error'][str(year)] = np.sqrt(
-#             (results_dict['random_error'][str(year)])**2 +
-#             (results_dict['daytime_model_error'][str(year)])**2)
+    years_data_dict = data.subset_datayear_from_arraydict(data_dict, 'date_time')
+
+    # Subset data and calculate daytime model error for each year
+    model_error_dict = {'day': {}, 'night': {}}
+    for year in years_data_dict.keys():
+        subset_dict = (data.subset_onthreshold_from_arraydict(
+                           years_data_dict[year],
+                           'Fsd',
+                           model_configs_dict['noct_threshold']))
+        subset_dict = {'day': subset_dict['>'], 'night': subset_dict['<']}
+        subset_dict['night'] = (data.set_arraydict_to_nan_conditional(
+                                subset_dict['night'], 'ustar', 0.42, '>'))
+        for cond in subset_dict:
+            print 'For ' + str(year) + ' ' + cond
+            model_error_dict[cond][year] = (mod_err.model_error
+                                            (subset_dict[cond], 
+                                             model_configs_dict))    
+    return model_error_dict
+    # Calculate the linear regression parameters of sigma_delta as a function 
+    # of flux magnitude
+    fig, stats_dict = rand_err.regress_sigma_delta(data_dict, random_configs_dict)
+    fig.savefig(os.path.join(global_configs_dict['output_path'], 
+                             'Random_error_plots.jpg'))
+    
+    # Calculate estimated sigma_delta for each data point, then remove records 
+    # where no observational estimate is available (only has an effect if the 
+    # propagation series is a model - which is recommended!!!)
+    sig_del_array = (rand_err.estimate_sigma_delta
+                        (data_dict[random_configs_dict['propagation_series']], 
+                         stats_dict))
+    sig_del_array = sig_del_array[~np.isnan(data_dict['Fc'])]
+    obs_years_array = years_array[~np.isnan(data_dict['Fc'])]
+    
+    # Calculate random error estimates for each record where obs are available, 
+    # then sum and scale appropriately to estimate annual error in gC m-2
+    random_error_dict = {}
+    for year in years_set_list:
+        year_sig_del_array = sig_del_array[obs_years_array == year]
+        random_error_dict[str(year)] = (rand_err.propagate_random_error
+                                            (year_sig_del_array,
+                                             random_configs_dict))
+
+    # Sum all error
+    results_dict = {}
+    results_dict['random_error'] = random_error_dict
+    results_dict['daytime_model_error'] = model_error_dict['day']
+    results_dict['combined_error'] = {}
+    for year in years_set_list:
+        results_dict['combined_error'][str(year)] = np.sqrt(
+             (results_dict['random_error'][str(year)])**2 +
+             (results_dict['daytime_model_error'][str(year)])**2)
 
     return results_dict    
