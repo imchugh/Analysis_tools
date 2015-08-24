@@ -10,12 +10,11 @@ import sys
 sys.path.append('../Partitioning')
 import Partition_NEE_5 as pt
 
-def daytime_model_error(data_dict, configs_dict):
+def model_error(data_dict, configs_dict):
 
     # Create data arrays with nocturnal data removed, then count all
-    day_index = data_dict['Fsd'] > configs_dict['noct_threshold']
-    obs_array = data_dict['Fc'][day_index]
-    mod_array = data_dict['Fc_model'][day_index]
+    obs_array = data_dict['Fc']
+    mod_array = data_dict['Fc_model']
     total_records = len(obs_array)
 
     # Rescale to gC m-2
@@ -23,7 +22,7 @@ def daytime_model_error(data_dict, configs_dict):
         arr[...] = arr * configs_dict['measurement_interval'] * 60 * 12 * 10 ** -6
 
     # Calculate annual sum for obs and model combined
-    day_sum = np.where(np.isnan(obs_array), mod_array, obs_array).sum()
+    annual_sum = np.where(np.isnan(obs_array), mod_array, obs_array).sum()
 
     # Subset arrays to remove nans and calculate proportion remaining
     nan_index = ~np.isnan(obs_array)
@@ -34,7 +33,7 @@ def daytime_model_error(data_dict, configs_dict):
     # Get the amount of data that will be removed from the sample (based on the 
     # proportion missing from the complete dataset)
     sample_missing = 1000 - int(1000 * (avail_records / float(total_records)))
-    
+    print 'This many missing: ' + str(sample_missing)
     # Draw a random sample of 1000 data from the timeseries, then calculate the
     # difference between the observed and model-spliced series (appropriately 
     # scaled to gC m-2)
@@ -50,15 +49,6 @@ def daytime_model_error(data_dict, configs_dict):
         error_array[this_trial] = (obs_sum - splice_sum) / obs_sum
         
     propn_error = error_array.std() * 2
-    abs_error = abs(day_sum * propn_error)
+    abs_error = abs(annual_sum * propn_error)
                                    
     return abs_error
-    
-def nocturnal_model_error(data_dict, configs_dict):
-    
-    reload(pt)    
-    
-    # Return parameter and series dictionaries
-    param_dict, series_dict = pt.main(data_dict, configs_dict)
-    
-    return series_dict
