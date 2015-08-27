@@ -12,7 +12,7 @@ import Partition_NEE_5 as pt
 
 def model_error(data_dict, configs_dict):
 
-    # Create data arrays with nocturnal data removed, then count all
+    # Create data arrays, then count all
     obs_array = data_dict['Fc']
     mod_array = data_dict['Fc_model']
     total_records = len(obs_array)
