@@ -170,7 +170,7 @@ def regress_sigma_delta(data_dict, configs_dict):
     x_high = myround(np.percentile(diff_dict['Fc_diff'], 99.5))
     x_range = (x_high - x_low)
     x = np.arange(x_low, x_high, 1 / (x_range * 10.))
-    pdf_laplace  =np.exp(-abs(x / beta)) / (2. * beta)
+    pdf_laplace = np.exp(-abs(x / beta)) / (2. * beta)
 	    	
     # Plot normalised histogram with Laplacian and Gaussian pdfs
     ax1.hist(np.array(diff_dict['Fc_diff']), bins = 200, 
@@ -180,7 +180,7 @@ def regress_sigma_delta(data_dict, configs_dict):
     ax1.plot(x,mlab.normpdf(x,0,sig),color='black', linestyle = '--', 
             label='Gaussian')
     ax1.set_xlabel(r'$\delta\/(\mu mol\/m^{-2} s^{-1}$)',fontsize=22)
-    ax1.set_ylabel('$Percent$', fontsize=22)
+    ax1.set_ylabel('$Frequency$', fontsize=22)
     ax1.axvline(x=0, color = 'black', linestyle = ':')
     ax1.tick_params(axis = 'x', labelsize = 14)
     ax1.set_yticks([0, 0.1, 0.2, 0.3, 0.4])
@@ -233,19 +233,19 @@ def estimate_sigma_delta(Fc_array, stats_dict):
                     Fc_array * stats_dict['pos']['slope'] 
                              + stats_dict['pos']['intcpt'],
                     Fc_array * stats_dict['neg']['slope'] 
-                             + stats_dict['neg']['intcpt'] / np.sqrt(2))
+                             + stats_dict['neg']['intcpt'])
 
 #-----------------------------------------------------------------------------#
-def estimate_random_error(data_array):
+def estimate_random_error(scale_param_array):
     """
     Pass the following arguments: 1) array containing sigma_delta estimate for Fc
     
     Returns a numpy array of random error estimate drawn from the Laplace 
-    distribution with sigma_delta as the scaling parameter \
+    distribution with sigma_delta as the scaling parameter
     (location parameter is 0)
     """
 
-    return np.random.laplace(0, data_array)
+    return np.random.laplace(0, scale_param_array)
 
 def propagate_random_error(sig_del_array, configs_dict):
     """
@@ -264,7 +264,7 @@ def propagate_random_error(sig_del_array, configs_dict):
     # Iterate over number of trials
     result_array = np.empty(configs_dict['num_trials'])
     for this_trial in xrange(configs_dict['num_trials']):
-        error_array = estimate_random_error(sig_del_array)
+        error_array = estimate_random_error(sig_del_array / np.sqrt(2))
         result_array[this_trial] = (error_array.sum() * 
                                     configs_dict['measurement_interval'] * 60 *
                                     12 * 10 ** -6)
