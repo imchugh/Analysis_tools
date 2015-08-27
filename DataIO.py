@@ -11,6 +11,7 @@ import netCDF4
 import numpy as np
 import pandas as pd
 import datetime as dt
+import ast
 import pdb
 
 def file_select_dialog():
@@ -136,16 +137,49 @@ def OzFluxQCnc_to_data_structure(file_in,
     nc_obj.close()
 
     if output_structure == 'pandas':
-        output_structure = pd.DataFrame(data_dict, index = dates_array)
-        output_structure.drop('date_time', axis = 1, inplace = True)
+        data_structure = pd.DataFrame(data_dict, index = dates_array)
+        data_structure.drop('date_time', axis = 1, inplace = True)
     else:
-        output_structure = data_dict
+        data_structure = data_dict
 
     if return_global_attr:
-        return output_structure, attr_dict
+        return data_structure, attr_dict
     else:
-        return output_structure
+        return data_structure
 
+#------------------------------------------------------------------------------
+def DINGO_df_to_data_structure(file_in, 
+                               var_list = None,
+                               fill_missing_with_nan = True,
+                               output_structure = None,
+                               return_global_attr = False):
+
+    df = pd.read_pickle(file_in)
+    time_step =  pd.infer_freq(df.index)
+    attr_dict = {'time_step': int(time_step[: len(time_step) - 1])}
+
+    all_var_list = df.columns
+    
+    if var_list == None: 
+        var_list = all_var_list
+    else:
+        if not isinstance(var_list, list): var_list = [var_list]
+    
+    if output_structure == 'pandas':
+        data_structure = df[var_list]
+    else:
+        data_dict = {'date_time': np.array([pd.Timestamp(rec).to_datetime() 
+                                            for rec in df.index])}
+        for var in var_list:
+            data_dict[var] = np.array(df[var])
+        data_structure = data_dict
+
+    if return_global_attr:
+        return data_structure, attr_dict
+    else:
+        return data_structure
+
+#------------------------------------------------------------------------------
 def config_to_dict(file_in):
     
     cf = ConfigObj(file_in)
@@ -155,24 +189,39 @@ def config_to_dict(file_in):
     for outer_key in cf.keys():
         cf_dict[outer_key] = {}
         for inner_key in cf[outer_key].keys():
-            try: 
-                a = float(cf[outer_key][inner_key])
-                b = int(a)
-                if a == b:
-                    cf_dict[outer_key][inner_key] = b
+            this_item = cf[outer_key][inner_key]
+#            if inner_key == 'ustar_threshold':
+#                pdb.set_trace()
+#            try: 
+#                a = float(cf[outer_key][inner_key])
+#                b = int(a)
+#                if a == b:
+#                    cf_dict[outer_key][inner_key] = b
+#                else:
+#                    cf_dict[outer_key][inner_key] = a
+            try:
+                cf_dict[outer_key][inner_key] = ast.literal_eval(this_item)
+            except:
+                if isinstance(this_item, dict):
+                    try:
+                        cf_dict[outer_key][inner_key] = (
+                            {key: float(this_item[key]) 
+                             for key in this_item.keys()})
+                    except:
+                        cf_dict[outer_key][inner_key]
                 else:
-                    cf_dict[outer_key][inner_key] = a
-            except ValueError:
-                bool_flag = 0
-                if cf[outer_key][inner_key] == 'True':
-                    bool_flag = 1
-                    cf_dict[outer_key][inner_key] = True
-                if cf[outer_key][inner_key] == 'False':
-                    bool_flag = 1
-                    cf_dict[outer_key][inner_key] = False
-                if bool_flag == 0:
                     cf_dict[outer_key][inner_key] = cf[outer_key][inner_key]
-                   
+#            except ValueError:
+#                bool_flag = 0
+#                if cf[outer_key][inner_key] == 'True':
+#                    bool_flag = 1
+#                    cf_dict[outer_key][inner_key] = True
+#                if cf[outer_key][inner_key] == 'False':
+#                    bool_flag = 1
+#                    cf_dict[outer_key][inner_key] = False
+#                if bool_flag == 0:
+#                    cf_dict[outer_key][inner_key] = cf[outer_key][inner_key]
+        
     return cf_dict
     
 def pandas_to_nc(file_in, file_out):
