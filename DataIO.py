@@ -7,11 +7,13 @@ Created on Mon Sep 15 09:29:43 2014
 
 import Tkinter, tkFileDialog
 from configobj import ConfigObj
+from collections import OrderedDict
 import netCDF4
 import numpy as np
 import pandas as pd
 import datetime as dt
 import ast
+import csv
 import pdb
 
 def file_select_dialog():
@@ -224,7 +226,24 @@ def config_to_dict(file_in):
         
     return cf_dict
     
-def pandas_to_nc(file_in, file_out):
+def dict_to_csv(data_dict, keyorder, outfile):
+    """
+    Writes a csv file from a dictionary (or dictionary of dictionaries);
+    Pass the following arguments: 1) dict or dict of dicts
+                                  2) the order in which the keys should be 
+                                     printed as headers (list of strings)
+                                  3) the ouput file path and name (string)
+    Returns None - writes to file
+    """    
+    
+    with open(outfile, 'wb') as f:
+       writer = csv.DictWriter(f, delimiter = ',', fieldnames = keyorder)
+       writer.writeheader()
+       if np.all(np.array([isinstance(data_dict[key], dict) for key in data_dict.keys()])):
+           for d in data_dict.keys():
+               writer.writerow(data_dict[d])
+       else:
+           writer.writerow(data_dict)
     
     return
 
