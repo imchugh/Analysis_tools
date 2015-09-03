@@ -86,8 +86,8 @@ def regress_sigma_delta(data_dict, configs_dict):
                            configs_dict['windspeed_difference_threshold']) & 
                           (diff_dict['Fsd_diff'] < 
                            configs_dict['radiation_difference_threshold']))
-    for i, var in enumerate(diff_dict.keys()):
-        diff_dict[var] = diff_dict[var][pass_index]
+    for key in diff_dict.keys():
+        diff_dict[key] = diff_dict[key][pass_index]
     passed_tuples = str(len(diff_dict['Fc_diff_abs']))
                
     # Separate out positive and negative values
@@ -104,10 +104,10 @@ def regress_sigma_delta(data_dict, configs_dict):
     num_neg = str(len(neg_dict['Fc_diff_abs']))
     num_neg_per_bin = str(int(float(num_neg) / configs_dict['neg_averaging_bins']))
     print (passed_tuples +' of ' + total_tuples + 
-           ' available tuples passed difference constraints (Fsd = ' +
-           str(configs_dict['radiation_difference_threshold']) + 'Wm^-2, Ta = ' + 
+           ' available tuples passed difference constraints (Fsd < ' +
+           str(configs_dict['radiation_difference_threshold']) + 'Wm^-2, Ta < ' + 
            str(configs_dict['temperature_difference_threshold']) + 
-           'C, ws = ' + str(configs_dict['windspeed_difference_threshold']) + 
+           'C, ws < ' + str(configs_dict['windspeed_difference_threshold']) + 
            'ms^-1):')
     print ('    - ' + num_neg + ' records for Fc < 0 (' + num_neg_per_bin + 
            ' records per bin)')
@@ -202,8 +202,9 @@ def regress_sigma_delta(data_dict, configs_dict):
     ax2.set_xlim(round(rslt_dict['Fc_mean'][0]), 
                  math.ceil(rslt_dict['Fc_mean'][-1]))
     ax2.set_xlabel(r'$C\/flux\/(\mu molC\/m^{-2} s^{-1}$)',fontsize=22)
-    ax2.set_ylim([int(rslt_dict['sig_del'].min()), 
-                  math.ceil(rslt_dict['sig_del'].max())])
+#    ax2.set_ylim([int(rslt_dict['sig_del'].min()), 
+#                  math.ceil(rslt_dict['sig_del'].max())])
+    ax2.set_ylim([0, math.ceil(rslt_dict['sig_del'].max())])    
     ax2.set_ylabel('$\sigma(\delta)\/(\mu molC\/m^{-2} s^{-1})$',fontsize=22)
     ax2.tick_params('x', labelsize = 14)    
     ax2.yaxis.set_ticklabels([])
@@ -269,7 +270,7 @@ def propagate_random_error(sig_del_array, configs_dict):
                                     configs_dict['measurement_interval'] * 60 *
                                     12 * 10 ** -6)
                                 
-    return result_array.std() * crit_t
+    return np.round(result_array.std() * crit_t, 2)
 
 def myround(x,base=10):
     return int(base*round(x/base))
