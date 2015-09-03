@@ -12,6 +12,12 @@ def subset_data_dict(data_dict, boolean_index, copy = True):
     
     work_dict = data_dict.copy() if copy else data_dict
     return {var: data_dict[var][boolean_index] for var in work_dict.keys()}
+    
+def set_data_dict_to_nan(data_dict, boolean_index):
+    
+    for var in data_dict.keys():
+        data_dict[var][boolean_index] = np.nan
+    return data_dict
 
 def subset_datayear_from_arraydict(data_dict, date_time_var, year = None):
     """
@@ -75,5 +81,19 @@ def set_arraydict_to_nan_conditional(data_dict, ind_var, value,
     new_dict = data_dict.copy()
     for var in set_vars:
         new_dict[var][nan_index] = np.nan
-    return new_dict
+    return new_dict   
+
+def count_nans_in_array(arr):
+    
+    index = ~np.isnan(arr)
+    
+    start_len = len(arr)
+    new_arr = arr[index]
+    end_len = len(new_arr)
+    
+    return {'Total_obs': start_len,
+            'Avail_obs': end_len,
+            'Pct_avail_obs': round(end_len / float(start_len) * 100, 1)}
+    
+    
     
