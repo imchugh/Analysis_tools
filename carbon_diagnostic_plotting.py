@@ -114,7 +114,7 @@ def plot_storage_all_levels_funct_ustar(correct_storage = False):
     if correct_storage:
         ax1.plot(corr_df.ustar, corr_df[storage_vars[0]], color = 'blue', 
                  linestyle = '--')
-        ax1.plot(means_df.ustar, means_df.Re_take_Fc, label = '$\hat{R_{e}}\/-\/F_{c}$',
+        ax1.plot(means_df.ustar, means_df.Re_take_Fc, label = '$\widehat{ER}\/-\/F_{c}$',
                  linestyle = '-', color = 'black')
         for var in vars_dict.keys():
             x = means_df.ustar         
@@ -128,13 +128,14 @@ def plot_storage_all_levels_funct_ustar(correct_storage = False):
         x = corr_df.ustar         
         y1 = means_df[storage_vars[0]][means_df.ustar < 0.25]
         y2 = corr_df[storage_vars[0]]
-        ax1.fill_between(x, y1, y2, where = y2 >= y1, hatch = '.', alpha = 0.2,
-                         interpolate=True, facecolor='None')
+        ax1.fill_between(x, y1, y2, where = y2 >= y1, hatch = '.', alpha = 0.5,
+                         interpolate=True, edgecolor = 'black', color='None',
+                         linewidth = 0.0)
         for i, var in enumerate(storage_vars[1:]):
             ax1.plot(corr_df.ustar, corr_df[var], color = plt.cm.cool(colour_idx[i]), 
                      linestyle = '--')
     ax1.axhline(y = 0, color  = 'black', linestyle = '-')
-    ax1.set_ylabel(r'$C\/storage\/(\mu mol C\/m^{-2} s^{-1})$', fontsize = 22)
+    ax1.set_ylabel(r'$C\/flux\/(\mu mol C\/m^{-2} s^{-1})$', fontsize = 22)
     ax1.set_xlabel('$u_{*}\/(m\/s^{-1})$', fontsize = 22)
     ax1.tick_params(axis = 'x', labelsize = 14)
     ax1.tick_params(axis = 'y', labelsize = 14)
@@ -266,7 +267,7 @@ def plot_storage_Fc_advection_funct_ustar():
     fig.patch.set_facecolor('white')
     ax1 = plt.gca()
     ser_1 = ax1.plot(means_df.ustar, means_df.Fre_lt, linestyle = '--', 
-                     label = '$\hat{R_{e}}$', color = 'black')
+                     label = '$\hat{ER}$', color = 'black')
     ser_2 = ax1.plot(means_df.ustar, means_df.Fc, linestyle = '-', 
                      label = '$F_{c}$', color = 'black')
     ser_3 = ax1.plot(means_df.ustar, means_df.Fc_storage, linestyle = ':', 
@@ -281,7 +282,7 @@ def plot_storage_Fc_advection_funct_ustar():
                      interpolate=True)
     ax1.fill_between(x, y1, y3, where=y3<=y1, facecolor='0.8', edgecolor='None',
                      interpolate=True)                     
-    ax1.axvline(x = 0.42, color  = 'black', linestyle = '--')
+    ax1.axvline(x = 0.42, color  = 'black', linestyle = '-.')
     ax1.axhline(y = 0, color  = 'black', linestyle = '-')
     ax1.set_ylabel(r'$C\/flux\/(\mu mol C\/m^{-2} s^{-1})$', fontsize = 22)
     ax1.set_xlabel('$u_{*}\/(m\/s^{-1})$', fontsize = 22)
@@ -359,7 +360,7 @@ def plot_estimated_storage_and_Fc_funct_ustar():
     ax1.tick_params(axis = 'x', labelsize = 14)
     ax1.tick_params(axis = 'y', labelsize = 14)
     ax2.tick_params(axis = 'y', labelsize = 14)
-Niu    plt.setp(ax1.get_yticklabels()[0], visible = False)
+    plt.setp(ax1.get_yticklabels()[0], visible = False)
     all_ser = ser_1 + ser_2 + ser_3 + ser_4 + ser_5
     labs = [ser.get_label() for ser in all_ser]
     ax1.legend(all_ser, labs, fontsize = 16, loc = [0.7,0.28], numpoints = 1)
@@ -372,7 +373,47 @@ Niu    plt.setp(ax1.get_yticklabels()[0], visible = False)
     
     return
 
+def storage_and_ustar_example_time_series():
+    
+    df, attr = get_data()
+    
+    dates_list = ['2012-02-11 12:00:00','2012-02-19 12:00:00']    
+    vars_list = ['Cc_LI840_1m', 'Cc_LI840_2m', 'Cc_LI840_4m', 
+                 'Cc_LI840_8m', 'Cc_LI840_16m', 'Cc_LI840_32m']
+    new_list = ['36m', '16m', '8m', '4m', '2m', '0.5m']
+    tick_locs = [i for i in 
+                 df.loc[dates_list[0]: dates_list[1]].index
+                 if i.hour == 0 and i.minute == 0]
+    tick_labs = [dt.datetime.strftime(i.date(), '%Y-%m-%d') for i in 
+                 df.loc[dates_list[0]: dates_list[1]].index
+                 if i.hour == 0 and i.minute == 0]
 
+    # Create plot
+    fig = plt.figure(figsize = (12, 6))
+    fig.patch.set_facecolor('white')
+    ax1 = plt.gca()
+    ax2 = ax1.twinx()
+    colour_idx = np.linspace(0, 1, 6)
+    ax1.set_ylim([360,520])
+    ax1.set_ylabel('$CO_{2}\/(ppm)$', fontsize = 22)
+
+    ax1.set_xticks(tick_locs)
+    ax1.set_xticklabels(tick_labs, rotation = 'vertical', fontsize = 14)
+    ax1.tick_params(axis = 'y', labelsize = 14)
+    
+    ax2.set_ylabel('$u_{*}\/(ms^{-1})$', fontsize = 22)
+    ax2.tick_params(axis = 'y', labelsize = 14)
+    for i, var in enumerate(vars_list):
+        ax1.plot(df.loc[dates_list[0]: dates_list[1]].index, 
+                 df.loc[dates_list[0]: dates_list[1], var], 
+                 label = new_list[i], color = plt.cm.cool(colour_idx[i]))
+    ax2.plot(df.loc[dates_list[0]: dates_list[1]].index, 
+             df.loc[dates_list[0]: dates_list[1], 'ustar'], label = 'ustar',
+             linestyle = ':', color = '0.5')
+    ax2.axhline(0.42, color = 'grey', linestyle = '--')
+    ax1.legend(loc = [0.7, 0.72], ncol = 2)
+    plt.tight_layout()
+    plt.show()    
     
 def storage_and_T_by_wind_sector():
 
