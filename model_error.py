@@ -33,7 +33,6 @@ def model_error(data_dict, configs_dict):
     # Get the amount of data that will be removed from the sample (based on the 
     # proportion missing from the complete dataset)
     sample_missing = 1000 - int(1000 * (avail_records / float(total_records)))
-    print 'This many missing: ' + str(sample_missing)
     # Draw a random sample of 1000 data from the timeseries, then calculate the
     # difference between the observed and model-spliced series (appropriately 
     # scaled to gC m-2)
@@ -46,9 +45,8 @@ def model_error(data_dict, configs_dict):
                                               subset_obs_array[sample_missing:]])
         obs_sum = subset_obs_array.sum()
         splice_sum = subset_splice_array.sum()
-        error_array[this_trial] = (obs_sum - splice_sum) / obs_sum
-        
+        error_array[this_trial] = (obs_sum - splice_sum) / obs_sum * annual_sum
     propn_error = error_array.std() * 2
     abs_error = abs(annual_sum * propn_error)
                                    
-    return abs_error
+    return np. round(abs_error, 2)
