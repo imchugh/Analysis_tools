@@ -622,7 +622,8 @@ def calc_plot_vars():
     # Get data
     df, attr = get_data()
     
-    monthly_mean_df = df[['Ta', 'Fsd', 'Sws']].groupby([lambda x: x.year, lambda y: y.month]).mean()
+    monthly_mean_df = df[['Ta', 'Fsd', 'Sws']].groupby([lambda x: x.year, 
+                                                        lambda y: y.month]).mean()
     
     years = list(set(monthly_mean_df.index.levels[0]))
     years_str = [str(yr) for yr in years]
@@ -737,7 +738,7 @@ def plot_BOM_rainfall():
     
     exclude_noQC = False
     
-    df = pd.read_csv('/home/imchugh/Analysis/Whroo/Data/External/BOM_088109_precip_all.csv')
+    df = pd.read_csv('/home/imchugh/Analysis/Whroo/Data/External/BOM_081043_precip.csv')
     
     df.index = [dt.datetime(df.loc[i, 'Year'],df.loc[i, 'Month'],df.loc[i, 'Day'])
                 for i in df.index]
