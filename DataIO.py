@@ -75,7 +75,7 @@ def OzFluxQCnc_to_data_structure(file_in,
     
     Returns: 1) .nc file data as a dictionary (or pandas DataFrame - see above) 
                 of numpy arrays
-             2) global attributes of the .nc file
+             2) global attributes of the .nc file (if specified)
     
     """
     
@@ -246,6 +246,13 @@ def dict_to_csv(data_dict, keyorder, outfile):
            writer.writerow(data_dict)
     
     return
+
+def var_to_OzFluxQCnc(file_in):
+    
+    nc_obj = netCDF4.Dataset(file_in)
+    
+    return nc_obj
+    
 
 def xlsx_to_pandas(file_in,header=True,header_row=0,skiprows_after_header=0,date_col=True,regularise=True,worksheets=[]):
 
