@@ -1002,5 +1002,5 @@ def wind_roses():
 ##    l = ax.legend(borderaxespad=-0.10)
 ##    plt.setp(l.get_texts(), fontsize=8)
     
-    return df
+    return
     
