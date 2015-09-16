@@ -46,7 +46,6 @@ def model_error(data_dict, configs_dict):
         obs_sum = subset_obs_array.sum()
         splice_sum = subset_splice_array.sum()
         error_array[this_trial] = (obs_sum - splice_sum) / obs_sum * annual_sum
-    propn_error = error_array.std() * 2
-    abs_error = abs(annual_sum * propn_error)
-                                   
-    return np. round(abs_error, 2)
+    total_error = error_array.std() * 2
+    
+    return np.round(total_error, 2)
