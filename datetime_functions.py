@@ -5,87 +5,133 @@ Created on Mon Nov 30 14:21:38 2015
 @author: imchugh
 """
 
-import pandas as pd
 import datetime as dt
 import numpy as np
+import pdb
 
-window = 10
-step = 5
-meas_int_hours = 0.5
+def get_timestep(datetime_array):
+    """
+    Checks timedelta for consistency and finds measurement interval
+    Takes datetime array as argument
+    Returns measurement interval in hours (float)
+    """
+    check_timedelta = datetime_array[1: ] - datetime_array[: -1]
+    if not all(check_timedelta[0] == rest for rest in check_timedelta):
+        print 'Time series is not continuous'
+        return None
+    else:
+        return check_timedelta[0].seconds / 3600.0
 
-test = np.array([dt.datetime(2012, 1, 1) + dt.timedelta(minutes = i * 30) 
-                 for i in range(52608)])
+def get_moving_window_indices(datetime_array, window, step, retro_stamp = True):
+    """
+    Finds available windows given window and step
+    Takes datetime array, window (int) and step (int) as arguments
+    Return dictionary containing date (centre of window) as key and array
+    location indices as value
+    Note: retro_stamp indicates that the timestamp applies to the data 
+          retrospectively i.e. the 00:00 timestamp indicates a data collection
+          period of 23:30-00:00; so for example the 2012-01-01 data day is 
+          correctly represented by 2012-01-01 00:30 to 2012-02-01 00:00; if 
+          this is set to false, it will interpret the timestamps literally, so 
+          the 2012-01-01 data day will be represented by 2012-01-01 00:00 to 
+          2012-12-31 23:30. 
+          This is only correct if timestamps are not retrospective!
+    """
 
-# Check no time jumps and get measurement interval
-check_timedelta = test[1: ] - test[: -1]
-if not all(check_timedelta[0] == rest for rest in check_timedelta):
-    print 'Time series is not continuous'
-else:
-    meas_int = check_timedelta[0].seconds / 3600.0
-
-# Create a series of continuous whole day dates that will be used for output
-# (parameter series will be interpolated between window centres)
-num_days = (test[-1].date() - test[0].date()).days + 1
-all_dates_array = np.array([test[0].date() + dt.timedelta(day) 
-                            for day in xrange(num_days)])
-
-# Create a shifted array
-shift_mins = 60 * meas_int
-shift_datetime_array = test - dt.timedelta(minutes = shift_mins)
-
-# Trim to remove part days
-start_date = shift_datetime_array[0].date()
-num_first_day = len([i for i in shift_datetime_array if i.date() == start_date]
-if num_first_day < 24: 
-    start_date = start_date + dt.timedelta(1)
-end_date = shift_datetime_array[-1].date()
-num_last_day = len([i for i in shift_datetime_array if i.date() == end_date]
-if num_first_day < 24: start_date = start_date + dt.timedelta(1)
+    # Check measurement interval    
+    meas_int = get_timestep(datetime_array)
     
+    if retro_stamp:
+        shift_by = meas_int
+    else:
+        shift_by = 0
+
+    # Find part days at beginning
+    start_date = (dt.datetime.combine(datetime_array[0].date(), 
+                                      dt.datetime.min.time()) +
+                  dt.timedelta(hours = shift_by))
+    if start_date > datetime_array[0]:
+        start_index = np.where(datetime_array == start_date)[0].item()
+    elif start_date < datetime_array[0]:
+        start_date = start_date + dt.timedelta(1)
+        start_index = np.where(datetime_array == start_date)[0].item()
+    else:
+        start_index = 0              
+
+    # Find part days at end
+    end_date = (dt.datetime.combine(datetime_array[-1].date(), 
+                                    dt.datetime.min.time()) +
+                                    dt.timedelta(1) - 
+                                    dt.timedelta(hours = meas_int) +
+                                    dt.timedelta(hours = shift_by))
+    if end_date > datetime_array[-1]:
+        end_date = end_date - dt.timedelta(1)
+        end_index = np.where(datetime_array == end_date)[0].item()               
+    else:
+        end_index = len(datetime_array)
+
+    # Slice a new working array
+    work_array = datetime_array[start_index: end_index]
+
+    # Generate dates representing begin, centre and end of window
+    num_days = (work_array[-1].date() - 
+                work_array[0].date()).days + 1 - window
+    num_days_range = range(0, num_days + 1, step)
+    centre_datetime_array = np.array([(work_array[0] + 
+                                       dt.timedelta(i + window / 2.0))
+                                      for i in num_days_range])
+    begin_datetime_array = np.array(centre_datetime_array - 
+                                    dt.timedelta(window / 2.0))
+    end_datetime_array = np.array(centre_datetime_array + 
+                                  dt.timedelta(window / 2.0) - 
+                                  dt.timedelta(hours = meas_int))
+
+    # Create dictionary with date as key and indices as values
+    step_dates_index_dict = {}
+    centre_date_array = np.array([date_time.date() 
+                                  for date_time in centre_datetime_array])
+    for i, date in enumerate(centre_date_array):
+        begin_ind = np.where(datetime_array == begin_datetime_array[i])[0].item()
+        end_ind = np.where(datetime_array == end_datetime_array[i])[0].item()
+        step_dates_index_dict[date] = [begin_ind, end_ind]
+
+    return step_dates_index_dict
+
+def get_year_indices(datetime_array, retro_stamp = True):    
+    """
+    Finds the array location indices for the years;
+    Takes datetime array as arg
+    Returns dictionary containing year as key and indices as value
+    Note: retro_stamp indicates that the timestamp applies to the data 
+          retrospectively i.e. the 00:00 timestamp indicates a data collection
+          period of 23:30-00:00; so for example the 2012 data year is correctly
+          represented by 2012-01-01 00:30 to 2013-01-01 00:00; if this is set 
+          to false, it will interpret the timestamps literally, so the 2012 
+          data year will be represented by 2012-01-01 00:00 to 2012-12-31 23:30. 
+          This is only correct if timestamps are not retrospective!
+    """    
+    # Check measurement interval    
+    meas_int = get_timestep(datetime_array)
     
-else:
-    start_date = shift_datetime_array[0].date()
+    if retro_stamp:
+        shift_by = meas_int
+    else:
+        shift_by = 0
 
-if len(shift_datetime_array[shift_datetime_array.date() == 
-                            shift_datetime_array[0].date()]) < 24:
-    start_date = dt.datetime(shift_datetime_array[0].year,
-                             shift_datetime_array[0].month,
-                             shift_datetime_array[0].day) + dt
-    print start_date                             
-else:
-    start_date = shift_datetime_array[0].date()
-print start_date
+    datetime_array = datetime_array - dt.timedelta(hours = shift_by)
+    years_index_dict = {}
+    year_array = np.array([i.year for i in datetime_array])
+    year_list = list(set(year_array))
+    for yr in year_list:
+        index = np.where(year_array == yr)[0]
+        years_index_dict[yr] = [index[0], index[-1]]
+        
+    return(years_index_dict)
 
-
-
-
-
-#window_width = window * 24 * 1 / meas_int
-#num_windows = int((len(all_dates_array) - window_width) / step)
-#print num_windows
-#start_minimum = shift_datetime_array[0] + dt.timedelta(window / 2.0)
-#if not 
-#if start_minimum.hour < 12 and start_minimum.hour > 0:
-#    hour_split = 12
-#else:
-#    hour_split = 0
-
+def blah():
     
-
-
-    
-
-#for i in all_dates_array:
-#    print len(np.where(test.date == i))
-
-# Check that first and last days are complete and revise start and end dates if required
-#temp_date = dt.datetime.combine((test[0] + dt.timedelta(1)).date(), 
-#                                dt.datetime.min.time())
-#num_obs = len(np.where(test < temp_date)[0])
-#if num_obs < 24 * (1 / meas_int_hours):
-#    start_date = start_date + dt.timedelta(1)
-#temp_date = dt.datetime.combine(shift_datetime_array[-1].date(), 
-#                                dt.datetime.min.time())
-#num_obs = len(np.where(shift_datetime_array >= temp_date)[0])
-#if num_obs < 24 * (1 / configs_dict['measurement_interval']):
-#    end_date = end_date - dt.timedelta(1)
+    # Create a series of continuous whole day dates that will be used for output
+    # (parameter series will be interpolated between window centres)
+    num_days = (datetime_array[-1].date() - datetime_array[0].date()).days + 1
+    all_dates_array = np.array([datetime_array[0].date() + dt.timedelta(day) 
+                                for day in xrange(num_days)])
