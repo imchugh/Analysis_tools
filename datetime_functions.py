@@ -26,7 +26,7 @@ def get_moving_window_indices(datetime_array, window, step, retro_stamp = True):
     """
     Finds available windows given window and step
     Takes datetime array, window (int) and step (int) as arguments
-    Return dictionary containing date (centre of window) as key and array
+    Returns dictionary containing date (centre of window) as key and array
     location indices as value
     Note: retro_stamp indicates that the timestamp applies to the data 
           retrospectively i.e. the 00:00 timestamp indicates a data collection
@@ -128,10 +128,68 @@ def get_year_indices(datetime_array, retro_stamp = True):
         
     return(years_index_dict)
 
-def blah():
+def get_time_indices(datetime_array, time_interval, retro_stamp = True):    
+    """
+    Finds the array location indices for the years;
+    Takes datetime array as arg
+    Returns dictionary containing year as key and indices as value
+    Note: retro_stamp indicates that the timestamp applies to the data 
+          retrospectively i.e. the 00:00 timestamp indicates a data collection
+          period of 23:30-00:00; so for example the 2012 data year is correctly
+          represented by 2012-01-01 00:30 to 2013-01-01 00:00; if this is set 
+          to false, it will interpret the timestamps literally, so the 2012 
+          data year will be represented by 2012-01-01 00:00 to 2012-12-31 23:30. 
+          This is only correct if timestamps are not retrospective!
+    """    
+    # Check measurement interval    
+    meas_int = get_timestep(datetime_array)
+    
+    if retro_stamp:
+        shift_by = meas_int
+    else:
+        shift_by = 0
+
+
+
+    datetime_array = datetime_array - dt.timedelta(hours = shift_by)
+    interval_index_dict = {}
+    interval_array = np.array([eval('i.' + time_interval) for i in datetime_array])
+    interval_list = list(set(interval_array))
+    for intvl in interval_list:
+        index = np.where(interval_array == intvl)[0]
+        interval_index_dict[intvl] = [index[0], index[-1]]
+        
+    return(interval_index_dict)
+
+def get_day_indices(datetime_array, time_interval, retro_stamp = True):
+    
+    # Check measurement interval    
+    meas_int = get_timestep(datetime_array)    
+
+    if retro_stamp:
+        shift_by = meas_int
+    else:
+        shift_by = 0
+
+    datetime_array = datetime_array - dt.timedelta(hours = shift_by)
+    
+    year_list = np.arange(datetime_array[0].year, datetime_array[-1].year)
+    month_list = np.arange(1, 13)
+    
+    date_list = []
+    if time_interval == 'year':
+        for year in year_list:
+            date_list.append(dt.date(year, 1, 1))
+    elif time_interval == 'month':
+        for year in year_list:
+            for month in month_list
     
     # Create a series of continuous whole day dates that will be used for output
-    # (parameter series will be interpolated between window centres)
-    num_days = (datetime_array[-1].date() - datetime_array[0].date()).days + 1
+    t_delta = (datetime_array[-1].date() - datetime_array[0].date())
+    num_days = t_delta.days + 1
+    num_months = t_delta.months + 1
+    num_years = t_delta.years + 1
     all_dates_array = np.array([datetime_array[0].date() + dt.timedelta(day) 
                                 for day in xrange(num_days)])
+            
+    return 
