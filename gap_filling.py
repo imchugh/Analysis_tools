@@ -15,13 +15,14 @@ def generic_2d_linear(data_2d):
 
     """
     Takes a 2d array as input and;
-     1) tiles this into a 3 x 3 space (9 repeats of the original 2d array in 3 columns and 3 rows)
+     1) tiles this into a 3 x 3 space (9 repeats of the original 2d array in 3 
+        columns and 3 rows)
      2) removes the missing data (c.missing_value) from the tiled array
      3) does a bi-linear interpolation to replace the the missing data
      4) returns the central tile
-     The effect is to replace missing data in the original 2d array with data from a bi-linear
-     interpolation, the tiling repeats the original array along its boundaries to avoid problems
-     at the array edges.
+     Note: the effect is to replace missing data in the original 2d array with 
+     data from a bi-linear interpolation, the tiling repeats the original array 
+     along its boundaries to avoid problems at the array edges.
     """
     
     data_2d_tiled = np.tile(data_2d, (3,3))   
@@ -46,62 +47,83 @@ def generic_2d_linear(data_2d):
 
     # Do the interpolation
     grid_z = griddata_sc(data_coords[index], data_flat[index], 
-                      (coords_x, coords_y), method = 'linear')
+                         (coords_x, coords_y), method = 'linear')
     
     # Return the central tile
-    return grid_z[num_y / 3: num_y / 3 * 2, num_x / 3: num_x / 3 * 2]
+    return grid_z[num_y / 3: num_y / 3 * 2, num_x / 3: num_x / 3 * 2].T[:, 0]
 
-def do_2dinterpolation(array_2d):
-    """
-    Takes a 2d array as input and;
-     1) tiles this into a 3 x 3 space (9 repeats of the original 2d array in 3 columns and 3 rows)
-     2) removes the missing data (c.missing_value) from the tiled array
-     3) does a bi-linear interpolation to replace the the missing data
-     4) returns the central tile
-     The effect is to replace missing data in the original 2d array with data from a bi-linear
-     interpolation, the tiling repeats the original array along its boundaries to avoid problems
-     at the array edges.
-    """
-    
-    missing_value = -9999 
-    eps = 0.0000001    
-    
-    WasMA = False
-    if np.ma.isMA(array_2d):
-        WasMA = True
-        array_2d = np.ma.filled(array_2d, float(missing_value))
-    
-    # Tile the 2d array into a 3 by 3 array
-    data_2d_tiled = np.tile(array_2d,(3,3))
-    
-    # Get the dimensions of the tiled array and create coordinates and grid
-    num_x = np.shape(data_2d_tiled)[1]
-    array_x = np.arange(0, num_x)
-    num_y = np.shape(data_2d_tiled)[0]
-    array_y = np.arange(0, num_y)
-    coords_x, coords_y = np.meshgrid(array_x, array_y)
-    
-    # Make a flat array of the tiled data
-    data_1d = data_2d_tiled.flatten()
-    
-    # Make a 2d array of the coordinates
-    data_coords = np.column_stack([coords_x.flatten(), 
-                                   coords_y.flatten()])
-    
-    # Define an index that will return all valid data for the array
-    index = np.where(data_1d!= missing_value)    
-    
-    # Do the interpolation
-    grid_z = griddata_sc(data_coords[index], data_1d[index], 
-                      (coords_x, coords_y), method = 'linear')
+#def do_2dinterpolation(array_2d):
+#    """
+#    Takes a 2d array as input and;
+#     1) tiles this into a 3 x 3 space (9 repeats of the original 2d array in 3 columns and 3 rows)
+#     2) removes the missing data (c.missing_value) from the tiled array
+#     3) does a bi-linear interpolation to replace the the missing data
+#     4) returns the central tile
+#     The effect is to replace missing data in the original 2d array with data from a bi-linear
+#     interpolation, the tiling repeats the original array along its boundaries to avoid problems
+#     at the array edges.
+#    """
+#    
+#    missing_value = -9999 
+#    eps = 0.0000001    
+#    
+#    WasMA = False
+#    if np.ma.isMA(array_2d):
+#        WasMA = True
+#        array_2d = np.ma.filled(array_2d, float(missing_value))
+#    
+#    # Tile the 2d array into a 3 by 3 array
+#    data_2d_tiled = np.tile(array_2d,(3,3))
+#    
+#    # Get the dimensions of the tiled array and create coordinates and grid
+#    num_x = np.shape(data_2d_tiled)[1]
+#    array_x = np.arange(0, num_x)
+#    num_y = np.shape(data_2d_tiled)[0]
+#    array_y = np.arange(0, num_y)
+#    coords_x, coords_y = np.meshgrid(array_x, array_y)
+#    
+#    # Make a flat array of the tiled data
+#    data_1d = data_2d_tiled.flatten()
+#    
+#    # Make a 2d array of the coordinates
+#    data_coords = np.column_stack([coords_x.flatten(), 
+#                                   coords_y.flatten()])
+#    
+#    # Define an index that will return all valid data for the array
+#    index = np.where(data_1d!= missing_value)    
+#    
+#    # Do the interpolation
+#    grid_z = griddata_sc(data_coords[index], data_1d[index], 
+#                      (coords_x, coords_y), method = 'linear')
+#
+#    # Retrieve the central tile
+#    array_2d_filled = grid_z[num_y / 3: num_y / 3 * 2, num_x / 3: num_x / 3 * 2]
+#
+#    # Check something...
+#    if WasMA:
+#        array_2d_filled = np.ma.masked_where(abs(array_2d_filled - np.float64(missing_value)) < eps, array_2d_filled)
+#        array_2d = np.ma.masked_where(abs(array_2d - np.float64(missing_value)) < eps, array_2d)
+#
+#    # Return the filled array
+#    return array_2d_filled   
 
-    # Retrieve the central tile
-    array_2d_filled = grid_z[num_y / 3: num_y / 3 * 2, num_x / 3: num_x / 3 * 2]
+# Simple linear interpolation
+def interp_params(param_rslt_array):
 
-    # Check something...
-    if WasMA:
-        array_2d_filled = np.ma.masked_where(abs(array_2d_filled - np.float64(missing_value)) < eps, array_2d_filled)
-        array_2d = np.ma.masked_where(abs(array_2d - np.float64(missing_value)) < eps, array_2d)
+    def do_interp(array_1D):
+        xp = np.arange(len(arr))
+        fp = array_1D[:]
+        nan_index = np.isnan(fp)
+        fp[nan_index] = np.interp(xp[nan_index], xp[~nan_index], fp[~nan_index])
+        return fp   
+    
+    arr = param_rslt_array.copy()    
+    num_vars = np.shape(arr)
+    if len(num_vars) == 1:
+        arr = do_interp(arr)
+    else:
+        num_vars = num_vars[1]
+        for i in range(num_vars):
+            arr[:, i] = do_interp(arr[:, i])
 
-    # Return the filled array
-    return array_2d_filled   
+    return arr            
