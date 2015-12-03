@@ -31,7 +31,7 @@ def subset_numpy_array(data_array, boolean_index):
     
     return data_array[boolean_index]
     
-def threshold_numpy_array(data_array, threshold, operator):
+def threshold_numpy_array(data_array, threshold, operation):
     """
     Creates a boolean index indicating whether values of numpy array are 
     greater than, less than, equal to or not equal to a given threshold
@@ -39,10 +39,10 @@ def threshold_numpy_array(data_array, threshold, operator):
           2) threshold - numerical value of desired threshold
           3) operator - which data to keep (choices are <, >, ==, !=)
     Returns: numpy boolean array
-    """    
+    """
     ops = {">": operator.gt, "<": operator.lt, "==": operator.eq, 
            "!=": operator.ne}
-    return ops[operator](data_array, threshold)
+    return ops[operation](data_array, threshold)
 
 #------------------------------------------------------------------------------
 # Basic Numpy array dictionary filtering functions 
@@ -62,7 +62,10 @@ def subset_numpy_dict(data_dict, boolean_index):
             for var in data_dict.keys()}
 
 #------------------------------------------------------------------------------
-# Dictionary data filtering
+# Higher level Numpy array dictionary filtering functions
+#   Note that it is assumed that all dictionary
+#   keys contain numpy arrays of equal length - indexing will most likely fail 
+#   out of range if non-equal length arrays are contained in dict)
 
 def sort_dict_on_index_variable(data_dict, sort_var):
     """
@@ -78,6 +81,17 @@ def sort_dict_on_index_variable(data_dict, sort_var):
         data_dict[key] = data_dict[key][index]
     return data_dict
 
+def subset_arraydict_on_nan(data_dict):
+    """
+    Removes all cases where ANY variable is nan
+    """    
+    temp_array = np.empty([len(data_dict[data_dict.keys()[0]]), len(data_dict)])
+    for i, var in enumerate(data_dict.keys()):
+        temp_array[:, i] = data_dict[var]
+    boolean_index = np.all(~np.isnan(temp_array), axis = 1)
+    
+    return subset_numpy_dict(data_dict, boolean_index)
+    
 def subset_arraydict_on_threshold(data_dict, threshold_var, threshold, 
                                   keep_cond, drop = False):
     """
@@ -89,9 +103,6 @@ def subset_arraydict_on_threshold(data_dict, threshold_var, threshold,
                     filtered data or set to nan
     Returns: filtered data dictionary
     """
-
-    ops = {">": operator.gt, "<": operator.lt, "==": operator.eq, 
-           "!=": operator.ne}
     boolean_index = threshold_numpy_array(data_dict[threshold_var], threshold,
                                           keep_cond)
     if drop:
