@@ -7,8 +7,8 @@ Created on Mon Aug 17 14:37:38 2015
 import pdb
 import numpy as np
 import sys
-sys.path.append('../Partitioning')
-import Partition_NEE_5 as pt
+#sys.path.append('../Partitioning')
+#import Partition_NEE_5 as pt
 
 def model_error(data_dict, configs_dict):
 
