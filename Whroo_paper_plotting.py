@@ -23,160 +23,6 @@ def get_data():
     
     return io.OzFluxQCnc_to_pandasDF(file_in)
 
-def calculate_plot_NEE_diurnal():
-    
-    file1_in = '/home/imchugh/Ozflux/Sites/Whroo/Data/Processed/all/Whroo_2011_to_2014_L6.nc'
-    file2_in = '/home/imchugh/Ozflux/Sites/Whroo/Data/Processed/all/Whroo_2011_to_2014_L6_stor.nc'
-    
-    df, attr = io.OzFluxQCnc_to_pandasDF(file1_in)
-    
-    df_stor, attr_stor = io.OzFluxQCnc_to_pandasDF(file2_in)    
-    
-    df = df[['Fc', 'NEE_SOLO', 'Fc_storage']]
-    df.columns = ['Fc', 'NEE_SOLO_no_storage', 'Fc_storage']
-    df['NEE_SOLO_incl_storage'] = df_stor['NEE_SOLO']
-    
-    df['NEE_SOLO_no_storage'] = df['NEE_SOLO_no_storage'] * (1/(12.0 * 1800 / 10**6))
-    df['NEE_SOLO_incl_storage'] = df['NEE_SOLO_incl_storage'] * (1/(12.0 * 1800 / 10**6))
-    df['Fc_plus_storage'] = df['Fc'] + df['Fc_storage']
-
-    df.dropna(inplace = True)    
-
-    # Do calculations of daily totals for u* uncorrected and corrected Fc and storage
-    diurnal_df = df.groupby([lambda x: x.hour, lambda y: y.minute]).mean()
-    diurnal_df.reset_index(inplace = True)    
-    diurnal_df.drop(['level_0','level_1'], axis = 1, inplace = True)
-    diurnal_df.index = np.linspace(0, 23.5, 48)
-
-    vars_dict = {1: ['Fc', 'Fc_plus_storage'],
-                 2: ['Fc', 'NEE_SOLO_no_storage'],
-                 3: ['Fc_plus_storage', 'NEE_SOLO_no_storage'],
-                 4: ['NEE_SOLO_no_storage', 'NEE_SOLO_incl_storage']}
-                 
-    names_dict = {1: ['$F$', '$F\/+\/S$'],
-                  2: ['$F$', '$F\/+\/u_{*}$'],
-                  3: ['$F\/+\/S$', '$F\/+\/u_{*}$'],
-                  4: ['$F\/+\/u_{*}$', '$F\/+\/S\/+\/u_{*}$'] }
-
-    lines_dict = {'Fc': '-.',
-                  'Fc_plus_storage': ':',
-                  'NEE_SOLO_no_storage':'-',
-                  'NEE_SOLO_incl_storage': '--'}
-
-    # Instantiate plot
-    fig = plt.figure(figsize = (12, 8))
-    fig.patch.set_facecolor('white')                              
-    fig_labels = ['a)', 'b)', 'c)', 'd)']
-
-    for i, var in enumerate(vars_dict.keys()):
-
-        sbplt = 220 + i + 1
-        ax = fig.add_subplot(sbplt)
-        ax.set_xlim([0, 24])
-        ax.set_ylim([-10, 4])
-        ax.set_xticks([0,4,8,12,16,20,24])
-        x = diurnal_df.index
-        var1 = vars_dict[var][0]
-        var2 = vars_dict[var][1]
-        y1 = diurnal_df[var1]
-        y2 = diurnal_df[var2]
-        ax.plot(x, y1, color = 'black', linestyle = lines_dict[var1], 
-                linewidth = 2, label = names_dict[var][0])
-        ax.plot(x, y2, color = 'black', linestyle = lines_dict[var2], 
-                linewidth = 2, label = names_dict[var][1])
-        ax.fill_between(x, y1, y2, where=y2>=y1, facecolor='blue', edgecolor='None',interpolate=True)
-        plt.fill_between(x, y1, y2, where=y1>=y2, facecolor='red', edgecolor='None',interpolate=True)
-        if i % 2 == 0:        
-            ax.set_ylabel(r'$F_{C}\/(\mu mol C\/m^{-2} s^{-1})$', fontsize = 18)
-        if i > 1:
-            ax.set_xlabel(r'$Time\/(hours)$', fontsize = 18)
-        ax.legend(fontsize = 14, loc = 'lower right', frameon = False)
-        ax.axhline(y = 0, color = 'black', linestyle = '-')
-        ax.text(-2, 3.9, fig_labels[i], fontsize = 12)
-    
-    plt.tight_layout()   
-    fig.savefig('/media/Data/Dropbox/Work/Manuscripts in progress/Writing/Whroo ' \
-                'basic C paper/Images/diurnal_Fc_effects_of_storage_and_ustar.png',
-                bbox_inches='tight',
-                dpi = 300)     
-    plt.show()
-    
-    return
-
-def calculate_plot_NEE_diurnal_2():
-    
-    file1_in = '/home/imchugh/Ozflux/Sites/Whroo/Data/Processed/all/Whroo_2011_to_2014_L6.nc'
-    file2_in = '/home/imchugh/Ozflux/Sites/Whroo/Data/Processed/all/Whroo_2011_to_2014_L6_stor.nc'
-    
-    df, attr = io.OzFluxQCnc_to_pandasDF(file1_in)
-    
-    df_stor, attr_stor = io.OzFluxQCnc_to_pandasDF(file2_in)    
-    
-    df = df[['Fc', 'NEE_SOLO', 'Fc_storage']]
-    df.columns = ['Fc', 'NEE_SOLO_no_storage', 'Fc_storage']
-    df['NEE_SOLO_incl_storage'] = df_stor['NEE_SOLO']
-    df['Fc_plus_storage'] = df['Fc'] + df['Fc_storage']
-    
-    df.dropna(inplace = True)    
-
-    # Do calculations of daily totals for u* uncorrected and corrected Fc and storage
-    diurnal_df = df.groupby([lambda x: x.hour, lambda y: y.minute]).mean()
-    diurnal_df.reset_index(inplace = True)    
-    diurnal_df.drop(['level_0','level_1'], axis = 1, inplace = True)
-    diurnal_df.index = np.linspace(0, 23.5, 48)
-
-    vars_dict = {1: ['Fc', 'Fc_plus_storage'],
-                 2: ['Fc_plus_storage', 'NEE_SOLO_no_storage'],
-                 3: ['NEE_SOLO_no_storage', 'NEE_SOLO_incl_storage']}
-                 
-    names_dict = {1: ['$F$', '$F\/+\/S$'],
-                  2: ['$F\/+\/S$', '$F\/+\/u_{*}$'],
-                  3: ['$F\/+\/u_{*}$', '$F\/+\/S\/+\/u_{*}$'] }
-
-    lines_dict = {'Fc': '-.',
-                  'Fc_plus_storage': ':',
-                  'NEE_SOLO_no_storage':'-',
-                  'NEE_SOLO_incl_storage': '--'}
-
-    # Instantiate plot
-    fig = plt.figure(figsize = (15, 5))
-    fig.patch.set_facecolor('white')                              
-    fig_labels = ['a)', 'b)', 'c)']
-
-    for i, var in enumerate(vars_dict.keys()):
-
-        sbplt = 130 + i + 1
-        ax = fig.add_subplot(sbplt)
-        ax.set_xlim([0, 24])
-        ax.set_ylim([-10, 4])
-        ax.set_xticks([0,4,8,12,16,20,24])
-        x = diurnal_df.index
-        var1 = vars_dict[var][0]
-        var2 = vars_dict[var][1]
-        y1 = diurnal_df[var1]
-        y2 = diurnal_df[var2]
-        ax.plot(x, y1, color = 'black', linestyle = lines_dict[var1], 
-                linewidth = 2, label = names_dict[var][0])
-        ax.plot(x, y2, color = 'black', linestyle = lines_dict[var2], 
-                linewidth = 2, label = names_dict[var][1])
-        ax.fill_between(x, y1, y2, where=y2>=y1, facecolor='0.8', edgecolor='None',interpolate=True)
-        plt.fill_between(x, y1, y2, where=y1>=y2, facecolor='0.8', edgecolor='None',interpolate=True)
-        if i == 0:        
-            ax.set_ylabel(r'$F_{C}\/(\mu mol C\/m^{-2} s^{-1})$', fontsize = 18)
-        ax.set_xlabel(r'$Time\/(hours)$', fontsize = 18)
-        ax.legend(fontsize = 14, loc = 'lower right', frameon = False)
-        ax.axhline(y = 0, color = 'black', linestyle = '-')
-        ax.text(-2.3, 3.9, fig_labels[i], fontsize = 12)
-    
-    plt.tight_layout()   
-    fig.savefig('/media/Data/Dropbox/Work/Manuscripts in progress/Writing/Whroo ' \
-                'basic C paper/Images/diurnal_Fc_effects_of_storage_and_ustar_2.png',
-                bbox_inches='tight',
-                dpi = 300)     
-    plt.show()
-    
-    return
-
 def calculate_plot_NEE_diurnal_3():
     
     file1_in = '/home/imchugh/Ozflux/Sites/Whroo/Data/Processed/all/Whroo_2011_to_2014_L6.nc'
@@ -207,10 +53,10 @@ def calculate_plot_NEE_diurnal_3():
                  3: ['Fc_plus_storage', 'NEE_SOLO_no_storage'],
                  4: ['Fc_plus_storage_corr', 'NEE_SOLO_no_storage']}
                  
-    names_dict = {1: ['$F$', '$F\/+\/S$'],
-                  2: ['$F\/+\/S$', '$F\/+\/S_{corr}$'],
-                  3: ['$F\/+\/S$', '$F\/+\/u_{*}$'],
-                  4: ['$F\/+\/S_{corr}$', '$F\/+\/u_{*}$']}
+    names_dict = {1: ['$F_c$', '$F_c\/+\/S_c$'],
+                  2: ['$F_c\/+\/S_c$', '$F_c\/+\/S_{c\_corr}$'],
+                  3: ['$F_c\/+\/S_c$', '$F_{c\_u_*corr}$'],
+                  4: ['$F_c\/+\/S_{c\_corr}$', '$F_{c\_u_*corr}$']}
 
     lines_dict = {'Fc': '-.',
                   'Fc_plus_storage': ':',
@@ -240,9 +86,10 @@ def calculate_plot_NEE_diurnal_3():
                 linewidth = 2, label = names_dict[var][1])
         ax.fill_between(x, y1, y2, where=y2>=y1, facecolor='0.8', edgecolor='None',interpolate=True)
         plt.fill_between(x, y1, y2, where=y1>=y2, facecolor='0.8', edgecolor='None',interpolate=True)
-        if i == 0:        
-            ax.set_ylabel(r'$F_{C}\/(\mu mol C\/m^{-2} s^{-1})$', fontsize = 18)
-        ax.set_xlabel(r'$Time\/(hours)$', fontsize = 18)
+        if i%2 == 0:        
+            ax.set_ylabel(r'$NEE\/(\mu mol C\/m^{-2} s^{-1})$', fontsize = 18)
+        if i > 1:
+            ax.set_xlabel(r'$Time\/(hours)$', fontsize = 18)
         ax.legend(fontsize = 14, loc = 'lower right', frameon = False)
         ax.axhline(y = 0, color = 'black', linestyle = '-')
         ax.text(-2.3, 3.9, fig_labels[i], fontsize = 12)
