@@ -67,7 +67,7 @@ def main():
     reload(rand_err)
     reload(mod_err)
     reload(io)
-    reload(data)
+    reload(data_filter)
 
     # Unpack configs and open data file
     configs_master_dict = io.config_to_dict(io.file_select_dialog())
