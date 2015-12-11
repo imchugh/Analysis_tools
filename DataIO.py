@@ -52,6 +52,12 @@ def OzFluxQCnc_to_pandasDF(file_in, var_list = None):
     return df, d_attr
 
 #------------------------------------------------------------------------------
+def OzFluxQCnc_add_variable(append_file, data_array, var_attr_dict):
+    
+    nc_obj = netCDF4.Dataset(append_file, 'w')
+    return nc_obj
+
+#------------------------------------------------------------------------------
 def OzFluxQCnc_to_data_structure(file_in, 
                                  var_list = None,
                                  fill_missing_with_nan = True,
@@ -89,7 +95,7 @@ def OzFluxQCnc_to_data_structure(file_in,
         
     nc_obj=netCDF4.Dataset(file_in)
     
-    dates_array = netCDF4.num2date(nc_obj.variables['time'], 
+    dates_array = netCDF4.num2date(nc_obj.variables['time'][:], 
                                    'days since 1800-01-01 00:00:00')
 
     data_dict = {'date_time': dates_array}
@@ -192,15 +198,6 @@ def config_to_dict(file_in):
         cf_dict[outer_key] = {}
         for inner_key in cf[outer_key].keys():
             this_item = cf[outer_key][inner_key]
-#            if inner_key == 'ustar_threshold':
-#                pdb.set_trace()
-#            try: 
-#                a = float(cf[outer_key][inner_key])
-#                b = int(a)
-#                if a == b:
-#                    cf_dict[outer_key][inner_key] = b
-#                else:
-#                    cf_dict[outer_key][inner_key] = a
             try:
                 cf_dict[outer_key][inner_key] = ast.literal_eval(this_item)
             except:
@@ -213,16 +210,6 @@ def config_to_dict(file_in):
                         cf_dict[outer_key][inner_key]
                 else:
                     cf_dict[outer_key][inner_key] = cf[outer_key][inner_key]
-#            except ValueError:
-#                bool_flag = 0
-#                if cf[outer_key][inner_key] == 'True':
-#                    bool_flag = 1
-#                    cf_dict[outer_key][inner_key] = True
-#                if cf[outer_key][inner_key] == 'False':
-#                    bool_flag = 1
-#                    cf_dict[outer_key][inner_key] = False
-#                if bool_flag == 0:
-#                    cf_dict[outer_key][inner_key] = cf[outer_key][inner_key]
         
     return cf_dict
     
@@ -246,6 +233,34 @@ def dict_to_csv(data_dict, keyorder, outfile):
            writer.writerow(data_dict)
     
     return
+
+def array_dict_to_csv(data_dict, outfile, keyorder = False):
+    
+    keys = data_dict.keys() if not keyorder else keyorder
+    try:
+        arr_len_list = list(set([len(data_dict[key]) for key in keys]))
+        if len(arr_len_list) > 1:
+            print 'Dictionary must contain arrays of equal length!'
+            return
+    except KeyError:
+        print 'Could not find key "' + key + '" in passed dictionary'
+        return
+
+    arr_len = arr_len_list[0]
+    arr = np.empty([arr_len, len(keys)])
+    arr[:] = np.nan
+    arr = arr.astype(object)
+    for i, key in enumerate(keys):
+        arr[:, i] = data_dict[key]
+       
+    with open(outfile, 'wb') as f:
+        writer = csv.writer(f, delimiter = ',')
+        writer.writerow(keys)
+        for i in range(arr_len):
+            writer.writerow(arr[i, :])
+            
+    return
+        
 
 def var_to_OzFluxQCnc(file_in):
     
