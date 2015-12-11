@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 sys.path.append('../Partitioning')
-import partn_wrapper_OzFluxQC as partn
+import partn_wrapper as partn
 import pdb
 
 import DataIO as io
@@ -414,6 +414,119 @@ def storage_and_ustar_example_time_series():
     ax1.legend(loc = [0.7, 0.72], ncol = 2)
     plt.tight_layout()
     plt.show()    
+
+def plot_storage_diurnal_with_ustar():
+    
+    file_in = '/home/imchugh/Ozflux/Sites/Whroo/Data/Processed/all/Whroo_2011_to_2014_L6_stor.nc'
+    
+    storage_vars = ['Fc_storage', 'Fc_storage_1', 'Fc_storage_2', 
+                    'Fc_storage_3', 'Fc_storage_4', 'Fc_storage_5', 
+                    'Fc_storage_6',]    
+    
+    df = io.OzFluxQCnc_to_data_structure(file_in, 
+                                         var_list = (storage_vars + 
+                                                     ['ustar','Ta', 'Fc',
+                                                     'Fc_storage', 'Flu',
+                                                     'Fsd']), 
+                                         output_structure='pandas')
+
+    diurnal_df = df.groupby([lambda x: x.hour, lambda y: y.minute]).mean()
+    diurnal_df['Fc_storage_std'] = df['Fc_storage'].groupby([lambda x: x.hour, 
+                                                             lambda y: y.minute]).std()
+    diurnal_df.index = np.linspace(0, 23.5, 48)
+    
+    storage_mean = diurnal_df.Fc_storage.mean()
+    var_names = ['0-36m', '0-0.5m', '0.5-2m', '2-4m', '4-8m', '8-16m', '16-36m']
+    # Create plot
+    fig = plt.figure(figsize = (12, 8))
+    fig.patch.set_facecolor('white')
+    colour_idx = np.linspace(0, 1, 6)
+    ax1 = plt.gca()
+    ax2 = ax1.twinx()
+    ax1.set_xlim([0, 24])
+    ax1.set_xticks([0,4,8,12,16,20,24])
+    ax1.tick_params(axis = 'x', labelsize = 14)
+    ax1.tick_params(axis = 'y', labelsize = 14)
+    ax2.tick_params(axis = 'y', labelsize = 14)
+    ax1.set_xlabel('$Time (hours)$', fontsize = 22)
+    ax1.set_ylabel('$S_c\/(\mu mol C\/m^{-2} s^{-1})$', fontsize = 22)
+    ax2.set_ylabel('$u_{*}\/(ms^{-1})$', fontsize = 22)
+    series_list = []
+    for i, var in enumerate(storage_vars[1:]):
+        series_list.append(ax1.plot(diurnal_df.index, diurnal_df[var], 
+                                    color = plt.cm.cool(colour_idx[i]), 
+                                    label = var_names[i + 1]))
+    series_list.append(ax1.plot(diurnal_df.index, diurnal_df.Fc_storage, 
+                                color = '0.5', label = var_names[i + 1]))
+    series_list.append(ax2.plot(diurnal_df.index, diurnal_df.ustar, 
+                                color = 'black', linestyle = ':', 
+                                label = '$u_*$'))
+    ax1.axhline(storage_mean, color = 'black')
+    ax2.axhline(0.42, linestyle = '--', color = 'black')    
+    plt.setp(ax1.get_yticklabels()[0], visible = False)
+    plt.setp(ax2.get_yticklabels()[0], visible = False)
+    labs = [ser[0].get_label() for ser in series_list]
+    lst = [i[0] for i in series_list]
+    ax1.legend(lst, labs, fontsize = 16, loc = [0.035,0.75], 
+               numpoints = 1, ncol = 2)
+    plt.tight_layout()
+    fig.savefig('/media/Data/Dropbox/Work/Manuscripts in progress/Writing/Whroo ' \
+                'basic C paper/Images/diurnal_storage.png',
+                bbox_inches='tight',
+                dpi = 300) 
+    plt.show()
+
+def plot_Fc_storage_diurnal_with_ustar_Fsd():
+    
+    file_in = '/home/imchugh/Ozflux/Sites/Whroo/Data/Processed/all/Whroo_2011_to_2014_L6.nc'
+        
+    df = io.OzFluxQCnc_to_data_structure(file_in, 
+                                         var_list = ['ustar','Ta', 'Fc',
+                                                     'Fc_storage', 'Flu',
+                                                     'Fsd'], 
+                                         output_structure='pandas')
+
+    df.Fsd = df.Fsd * 4.6 * 0.46
+    diurnal_df = df.groupby([lambda x: x.hour, lambda y: y.minute]).mean()
+    diurnal_df.index = np.linspace(0, 23.5, 48)
+    
+    storage_mean = diurnal_df.Fc_storage.mean()
+
+    # Create plot
+    fig = plt.figure(figsize = (12, 8))
+    fig.patch.set_facecolor('white')
+    ax1 = plt.gca()
+    ax2 = ax1.twinx()
+    ax1.set_xlim([8, 16])
+    ax1.set_ylim([-0.01,-0.002])
+    ax2.set_ylim([0,1])
+    ax1.set_xticks([8,9,10,11,12,13,14,15,16])
+    ax1.tick_params(axis = 'x', labelsize = 14)
+    ax1.tick_params(axis = 'y', labelsize = 14)
+    ax2.tick_params(axis = 'y', labelsize = 14)
+    ax1.set_xlabel('$Time (hours)$', fontsize = 22)
+    ax1.set_ylabel('$RUE\/(\mu mol C\/\mu mol\/photon^{-1}\/m^{-2} s^{-1})$', fontsize = 22)
+    ax2.set_ylabel('$S_c\//\/F_c$', fontsize = 22)
+    series_list = []
+    series_1 = ax1.plot(diurnal_df.index, (diurnal_df.Fc + 
+                                           diurnal_df.Fc_storage) / diurnal_df.Fsd, 
+                        color = '0.5', label = '$S_c$')
+    series_2 = ax1.plot(diurnal_df.index, diurnal_df.Fc / diurnal_df.Fsd, 
+                        color = 'black', label = '$F_c\/+\/S_c$')
+    series_3 = ax2.plot(diurnal_df.index, diurnal_df.Fc_storage / diurnal_df.Fc, 
+                        color = 'black', label = '$S_c\//\/F_c$', linestyle = ':')
+    series_list = series_1 + series_2 + series_3                        
+    labs = [ser.get_label() for ser in series_list]
+    ax1.legend(series_list, labs, fontsize = 18, loc = [0.75,0.77], 
+               numpoints = 1, frameon = False)    
+    plt.setp(ax1.get_yticklabels()[0], visible = False)
+    plt.setp(ax2.get_yticklabels()[0], visible = False)
+    plt.tight_layout()
+    fig.savefig('/media/Data/Dropbox/Work/Manuscripts in progress/Writing/Whroo ' \
+                'basic C paper/Images/RUE_and_Sc_on_Fc.png',
+                bbox_inches='tight',
+                dpi = 300) 
+    plt.show()
     
 def storage_and_T_by_wind_sector():
 
@@ -447,5 +560,35 @@ def storage_and_T_by_wind_sector():
                                                      (df[wd_var] < wind_sectors_dict[sector][1])].mean()                                                 
 
     return results_df                                                 
+
+def temp():
     
+    num_cats = 50   
     
+    # Get data
+    df, attr = get_data()
+
+    # Make variable lists
+    storage_vars = ['Fc_storage', 'Fc_storage_1', 'Fc_storage_2', 
+                    'Fc_storage_3', 'Fc_storage_4', 'Fc_storage_5', 
+                    'Fc_storage_6']
+    anc_vars = ['ustar', 'ustar_QCFlag', 'Fsd', 'Fsd_QCFlag', 'Ta', 'Ta_QCFlag',
+                'Fc', 'Fc_QCFlag']
+    var_names = ['0-32m', '0-0.5m', '0.5-2m', '2-4m', '4-8m', '8-16m', '16-32m']    
+    
+    # Remove daytime, missing or filled data where relevant
+    sub_df = df[storage_vars + anc_vars]
+    sub_df = sub_df[sub_df.ustar_QCFlag == 0]    
+    sub_df = sub_df[sub_df.Fsd_QCFlag == 0]    
+    sub_df = sub_df[sub_df.Fc_QCFlag == 0]  
+    sub_df = sub_df[sub_df.Fsd < 5]
+    sub_df.dropna(inplace = True)    
+
+    # Categorise data
+    sub_df['ustar_cat'] = pd.qcut(sub_df.ustar, num_cats, labels = np.linspace(1, num_cats, num_cats))
+    new_df = sub_df[['ustar', 'Fc_storage', 'Fc_storage_1', 'Fc_storage_2', 
+                     'Fc_storage_3', 'Fc_storage_4', 'Fc_storage_5', 
+                     'Fc_storage_6', 'ustar_cat', 'Ta', 'Fc']].groupby('ustar_cat').mean()
+#    new_df['Fc_storage_std'] = sub_df[['Fc_storage','ustar_cat']].groupby('ustar_cat').std()
+
+    return new_df
