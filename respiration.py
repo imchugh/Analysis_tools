@@ -7,74 +7,37 @@ Created on Tue Dec  8 13:47:20 2015
 
 import sys
 import numpy as np
-import pdb
 import calendar
 
 sys.path.append('../Partitioning')
-import DataIO as io
 import gap_filling as gf
 import dark_T_response_functions as dark
-import datetime_functions as dtf
-import data_filtering as filt
-
-def get_LT_fit_params(data_dict, configs_dict):
-    """
-    DOCSTRING!!!!!!!!!!!!!!!!!!
-    """
-    def filtering(this_dict):
-        noct_dict = filt.subset_arraydict_on_threshold(this_dict, 'Fsd', 5, '<', 
-                                                       drop = True)    
-        ustar_dict = filt.subset_arraydict_on_threshold(noct_dict, 'ustar', 0.42, 
-                                                        '>', drop = True)
-        sub_dict = filt.subset_arraydict_on_nan(ustar_dict)
-        return sub_dict
-
-    window = configs_dict['window_size_days']
-    step = configs_dict['step_size_days']
-    
-    # Create data step indices for input arrays
-    datetime_array = data_dict.pop('date_time')
-    years_input_index_dict = dtf.get_year_indices(datetime_array)
-    step_dates_input_index_dict = dtf.get_moving_window_indices(datetime_array, 
-                                                                window, step)
-    
-    # Create date step indices for output arrays
-    dates_output_index_dict = dtf.get_unique_dates(datetime_array)
-    date_array = np.array(dates_output_index_dict.keys())
-    date_array.sort()
-    years_output_index_dict = dtf.get_year_indices(date_array, retro_stamp = False)
 
 #------------------------------------------------------------------------------
-    
-    # Create output arrays for parameter time series
-    Eo_array = np.empty([len(dates_output_index_dict)])
-    Eo_array[:] = np.nan
-    
-    # Initalise dicts
-    all_noct_dict = filtering(data_dict)
-    params_dict = {'Eo_prior': 100,
-                   'rb_prior': all_noct_dict['NEE'].mean()}
-    
+
+def calculate_Eo(data_dict,
+                 params_in_dict,
+                 params_out_dict,
+                 years_output_index_dict,
+                 meas_int,
+                 min_pct):
+
     # Do annual fits for Eo
     Eo_annual_data_dict = {}
     Eo_annual_error_dict = {}
     Eo_pass_keys = []
     Eo_fail_keys = []
-    for year in years_input_index_dict.keys():
+    for year in data_dict.keys():
     
         # Calculate number of nocturnal recs for year
         days = 366 if calendar.isleap(year) else 365
-        recs = days * (24 / configs_dict['measurement_interval']) / 2
+        recs = days * (24 / meas_int) / 2
     
-        # Input and output indices
-        in_indices = years_input_index_dict[year]
-        
-        this_dict = {var: data_dict[var][in_indices[0]: in_indices[1]] 
-                     for var in data_dict.keys()}
-        sub_dict = filtering(this_dict)
-        data_pct = int(len(sub_dict['NEE']) / float(recs) * 100)
-        if not data_pct < configs_dict['minimum_pct_annual']:
-            params, error_code = dark.optimise_all(sub_dict, params_dict)
+        # Input indices
+        data_pct = int(len(data_dict[year]['NEE']) / float(recs) * 100)
+        if not data_pct < min_pct:
+            params, error_code = dark.optimise_all(data_dict[year], 
+                                                   params_in_dict)
         else:
             params, error_code = [np.nan, np.nan], 10
         Eo_annual_data_dict[year] = params[0]
@@ -84,7 +47,7 @@ def get_LT_fit_params(data_dict, configs_dict):
         else:
             Eo_fail_keys.append(year)
             
-    # Fill gaps and project Eo to the appropriate indices of the results array
+    # Fill gaps 
     if np.all(np.isnan(Eo_annual_data_dict.values())):
         print 'Could not find any values of Eo for any years! Exiting...'
         sys.exit()
@@ -93,56 +56,61 @@ def get_LT_fit_params(data_dict, configs_dict):
         for year in Eo_fail_keys:
             Eo_annual_data_dict[year] = Eo_mean
             Eo_pass_keys.append(year)
+
+    # Attach the yearly Eo to the parameter dictionary
+    params_in_dict['Eo_years'] = Eo_annual_data_dict
+
+    # Project Eo to the appropriate indices of the results array
     for year in Eo_pass_keys:
         out_indices = years_output_index_dict[year]
-        Eo_array[out_indices[0]: out_indices[1] + 1] = Eo_annual_data_dict[year]
+        params_out_dict['Eo'][out_indices[0]: out_indices[1] + 1] = (
+            Eo_annual_data_dict[year])
+        params_out_dict['Eo_error_code'][out_indices[0]: out_indices[1] + 1] = (
+            Eo_annual_error_dict[year])
 
-    rb_array = np.empty([len(dates_output_index_dict)])
-    rb_array[:] = np.nan
-        
+    return
+
+def calculate_rb(data_dict,
+                 params_in_dict,
+                 params_out_dict,
+                 meas_int,
+                 min_pct):
+    
     # Calculate rb for windows    
-    for date in step_dates_input_index_dict.keys():
+    for date in data_dict.keys():
         
         # Specify Eo value for the relevant year
-        params_dict['Eo_default'] = Eo_annual_data_dict[date.year]
-        
-        # Input and output indices
-        in_indices = step_dates_input_index_dict[date]
-        out_index = dates_output_index_dict[date]
-    
-        # Do optimisation
-        this_dict = {var: data_dict[var][in_indices[0]: in_indices[1]] 
-                     for var in data_dict.keys()}
-        sub_dict = filtering(this_dict)
-        data_pct = int(len(sub_dict['NEE']) / float((24 / configs_dict['measurement_interval']) / 2) * 100)
-        if not data_pct < configs_dict['minimum_pct_noct_window']:
-            params, error_code = dark.optimise_rb(sub_dict, params_dict)
+        params_in_dict['Eo_default'] = params_in_dict['Eo_years'][date.year]
+        data_pct = int(len(data_dict[date]['NEE']) / 
+                       float((24 / meas_int) / 2) * 100)
+        if not data_pct < min_pct:
+            params, error_code = dark.optimise_rb(data_dict[date], 
+                                                  params_in_dict)
         else:
             params, error_code = [np.nan], 10
-        rb_array[out_index] = params
-    
+        out_index = np.where(params_out_dict['date'] == date)
+        params_out_dict['rb'][out_index] = params
+        params_out_dict['rb_error_code'][out_index] = error_code
+
     # Interpolate rb
-    rb_array = gf.generic_2d_linear(rb_array)
+    params_out_dict['rb'] = gf.generic_2d_linear(params_out_dict['rb'])
     
-    # Return a dictionary
-    return {'date': date_array, 'Eo': Eo_array, 'rb': rb_array}
+    return
 
-def estimate_Re(data_dict, params_dict):
-
-    # Create date step indices for input arrays
-    datetime_array = data_dict.pop('date_time')
-    datetime_input_index_dict = dtf.get_day_indices(datetime_array)
+def estimate_Re(data_dict, 
+                all_params_dict, 
+                datetime_input_index_dict):
     
     # Create output arrays for Re estimates
     results_array = np.empty(len(data_dict['TempC']))
     results_array[:] = np.nan
     
     # Estimate time series Re
-    for i, date in enumerate(params_dict['date']):
+    for i, date in enumerate(all_params_dict['date']):
         
         indices = datetime_input_index_dict[date]
-        this_Eo = params_dict['Eo'][i]
-        this_rb = params_dict['rb'][i]
+        this_Eo = all_params_dict['Eo'][i]
+        this_rb = all_params_dict['rb'][i]
         this_dict = {'TempC': data_dict['TempC'][indices[0]: indices[1] + 1]}
         results_array[indices[0]: indices[1] + 1] = dark.TRF(this_dict, 
                                                              this_Eo,
