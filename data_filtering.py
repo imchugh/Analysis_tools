@@ -73,22 +73,28 @@ def sort_dict_on_index_variable(data_dict, sort_var):
     sorting variable
     Pass: 1) data_dict - a dictionary containing arrays
           2) sort_var - the variable whose sorted order will dictate the 
-                        ordering of all others
+                        ordering of all others (str)
     Returns: sorted dictionary
     """
-    index = sort_var.argsort()
+    index = data_dict[sort_var].argsort()
     for key in data_dict.keys():
         data_dict[key] = data_dict[key][index]
     return data_dict
 
-def subset_arraydict_on_nan(data_dict):
+def subset_arraydict_on_nan(data_dict, condition = 'any'):
     """
-    Removes all cases where ANY variable is nan
+    Removes all cases where either any or all variables (casewise) in array 
+    are nan and return remaining data
     """    
     temp_array = np.empty([len(data_dict[data_dict.keys()[0]]), len(data_dict)])
     for i, var in enumerate(data_dict.keys()):
         temp_array[:, i] = data_dict[var]
-    boolean_index = np.all(~np.isnan(temp_array), axis = 1)
+    if condition == 'any':
+        boolean_index = np.all(~np.isnan(temp_array), axis = 1)
+    elif condition == 'all':
+        boolean_index = np.any(~np.isnan(temp_array), axis = 1)
+    else:
+        raise Exception('Valid keywords are "any" or "all"')
     
     return subset_numpy_dict(data_dict, boolean_index)
     
