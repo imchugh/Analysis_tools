@@ -1,28 +1,24 @@
 # -*- coding: utf-8 -*-
-import os
 import math
 import numpy as np
-import pandas as pd
 from scipy import stats
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 from matplotlib import gridspec
-import pdb
-import DataIO as io
 
 #-----------------------------------------------------------------------------#
 def regress_sigma_delta(data_dict, configs_dict):
 
     """
     Pass the following arguments: 1) dict containing non-gap filled QC'd Fc, 
-                                     Fsd, Ta, ws
+                                     Fsd, Ta, ws, Fc_model
                                   2) dict containing config options as 
                                      specified below
     
     Returns the linear regression statistics for daytime and nocturnal data
     
     Config dictionary should contain the following:
-        'measurement_interval' (of fluxes)
+        'measurement_interval' (of fluxes, in minutes)
         'pos_averaging_bins' (number of bins for calculation of random error 
                               variance as function of +ve flux magnitude)
         'neg_averaging_bins' (number of bins for calculation of random error 
@@ -32,6 +28,10 @@ def regress_sigma_delta(data_dict, configs_dict):
                                           threshold values)
         'temperature_difference_threshold' (as above)
         'windspeed_difference_threshold' (as above)
+        'mean_series' (series to use to calculate the Fc mean that is paired 
+                       with the random error estimate - obs can be used but 
+                       not recommended since there are only 2 values and both 
+                       are affected by random error)
                                      
     Algorithm from reference:
         Hollinger, D.Y., Richardson, A.D., 2005. Uncertainty in eddy covariance measurements 
@@ -62,8 +62,8 @@ def regress_sigma_delta(data_dict, configs_dict):
                                     np.roll(data_dict['Fc'], recs_per_day)),
                  'Fc_diff': (data_dict['Fc'] -
                              np.roll(data_dict['Fc'], recs_per_day)),                
-                 'Ta_diff': abs(data_dict['Ta'] -
-                                np.roll(data_dict['Ta'], recs_per_day)),
+                 'Ta_diff': abs(data_dict['TempC'] -
+                                np.roll(data_dict['TempC'], recs_per_day)),
                  'ws_diff': abs(data_dict['ws'] -
                                 np.roll(data_dict['ws'], recs_per_day)),
                  'Fsd_diff': abs(data_dict['Fsd'] -
@@ -202,8 +202,6 @@ def regress_sigma_delta(data_dict, configs_dict):
     ax2.set_xlim(round(rslt_dict['Fc_mean'][0]), 
                  math.ceil(rslt_dict['Fc_mean'][-1]))
     ax2.set_xlabel(r'$C\/flux\/(\mu molC\/m^{-2} s^{-1}$)',fontsize=22)
-#    ax2.set_ylim([int(rslt_dict['sig_del'].min()), 
-#                  math.ceil(rslt_dict['sig_del'].max())])
     ax2.set_ylim([0, math.ceil(rslt_dict['sig_del'].max())])    
     ax2.set_ylabel('$\sigma(\delta)\/(\mu molC\/m^{-2} s^{-1})$',fontsize=22)
     ax2.tick_params('x', labelsize = 14)    
@@ -228,6 +226,15 @@ def regress_sigma_delta(data_dict, configs_dict):
 
 #-----------------------------------------------------------------------------#
 def estimate_sigma_delta(Fc_array, stats_dict):
+    
+    """
+    Pass the following positional arguments:
+        1) array containing Fc estimates (a model is recommended)
+        2) dict containing the regression statistics for positive and negative 
+           values of Fc
+           
+    Returns a numpy array of sigma_delta estimates
+    """    
     
     # Calculate the estimated sigma_delta for each datum
     return np.where(Fc_array > 0, 
