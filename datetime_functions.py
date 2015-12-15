@@ -13,14 +13,14 @@ def get_timestep(datetime_array):
     """
     Checks timedelta for consistency and finds measurement interval
     Takes datetime array as argument
-    Returns measurement interval in hours (float)
+    Returns measurement interval in minutes
     """
     check_timedelta = datetime_array[1: ] - datetime_array[: -1]
     if not all(check_timedelta[0] == rest for rest in check_timedelta):
         print 'Time series is not continuous'
         return None
     else:
-        return check_timedelta[0].seconds / 3600.0
+        return check_timedelta[0].seconds / 60.0
 
 def get_moving_window_indices(datetime_array, window, step, retro_stamp = True):
     """
@@ -49,7 +49,7 @@ def get_moving_window_indices(datetime_array, window, step, retro_stamp = True):
     # Find part days at beginning
     start_date = (dt.datetime.combine(datetime_array[0].date(), 
                                       dt.datetime.min.time()) +
-                  dt.timedelta(hours = shift_by))
+                  dt.timedelta(minutes = shift_by))
     if start_date > datetime_array[0]:
         start_index = np.where(datetime_array == start_date)[0].item()
     elif start_date < datetime_array[0]:
@@ -62,8 +62,8 @@ def get_moving_window_indices(datetime_array, window, step, retro_stamp = True):
     end_date = (dt.datetime.combine(datetime_array[-1].date(), 
                                     dt.datetime.min.time()) +
                                     dt.timedelta(1) - 
-                                    dt.timedelta(hours = meas_int) +
-                                    dt.timedelta(hours = shift_by))
+                                    dt.timedelta(minutes = meas_int) +
+                                    dt.timedelta(minutes = shift_by))
     if end_date > datetime_array[-1]:
         end_date = end_date - dt.timedelta(1)
         end_index = np.where(datetime_array == end_date)[0].item()               
@@ -84,7 +84,7 @@ def get_moving_window_indices(datetime_array, window, step, retro_stamp = True):
                                     dt.timedelta(window / 2.0))
     end_datetime_array = np.array(centre_datetime_array + 
                                   dt.timedelta(window / 2.0) - 
-                                  dt.timedelta(hours = meas_int))
+                                  dt.timedelta(minutes = meas_int))
 
     # Create dictionary with date as key and indices as values
     step_dates_index_dict = {}
@@ -119,7 +119,7 @@ def get_year_indices(datetime_array, retro_stamp = True):
     else:
         shift_by = 0
 
-    datetime_array = datetime_array - dt.timedelta(hours = shift_by)
+    datetime_array = datetime_array - dt.timedelta(minutes = shift_by)
     years_index_dict = {}
     year_array = np.array([i.year for i in datetime_array])
     year_list = list(set(year_array))
@@ -152,7 +152,7 @@ def get_day_indices(datetime_array, retro_stamp = True):
     else:
         shift_by = 0
 
-    datetime_array = datetime_array - dt.timedelta(hours = shift_by)
+    datetime_array = datetime_array - dt.timedelta(minutes = shift_by)
     days_index_dict = {}
     date_array = np.array([i.date() for i in datetime_array])
     date_list = list(set(date_array))
