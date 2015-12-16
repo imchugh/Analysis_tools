@@ -10,7 +10,7 @@ import copy as cp
 import calendar
 
 #sys.path.append('../Analysis_tools')
-#sys.path.append('../Partitioning')
+sys.path.append('../Partitioning')
 import datetime_functions as dtf
 import data_filtering as filt
 import gap_filling as gf
@@ -123,14 +123,12 @@ def estimate_Re(data_dict,
         results_array[indices[0]: indices[1] + 1] = dark.TRF(this_dict, 
                                                              this_Eo,
                                                              this_rb)
-    return {'Re': results_array}
+    return results_array
 
 def filtering(this_dict):
     noct_dict = filt.subset_arraydict_on_threshold(this_dict, 'Fsd', 5, '<', 
                                                    drop = True)    
-    ustar_dict = filt.subset_arraydict_on_threshold(noct_dict, 'ustar', 0.42, 
-                                                    '>', drop = True)
-    sub_dict = filt.subset_arraydict_on_nan(ustar_dict)
+    sub_dict = filt.subset_arraydict_on_nan(noct_dict)
     return sub_dict
 
 def generate_results_array(datetime_array):
@@ -226,9 +224,9 @@ def main(data_dict, configs_dict):
                  params_out_dict)
     
     # Estimate Re for all data
-    Re_dict = estimate_Re(data_dict,
-                          params_out_dict,
-                          dates_input_index_dict)
-    Re_dict['date_time'] = datetime_array
+    rslt_dict = {'Re': estimate_Re(data_dict,
+                                   params_out_dict,
+                                   dates_input_index_dict),
+                 'date_time': datetime_array}
 
-    return Re_dict, params_out_dict                         
+    return rslt_dict, params_out_dict
