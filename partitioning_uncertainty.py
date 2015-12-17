@@ -10,7 +10,7 @@ import os
 import numpy as np
 import copy as cp
 import random
-import pdb
+import time
 
 # My modules
 import DataIO as io
@@ -104,9 +104,10 @@ ustar_threshold = re_configs_dict['ustar_threshold']
 num_trials = uncert_configs_dict['num_trials']
 gaps = uncert_configs_dict['gaps']
 gap_type = uncert_configs_dict['gap_type']
-if not (isinstance(gap_type, float) or isinstance(gap_type, int)):
-    print 'Variable gap_type needs to be a float or int between 1 and 100... ' \
-          'reverting to observational gaps!'  
+if not gap_type == 'obs':
+    if not (isinstance(gap_type, float) or isinstance(gap_type, int)):
+        print 'Variable gap_type needs to be a float or int between 1 and 100... ' \
+              'reverting to observational gaps!'  
     gap_type = 'obs'
 
 # Assign observational Fc to the 'Fc_series' var
@@ -176,7 +177,7 @@ trial_sums_dict = {year: np.zeros([num_trials]) for year in
                    years_input_index_dict.keys()}
 
 #------------------------------------------------------------------------------
-
+a = time.time()
 # Loop through number of trials
 for i in xrange(num_trials):
     
@@ -228,3 +229,6 @@ for i in xrange(num_trials):
         trial_sums_dict[year][i] = (this_dict['Re'][indices[0]: 
                                     indices[1] + 1] * 12 * 0.0018).sum()
                                         
+b = time.time()
+
+print b - a
