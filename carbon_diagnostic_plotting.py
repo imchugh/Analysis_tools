@@ -16,6 +16,8 @@ import pdb
 
 import DataIO as io
 
+reload (partn)
+
 def get_data():
     
     reload(io)    
@@ -34,13 +36,13 @@ def plot_storage_all_levels_funct_ustar(correct_storage = False):
     (between u* = 0.4 and u* = 0.2m s-1) and extrapolating the regression to 
     0.2-0m s-1;
     """
-
+    
     num_cats = 30   
     
     # Get data
     df, attr = get_data()
     lt_df = partn.main()[1]
-    df['Fre_lt'] = lt_df['Re_noct']
+    df['Fre_lt'] = lt_df['Nocturnally derived Re']
     
     # Make variable lists
     storage_vars = ['Fc_storage', 'Fc_storage_1', 'Fc_storage_2', 
@@ -238,7 +240,7 @@ def plot_storage_Fc_advection_funct_ustar():
     # Get data
     df, attr = get_data()
     lt_df = partn.main()[1]
-    df['Fre_lt'] = lt_df['Re_noct']
+    df['Fre_lt'] = lt_df['Nocturnally derived Re']
 
     # Make variable lists
     use_vars = ['Fc_storage', 'Fc', 'Fre_lt', 'ustar', 'ustar_QCFlag', 
@@ -306,7 +308,7 @@ def plot_estimated_storage_and_Fc_funct_ustar():
     # Get data
     df, attr = get_data()
     lt_df = partn.main()[1]
-    df['Fre_lt'] = lt_df['Re_noct']
+    df['Fre_lt'] = lt_df['Nocturnally derived Re']
 
     # Make variable lists
     storage_vars = ['Fc_storage', 'Fc_storage_1', 'Fc_storage_2', 
@@ -372,6 +374,80 @@ def plot_estimated_storage_and_Fc_funct_ustar():
     plt.show()
     
     return
+
+def plot_test():
+    
+    num_cats = 50   
+    
+    # Get data
+    df, attr = get_data()
+    lt_df = partn.main()[1]
+    df['Fre_lt'] = lt_df['Nocturnally derived Re']
+
+    # Make variable lists
+    storage_vars = ['Fc_storage', 'Fc_storage_1', 'Fc_storage_2', 
+                    'Fc_storage_3', 'Fc_storage_4', 'Fc_storage_5', 
+                    'Fc_storage_6']
+    anc_vars = ['ustar', 'ustar_QCFlag', 'Fsd', 'Fsd_QCFlag', 'Ta', 'Ta_QCFlag',
+                'Fc', 'Fc_QCFlag', 'Fre_lt']
+    var_names = ['0-32m', '0-0.5m', '0.5-2m', '2-4m', '4-8m', '8-16m', '16-32m']    
+    
+    # Remove daytime, missing or filled data where relevant
+    sub_df = df[storage_vars + anc_vars]
+    sub_df = sub_df[sub_df.ustar_QCFlag == 0]    
+    sub_df = sub_df[sub_df.Fsd_QCFlag == 0]    
+    sub_df = sub_df[sub_df.Fc_QCFlag == 0]  
+    sub_df = sub_df[sub_df.Fsd < 5]
+    sub_df.dropna(inplace = True)    
+
+    # Categorise data
+    sub_df['ustar_cat'] = pd.qcut(sub_df.ustar, num_cats, labels = np.linspace(1, num_cats, num_cats))
+    new_df = sub_df[['ustar', 'Fc_storage', 'Fc_storage_1', 'Fc_storage_2', 
+                     'Fc_storage_3', 'Fc_storage_4', 'Fc_storage_5', 
+                     'Fc_storage_6', 'ustar_cat', 'Ta', 'Fc', 'Fre_lt']].groupby('ustar_cat').mean()
+    new_df['Fc_storage_std'] = sub_df[['Fc_storage','ustar_cat']].groupby('ustar_cat').std()
+
+    # Create plot
+    fig = plt.figure(figsize = (12, 8))
+    fig.patch.set_facecolor('white')
+    ax1 = plt.gca()
+    ax1.plot(new_df.ustar, new_df.Fc_storage + new_df.Fc, linestyle = ':', 
+             label = '$S_{c}$', color = 'black')
+    ax1.plot(new_df.ustar, new_df.Fc, linestyle = '-', 
+             label = '$F_{c}$', color = 'black')
+    ax1.plot(new_df.ustar, new_df.Fre_lt, linestyle = '--', 
+             label = '$\widehat{ER}$', color = 'black')
+
+    x = new_df.ustar[new_df.ustar < 0.42]
+    y1 = new_df.Fc[new_df.ustar < 0.42]
+    y2 = new_df.Fc_storage[new_df.ustar < 0.42] + new_df.Fc[new_df.ustar < 0.42]
+    ax1.fill_between(x, y1, y2, where=y2>=y1, facecolor='0.8', edgecolor='None',
+                     interpolate=True)
+    y1 = new_df.Fc_storage[new_df.ustar < 0.42] + new_df.Fc[new_df.ustar < 0.42]
+    y2 = new_df.Fre_lt[new_df.ustar < 0.42]
+    ax1.fill_between(x, y1, y2, where=y2>=y1, facecolor='0.6', edgecolor='None',
+                 interpolate=True)
+    ax1.axvline(x = 0.42, color  = 'black', linestyle = '-.')
+    ax1.axhline(y = 0, color  = 'black', linestyle = '-')
+    ax1.set_ylabel(r'$C\/source\/(\mu mol C\/m^{-2} s^{-1})$', fontsize = 22)
+    ax1.set_xlabel('$u_{*}\/(m\/s^{-1})$', fontsize = 22)
+    ax1.tick_params(axis = 'x', labelsize = 14)
+    ax1.tick_params(axis = 'y', labelsize = 14)
+    ax1.text(0.04, 1.95, '$Av_c\/+\/Ah_c$', fontsize = 18)
+    ax1.text(0.1, 1, '$S_c$', fontsize = 18)
+    plt.setp(ax1.get_yticklabels()[0], visible = False)
+    plt.tight_layout()   
+    fig.savefig('/media/Data/Dropbox/Work/Manuscripts in progress/Writing/Whroo ' \
+                'basic C paper/Images/ustar_vs_Fc_and_storage_advection1.png',
+                bbox_inches='tight',
+                dpi = 300) 
+    plt.show()
+    
+    print new_df.Fc[new_df.ustar<0.42].mean()
+    print new_df.Fre_lt[new_df.ustar<0.42].mean()
+    print new_df.Fc_storage[new_df.ustar<0.42].mean()
+    
+    return new_df
 
 def storage_and_ustar_example_time_series():
     
