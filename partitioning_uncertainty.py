@@ -14,23 +14,15 @@ import time
 
 # My modules
 import DataIO as io
-import data_filtering as filt
 import respiration as re
 import random_error as ra
 import datetime_functions as dtf
+import data_formatting as dt_fm
+
+reload(re)
 
 # Get the data and format appropriately
 def get_data(configs_dict):
-
-    # Initialise name change dictionary with new names via common keys
-    vars_dict = configs_dict['variables']
-    newNames_dict = {'carbon_flux':'Fc',
-                     'modelled_carbon_flux': 'Fc_model',
-                     'temperature': 'TempC',
-                     'solar_radiation': 'Fsd',
-                     'vapour_pressure_deficit': 'VPD',
-                     'friction_velocity': 'ustar',
-                     'wind_speed': 'ws'}
 
     # Get file extension and target
     paths_dict = configs_dict['files']
@@ -38,13 +30,24 @@ def get_data(configs_dict):
     data_input_target = os.path.join(paths_dict['input_path'],
                                      paths_dict['input_file'])
 
+    # Initialise name change dictionary with new names via common keys
+    oldNames_dict = configs_dict['variables']
+    newNames_dict = {'carbon_flux':'Fc',
+                     'temperature': 'TempC',
+                     'solar_radiation': 'Fsd',
+                     'vapour_pressure_deficit': 'VPD',
+                     'friction_velocity': 'ustar',
+                     'wind_speed': 'ws'}
+    names_dict = {oldNames_dict[key]: newNames_dict[key] for key in oldNames_dict}                     
+
     # get data (screen only the Fc data to obs only)
     if ext == '.nc':
         Fc_dict = io.OzFluxQCnc_to_data_structure(data_input_target,
-                                                  var_list = [vars_dict['carbon_flux']],
+                                                  var_list = [oldNames_dict
+                                                              ['carbon_flux']],
                                                   QC_accept_codes = [0])
-        date_time = Fc_dict.pop('date_time')
-        ancillary_vars = [vars_dict[var] for var in vars_dict.keys() 
+        Fc_dict.pop('date_time')
+        ancillary_vars = [oldNames_dict[var] for var in oldNames_dict.keys() 
                           if not var == 'carbon_flux']
         ancillary_dict, global_attr = io.OzFluxQCnc_to_data_structure(
                                           data_input_target,
@@ -54,31 +57,17 @@ def get_data(configs_dict):
     elif ext == '.df':
         data_dict, global_attr = io.DINGO_df_to_data_structure(
                                      data_input_target,
-                                     var_list = vars_dict.values(),
+                                     var_list = oldNames_dict.values(),
                                      return_global_attr = True)
-        date_time = data_dict.pop('date_time')
-    
-    # Create continuous model series from ER and Fc series
-    vars_dict['modelled_carbon_flux'] = 'Fc_model'
-    temp_dict = {'Fc_model': np.concatenate([data_dict['ER_SOLO_all']
-                                             [data_dict['Fsd'] < 10],
-                                             data_dict['Fc_SOLO']
-                                             [data_dict['Fsd'] >= 10]]),
-                 'date_time': np.concatenate([data_dict['date_time']
-                                             [data_dict['Fsd'] < 10],
-                                             data_dict['date_time']
-                                             [data_dict['Fsd'] >= 10]])}
-    temp_dict = filt.sort_dict_on_index_variable(temp_dict, 'date_time')
-    data_dict['Fc_model'] = temp_dict['Fc_model']
-                                  
-    # Reconstruct data dict with standard names used by algorithms
-    new_dict = {}
-    for key in vars_dict.keys():
-        if key in newNames_dict.keys():
-            new_dict[newNames_dict[key]] = data_dict.pop(vars_dict[key])  
-    new_dict['date_time'] = date_time
 
-    return new_dict, global_attr
+    # Add model data
+    data_dict['Fc_model'] = (dt_fm.get_model_NEE_from_OzFluxQCncL6
+                             (data_input_target)['Fc_model'])
+    
+    # Rename relevant variables    
+    data_dict = dt_fm.rename_data_dict_vars(data_dict, names_dict)
+
+    return data_dict, global_attr
     
 #------------------------------------------------------------------------------    
 # Do the standard respiration fit
@@ -92,7 +81,7 @@ data_dict, attr = get_data(configs_dict)
 # Make a respiration config dict from config file and write measurement 
 # interval to it
 re_configs_dict = configs_dict['respiration_configs']
-re_configs_dict['measurement_interval'] = configs_dict['globals']['measurement_interval']
+re_configs_dict['measurement_interval'] = int(attr['time_step'])
 
 # Make an uncertainty configs dict from config file
 uncert_configs_dict = configs_dict['partitioning_uncertainty']
@@ -161,7 +150,7 @@ step_dates_input_index_dict = dtf.get_moving_window_indices(datetime_array,
 
 # Get random error estimate using model data as input
 ra_configs_dict = configs_dict['random_error_configs']
-ra_configs_dict['measurement_interval'] = configs_dict['globals']['measurement_interval']
+ra_configs_dict['measurement_interval'] = int(attr['time_step'])
 ra_fig, ra_stats_dict = ra.regress_sigma_delta(data_dict, ra_configs_dict)
 sigma_delta = ra.estimate_sigma_delta(data_dict['Re'], ra_stats_dict)
 
