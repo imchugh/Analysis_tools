@@ -4,12 +4,13 @@ Created on Wed Dec  2 11:23:04 2015
 
 @author: imchugh
 """
+# Python modules
 import sys
 import numpy as np
 import copy as cp
 import calendar
 
-#sys.path.append('../Analysis_tools')
+# My modules
 sys.path.append('../Partitioning')
 import datetime_functions as dtf
 import data_filtering as filt
@@ -82,8 +83,7 @@ def calculate_Eo(data_dict,
             
     # Fill gaps 
     if np.all(np.isnan(Eo_annual_data_dict.values())):
-        print 'Could not find any values of Eo for any years! Exiting...'
-        sys.exit()
+        raise Exception('Could not find any values of Eo for any years! Exiting...')
     if np.any(np.isnan(Eo_annual_data_dict.values())):
         Eo_mean = np.array([Eo_annual_data_dict[year] for year in Eo_pass_keys]).mean()    
         for year in Eo_fail_keys:
