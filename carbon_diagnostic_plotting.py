@@ -408,7 +408,7 @@ def plot_test():
     new_df['Fc_storage_std'] = sub_df[['Fc_storage','ustar_cat']].groupby('ustar_cat').std()
 
     # Create plot
-    fig = plt.figure(figsize = (12, 8))
+    fig = plt.figure(figsize = (8, 8))
     fig.patch.set_facecolor('white')
     ax1 = plt.gca()
     ax1.plot(new_df.ustar, new_df.Fc_storage + new_df.Fc, linestyle = ':', 
@@ -418,23 +418,30 @@ def plot_test():
     ax1.plot(new_df.ustar, new_df.Fre_lt, linestyle = '--', 
              label = '$\widehat{ER}$', color = 'black')
 
-    x = new_df.ustar[new_df.ustar < 0.42]
-    y1 = new_df.Fc[new_df.ustar < 0.42]
-    y2 = new_df.Fc_storage[new_df.ustar < 0.42] + new_df.Fc[new_df.ustar < 0.42]
+    x = new_df.ustar
+    y1 = new_df.Fc
+    y2 = new_df.Fc_storage + new_df.Fc
     ax1.fill_between(x, y1, y2, where=y2>=y1, facecolor='0.8', edgecolor='None',
                      interpolate=True)
-    y1 = new_df.Fc_storage[new_df.ustar < 0.42] + new_df.Fc[new_df.ustar < 0.42]
-    y2 = new_df.Fre_lt[new_df.ustar < 0.42]
+    y1 = new_df.Fc_storage + new_df.Fc
+    y2 = new_df.Fre_lt
     ax1.fill_between(x, y1, y2, where=y2>=y1, facecolor='0.6', edgecolor='None',
                  interpolate=True)
-    ax1.axvline(x = 0.42, color  = 'black', linestyle = '-.')
+#    ax1.axvline(x = 0.42, color  = 'black', linestyle = '-.')
     ax1.axhline(y = 0, color  = 'black', linestyle = '-')
+    ax1.xaxis.set_ticks_position('bottom')
+    ax1.yaxis.set_ticks_position('left')
+    ax1.spines['right'].set_visible(False)
+    ax1.spines['top'].set_visible(False)
     ax1.set_ylabel(r'$C\/source\/(\mu mol C\/m^{-2} s^{-1})$', fontsize = 22)
     ax1.set_xlabel('$u_{*}\/(m\/s^{-1})$', fontsize = 22)
+    ax1.set_xlim([0, 0.42])
     ax1.tick_params(axis = 'x', labelsize = 14)
     ax1.tick_params(axis = 'y', labelsize = 14)
-    ax1.text(0.04, 1.95, '$Av_c\/+\/Ah_c$', fontsize = 18)
-    ax1.text(0.1, 1, '$S_c$', fontsize = 18)
+    ax1.text(0.08, 1.73, '$Av_c\/+\/Ah_c$\n$=\/0.37$', fontsize = 22, 
+             horizontalalignment = 'center')
+    ax1.text(0.1, 1.1, '$S_c\/=\/0.63$', fontsize = 22)
+    ax1.text(0.3, 0.5, '$F_c$', fontsize = 22)
     plt.setp(ax1.get_yticklabels()[0], visible = False)
     plt.tight_layout()   
     fig.savefig('/media/Data/Dropbox/Work/Manuscripts in progress/Writing/Whroo ' \
