@@ -23,7 +23,7 @@ def calculate_rb(data_dict,
 
     # Create local vars from configs
     meas_int = configs_dict['measurement_interval']    
-    min_pct = configs_dict['minimum_pct_noct_window']    
+    min_pct = configs_dict['minimum_pct_window']    
     
     # Calculate rb for windows    
     for date in data_dict.keys():
@@ -148,8 +148,8 @@ def generate_results_array(datetime_array):
 def partition_by_date(data_dict, configs_dict, datetime_array):
 
     # Create local vars for step and window
-    step = configs_dict['respiration_configs']['step_size_days']
-    window = configs_dict['respiration_configs']['window_size_days']
+    step = configs_dict['step_size_days']
+    window = configs_dict['window_size_days']
     
     # Get the indices of the start and end rows of each year in the source data 
     # array, then build a dict containing a filtered (ustar-screened nocturnal data
@@ -185,10 +185,53 @@ def segment_data(data_dict, indices_dict):
 
 def main(data_dict, configs_dict):
 
-    # Make local var names for config items
-    re_configs_dict = configs_dict['respiration_configs']
-    re_configs_dict['measurement_interval'] = (configs_dict['globals']
-                                               ['measurement_interval'])
+    """
+    Calculates Re using Lloyd and Taylor function where Eo is fitted to annual
+    data and rb is fitted to specified combination of step and window;
+    Pass: 1) a data dictionary containing the following key / value pairs (it 
+             is assumed that there are no gaps in the time series, but this is 
+             not yet enforced!; also, all values in dict must be numpy arrays, 
+             and all must be of same length):
+                 - 'date_time': numpy array of Python datetimes
+                 - 'Fc_series': numpy array of the NEE time series to be used 
+                                as the optimisation target (float); note:
+                                - missing values must be np.nan
+                                - no QC is done on values - this must be done 
+                                  prior to passing the data
+                 - 'TempC': numpy array of temperatures to be used as 
+                            optimisation input (float)
+          2) a configs dict containing the following key / value pairs:
+                 - 'step_size_days': step size in days between fitting windows
+                                     (int; range 0 < x < n days)
+                 - 'window_size_days': width of fitting window in days 
+                                     (int; range 0 < x < n days)
+                 - 'minimum_pct_annual': minimum acceptable percentage of 
+                                         available annual data for fitting of 
+                                         Eo (int; range 0 <= x <= 100)
+                 - 'minimum_pct_window': minimum acceptable percentage of 
+                                         available window data for fitting of 
+                                         rb (int; range 0 <= x <= 100)
+                 - 'measurement_interval': measurement interval (minutes) of 
+                                           the input data (int)                                          
+    Returns: 1) a results dictionary containing 2 key / value pairs:
+                    - 'date_time': numpy array of Python datetimes for each
+                      datum in the original time series
+                    - 'Re': numpy array of half-hourly estimates of Re
+             2) a results dictionary containing 4 key / value pairs:
+                    - 'date_time': numpy array of Python dates for each day in 
+                                   the original time series 
+                    - 'Eo': numpy array of Eo estimates for each day (note that 
+                            each year has a constant value)
+                    - 'Eo_error_code': numpy array of Eo diagnostic errors for 
+                                       each day (note that each year has a 
+                                       constant value)
+                    - 'rb': numpy array of rb estimates for each day (note that 
+                            linear interpolation is used to gap fill between 
+                            steps)
+                    - 'rb_error_code': numpy array of rb diagnostic errors for 
+                                       each day (including whether the value is 
+                                       interpolated or calculated)                    
+    """
     
     #------------------------------------------------------------------------------
     # Strip datetime from dict
@@ -213,13 +256,13 @@ def main(data_dict, configs_dict):
                       'rb_prior': all_noct_dict['Fc_series'].mean()}
     
     calculate_Eo(years_data_dict, 
-                 re_configs_dict,
+                 configs_dict,
                  params_in_dict,
                  params_out_dict)
     
     # Get rb for all steps
     calculate_rb(step_data_dict,
-                 re_configs_dict,
+                 configs_dict,
                  params_in_dict,
                  params_out_dict)
     
