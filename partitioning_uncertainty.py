@@ -137,7 +137,7 @@ data_dict['Fc_series'][data_dict['ustar'] < ustar_threshold] = np.nan
 nan_boolean = np.isnan(data_dict['Fc_series'])
 
 # Calculate Re by sending data to main respiration function
-re_dict, params_dict = re.main(data_dict, configs_dict)
+re_dict, params_dict = re.main(data_dict, re_configs_dict)
 data_dict['Re'] = re_dict['Re']
 
 # Calculate sums for each year
