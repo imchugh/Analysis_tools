@@ -145,23 +145,23 @@ def generate_results_array(datetime_array):
             'rb': cp.copy(generic_array),
             'rb_error_code': rb_error_code_array}  
 
-def partition_by_date(data_dict, configs_dict, datetime_array):
+def partition_by_date(data_dict, configs_dict):
 
     # Create local vars for step and window
     step = configs_dict['step_size_days']
     window = configs_dict['window_size_days']
     
     # Get the indices of the start and end rows of each year in the source data 
-    # array, then build a dict containing a filtered (ustar-screened nocturnal data
-    # with nans dropped) data dict for each year with year as key
-    years_input_index_dict = dtf.get_year_indices(datetime_array)
+    # array, then build a dict containing a filtered (nans dropped) data dict 
+    # for each year with year as key
+    years_input_index_dict = dtf.get_year_indices(data_dict['date_time'])
     years_data_dict = segment_data(data_dict, years_input_index_dict)
     
     # Get the indices of the start and end rows of each window (depending on step
     # and window size) in the source data array, then build a dict containing a 
-    # filtered (ustar-screened nocturnal data with nans dropped) data dict for each 
-    # window with the central date for that window as key
-    step_dates_input_index_dict = dtf.get_moving_window_indices(datetime_array, 
+    # filtered (nans dropped) data dict for each window with the central date 
+    # for that window as key
+    step_dates_input_index_dict = dtf.get_moving_window_indices(data_dict['date_time'], 
                                                                 window, step)
     step_data_dict = segment_data(data_dict, step_dates_input_index_dict)    
     
@@ -234,21 +234,18 @@ def main(data_dict, configs_dict):
     """
     
     #------------------------------------------------------------------------------
-    # Strip datetime from dict
-    datetime_array = data_dict.pop('date_time')
     
     # Partition the data into year and step pieces
     years_data_dict, step_data_dict = partition_by_date(data_dict, 
-                                                        configs_dict,
-                                                        datetime_array)
+                                                        configs_dict)
     
     # Get the indices of the start and end rows of each unique date in the source 
     # data array - no data dict is built from this, since these indices are used to
     # assign Re estimates to the estimated time series output array only
-    dates_input_index_dict = dtf.get_day_indices(datetime_array)
+    dates_input_index_dict = dtf.get_day_indices(data_dict['date_time'])
     
     # Generate a results dictionary for the parameter values (1 for each day)
-    params_out_dict = generate_results_array(datetime_array)
+    params_out_dict = generate_results_array(data_dict['date_time'])
     
     # Initalise parameter dicts with prior estimates
     all_noct_dict = filtering(data_dict)
@@ -270,6 +267,6 @@ def main(data_dict, configs_dict):
     rslt_dict = {'Re': estimate_Re(data_dict,
                                    params_out_dict,
                                    dates_input_index_dict),
-                 'date_time': datetime_array}
+                 'date_time': data_dict['date_time']}
 
     return rslt_dict, params_out_dict
