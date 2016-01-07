@@ -6,9 +6,13 @@ Created on Wed Dec  2 11:23:04 2015
 """
 # Python modules
 import sys
+import os
 import numpy as np
 import copy as cp
 import calendar
+import matplotlib.pyplot as plt
+import datetime as dt
+import pdb
 
 # My modules
 sys.path.append('../Partitioning')
@@ -166,6 +170,42 @@ def partition_by_date(data_dict, configs_dict):
     step_data_dict = segment_data(data_dict, step_dates_input_index_dict)    
     
     return years_data_dict, step_data_dict
+
+# Nocturnal fits for each window
+def plot_windows(data_dict, configs_dict, datetime_input_index_dict):
+
+    # Set parameters from dicts
+    window = configs_dict['window_size_days']
+    
+    x_lab = r'Temperature ($^{o}C$)'
+    
+    for date in datetime_input_index_dict:
+
+        indices = datetime_input_index_dict[date]
+        x_var = data_dict['TempC'][indices[0]: indices[1] + 1]
+        y_var1 = data_dict['Fc_series'][indices[0]: indices[1] + 1]
+        y_var2 = data_dict['Re'][indices[0]: indices[1] + 1]
+          
+        # Plot
+        date_str = dt.datetime.strftime(date,'%Y-%m-%d')
+        fig = plt.figure(figsize = (12,8))
+        fig.patch.set_facecolor('white')
+        plt.plot(x_var, y_var1, 'o' , label = 'NEE_obs', color = 'black')
+        plt.plot(x_var, y_var2, label = 'NEE_est', color = 'black')
+        plt.title('Fit for ' + str(window) + ' day window centred on ' + 
+                  date_str + '\n', fontsize = 22)
+        plt.xlabel(x_lab, fontsize = 16)
+        plt.ylabel(r'NEE ($\mu mol C\/m^{-2} s^{-1}$)', fontsize = 16)
+        plt.axhline(y = 0, color = 'black')
+        plot_out_name = 'noct' + '_' + date_str + '.jpg'
+        plt.tight_layout()
+        fig.savefig(os.path.join(configs_dict['full_path'],
+                                 plot_out_name))
+        plt.close(fig)
+    
+        break
+        
+    return
         
 def segment_data(data_dict, indices_dict):
 
@@ -268,5 +308,13 @@ def main(data_dict, configs_dict):
                                    params_out_dict,
                                    dates_input_index_dict),
                  'date_time': data_dict['date_time']}
+
+    # Write Re estimate to data_dict
+    data_dict['Re'] = rslt_dict['Re']
+
+    # Do plotting
+    if configs_dict['output_fit_plots']:
+        plot_windows(step_data_dict, 
+                     configs_dict)
 
     return rslt_dict, params_out_dict
