@@ -81,7 +81,7 @@ def sort_dict_on_index_variable(data_dict, sort_var):
         data_dict[key] = data_dict[key][index]
     return data_dict
 
-def subset_arraydict_on_nan(data_dict, condition = 'any'):
+def subset_arraydict_on_nan_old(data_dict, condition = 'any'):
     """
     Removes all cases where either any or all variables (casewise) in array 
     are nan and return remaining data
@@ -96,6 +96,27 @@ def subset_arraydict_on_nan(data_dict, condition = 'any'):
     else:
         raise Exception('Valid keywords are "any" or "all"')
     
+    return subset_numpy_dict(data_dict, boolean_index)
+
+def subset_arraydict_on_nan(data_dict, condition = 'any'):
+    """
+    Removes all cases where either any or all variables (casewise) in array 
+    are nan and return remaining data (ignores non-numeric dtypes)
+    """    
+    boolean_list = []
+    for var in data_dict.keys():
+        try:
+            boolean_list.append(~np.isnan(data_dict[var]))
+        except:
+            continue
+    if condition == 'any':
+        all_boolean_index = [all(rec) for rec in zip(*boolean_list)]
+    elif condition == 'all':
+        all_boolean_index = [any(rec) for rec in zip(*boolean_list)]
+    else:
+        raise Exception('Valid keywords are "any" or "all"')    
+    
+    boolean_index = np.array(all_boolean_index)
     return subset_numpy_dict(data_dict, boolean_index)
     
 def subset_arraydict_on_threshold(data_dict, threshold_var, threshold, 
