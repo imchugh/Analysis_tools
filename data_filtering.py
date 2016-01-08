@@ -81,30 +81,15 @@ def sort_dict_on_index_variable(data_dict, sort_var):
         data_dict[key] = data_dict[key][index]
     return data_dict
 
-def subset_arraydict_on_nan_old(data_dict, condition = 'any'):
-    """
-    Removes all cases where either any or all variables (casewise) in array 
-    are nan and return remaining data
-    """    
-    temp_array = np.empty([len(data_dict[data_dict.keys()[0]]), len(data_dict)])
-    for i, var in enumerate(data_dict.keys()):
-        temp_array[:, i] = data_dict[var]
-    if condition == 'any':
-        boolean_index = np.all(~np.isnan(temp_array), axis = 1)
-    elif condition == 'all':
-        boolean_index = np.any(~np.isnan(temp_array), axis = 1)
-    else:
-        raise Exception('Valid keywords are "any" or "all"')
-    
-    return subset_numpy_dict(data_dict, boolean_index)
-
-def subset_arraydict_on_nan(data_dict, condition = 'any'):
+def subset_arraydict_on_nan(data_dict, var_list = False, condition = 'any', 
+                            subset = True):
     """
     Removes all cases where either any or all variables (casewise) in array 
     are nan and return remaining data (ignores non-numeric dtypes)
     """    
     boolean_list = []
-    for var in data_dict.keys():
+    these_vars = var_list if var_list else data_dict.keys()
+    for var in these_vars:
         try:
             boolean_list.append(~np.isnan(data_dict[var]))
         except:
@@ -117,7 +102,10 @@ def subset_arraydict_on_nan(data_dict, condition = 'any'):
         raise Exception('Valid keywords are "any" or "all"')    
     
     boolean_index = np.array(all_boolean_index)
-    return subset_numpy_dict(data_dict, boolean_index)
+    if subset:
+        return subset_numpy_dict(data_dict, boolean_index)
+    else:
+        return boolean_index
     
 def subset_arraydict_on_threshold(data_dict, threshold_var, threshold, 
                                   keep_cond, drop = False):
