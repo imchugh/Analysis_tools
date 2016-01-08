@@ -17,26 +17,43 @@ def get_timestep(datetime_array):
     """
     check_timedelta = datetime_array[1: ] - datetime_array[: -1]
     if not all(check_timedelta[0] == rest for rest in check_timedelta):
-        print 'Time series is not continuous'
-        return None
+        raise exception('Time series is not continuous!')
     else:
         return check_timedelta[0].seconds / 60.0
 
-def get_moving_window_indices(datetime_array, window, step, retro_stamp = True):
+def get_moving_window(data_dict,
+                      datetime_varname, 
+                      window, 
+                      step, 
+                      return_indices_only = False, 
+                      retro_stamp = True):
     """
     Finds available windows given window and step
-    Takes datetime array, window (int) and step (int) as arguments
-    Returns dictionary containing date (centre of window) as key and array
-    location indices as value
-    Note: retro_stamp indicates that the timestamp applies to the data 
-          retrospectively i.e. the 00:00 timestamp indicates a data collection
-          period of 23:30-00:00; so for example the 2012-01-01 data day is 
-          correctly represented by 2012-01-01 00:30 to 2012-02-01 00:00; if 
-          this is set to false, it will interpret the timestamps literally, so 
-          the 2012-01-01 data day will be represented by 2012-01-01 00:00 to 
-          2012-12-31 23:30. 
-          This is only correct if timestamps are not retrospective!
+    Pass args: 1) data dictionary containing a numpy array of python datetimes, 
+               2) the variable name for the datetime array (str)
+               3) window (int)
+               4) step (int)
+    Optional kwargs: 1) return_indices_only:
+                         - if true will return a dictionary with key / value 
+                           pairs of:
+                               - date of centre of window: start and end indices 
+                                                          (list of ints)'
+                         - if false will return a dicitonary with key / value 
+                           pairs of:
+                               - date of centre of window: complete time series
+                                                          within the window
+                                                          boundaries
+                     2) retro_stamp:
+                         - if true then selects dates on the basis that the 
+                           datetime format in the file is retrospective (i.e.
+                           that the timestmap represents the END of the period
+                           it references e.g. 28/07/2015 00:00 for a 
+                           half-hourly frequency time series represents the 
+                           period 27/07/15 23:30 - 28/07/15 00:00)
     """
+
+    # Get datetime array
+    datetime_array = data_dict[datetime_varname]
 
     # Check measurement interval    
     meas_int = get_timestep(datetime_array)
@@ -95,9 +112,15 @@ def get_moving_window_indices(datetime_array, window, step, retro_stamp = True):
         end_ind = np.where(datetime_array == end_datetime_array[i])[0].item()
         step_dates_index_dict[date] = [begin_ind, end_ind]
 
-    return step_dates_index_dict
+    if return_indices_only:
+        return step_dates_index_dict
+    else:
+        return segment_data(data_dict, step_dates_index_dict)
 
-def get_year_indices(datetime_array, retro_stamp = True):    
+def get_year_window(data_dict,
+                    datetime_varname,
+                    return_indices_only = False,
+                    retro_stamp = True):    
     """
     Finds the array location indices for the years;
     Takes datetime array as arg
@@ -110,6 +133,9 @@ def get_year_indices(datetime_array, retro_stamp = True):
           data year will be represented by 2012-01-01 00:00 to 2012-12-31 23:30. 
           This is only correct if timestamps are not retrospective!
     """    
+
+    # Get datetime array
+    datetime_array = data_dict[datetime_varname]
  
     # Check measurement interval    
     meas_int = get_timestep(datetime_array)
@@ -126,6 +152,11 @@ def get_year_indices(datetime_array, retro_stamp = True):
     for yr in year_list:
         index = np.where(year_array == yr)[0]
         years_index_dict[yr] = [index[0], index[-1]]
+
+    if return_indices_only:
+        return years_index_dict
+    else:
+        return segment_data(data_dict, years_index_dict)
         
     return years_index_dict
 
@@ -167,3 +198,15 @@ def get_unique_dates(datetime_array):
     date_array = np.array(list(set([i.date() for i in datetime_array])))
     date_array.sort()
     return {date: i for i, date in enumerate(date_array)}
+    
+def segment_data(data_dict, indices_dict):
+
+    d = {}    
+    for key in indices_dict.keys():
+        start = indices_dict[key][0]
+        end = indices_dict[key][1]
+        this_dict = {var: data_dict[var][start: end + 1] 
+                     for var in data_dict.keys()}
+        d[key] = this_dict
+
+    return d    
