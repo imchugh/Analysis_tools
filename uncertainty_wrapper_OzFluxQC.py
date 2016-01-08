@@ -151,12 +151,12 @@ def main():
 
     # Ouput
     io.dict_to_csv(error_dict, 
+                   os.path.join(global_configs_dict['output_path'], 
+                                'Uncertainty_output.csv'),
                    ['Year', 'Avail_obs_day', 'Avail_obs_night', 
                     'Avail_obs_total', 'Pct_avail_obs_day', 
                     'Pct_avail_obs_night', 'Pct_avail_obs_total', 
                     'model_error_day', 'model_error_night', 'random_error_day', 
-                    'random_error_night', 'combined_error'],
-                   os.path.join(global_configs_dict['output_path'], 
-                                'Uncertainty_output.csv'))
+                    'random_error_night', 'combined_error'])
     
     return error_dict
