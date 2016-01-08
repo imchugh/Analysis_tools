@@ -15,7 +15,33 @@ import DataIO as io
 import respiration as re
 import data_formatting as dt_fm
 
+reload(io)
 reload(re)
+
+#------------------------------------------------------------------------------    
+# Write error messages to dictionary with codes as keys
+def error_codes():
+    
+    d = {0:'Optimisation successful',
+         1:'Value of k failed range check - setting to zero and ' \
+           'recalculating other parameters',
+         2:'Value of alpha failed range check - using previous ' \
+           'estimate (zero if unavailable) and recalculating other ' \
+           'parameters',
+         3:'Optimisation reached maximum number of iterations' \
+           'without convergence',
+         4:'Value of beta and rb have wrong sign - ' \
+           'rejecting all parameters',
+         5:'Value of beta has wrong sign - rejecting all parameters',
+         6:'Value of daytime rb has wrong sign - rejecting all parameters',
+         7:'Value of nocturnal rb out of range - rejecting',
+         8:'Value of Eo out of range - set to mean of other years or ' \
+           'nearest range limit (50-400)',
+         9:'Value of nocturnal rb has wrong sign - rejecting',
+         10:'Data did not pass minimum percentage threshold - ' \
+            'skipping optimisation'}
+    
+    return d
 
 # Get the data and format appropriately
 def get_data(configs_dict):
@@ -70,9 +96,15 @@ configs_dict = io.config_to_dict(io.file_select_dialog())
 # Get data
 data_dict, attr = get_data(configs_dict)
 
+# Set output path for results
+full_path = os.path.join(configs_dict['files']['output_path'],
+                         configs_dict['respiration_configs']['output_folder'])
+if not os.path.isdir(full_path): os.makedirs(full_path)
+
 # Drop additional config items and add measurement interval to configs
 configs_dict = configs_dict['respiration_configs']
 configs_dict['measurement_interval'] = int(attr['time_step'])
+configs_dict['output_path'] = full_path
 
 # Remove low ustar values according to threshold
 data_dict['Fc_series'][data_dict['ustar'] < 
@@ -81,3 +113,10 @@ data_dict['Fc_series'][data_dict['ustar'] <
 # Calculate Re by sending data to main respiration function
 re_dict, params_dict = re.main(cp.copy(data_dict), configs_dict)
 data_dict['Re'] = re_dict['Re']
+
+# Write data to file
+io.array_dict_to_csv(params_dict, 
+                     os.path.join(full_path, 'params.csv'), 
+                     ['date', 'Eo', 'Eo_error_code', 'rb', 'rb_error_code'])
+io.array_dict_to_csv(re_dict, os.path.join(full_path, 'Re.csv'), ['date_time',
+                                                                  'Re'])                                                                  
