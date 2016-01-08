@@ -224,7 +224,7 @@ def config_to_dict(file_in):
         
     return cf_dict
     
-def dict_to_csv(data_dict, keyorder, outfile):
+def dict_to_csv(data_dict, outfile, keyorder = False):
     """
     Writes a csv file from a dictionary (or dictionary of dictionaries);
     Pass the following arguments: 1) dict or dict of dicts
@@ -233,7 +233,9 @@ def dict_to_csv(data_dict, keyorder, outfile):
                                   3) the ouput file path and name (string)
     Returns None - writes to file
     """    
-    
+    if not keyorder: 
+        keyorder = data_dict.keys()
+        keyorder.sort()
     with open(outfile, 'wb') as f:
        writer = csv.DictWriter(f, delimiter = ',', fieldnames = keyorder)
        writer.writeheader()
