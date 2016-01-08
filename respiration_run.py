@@ -58,8 +58,7 @@ def get_data(configs_dict):
                      'temperature': 'TempC',
                      'solar_radiation': 'Fsd',
                      'vapour_pressure_deficit': 'VPD',
-                     'friction_velocity': 'ustar',
-                     'wind_speed': 'ws'}
+                     'friction_velocity': 'ustar'}
     names_dict = {oldNames_dict[key]: newNames_dict[key] for key in oldNames_dict}                     
 
     # get data (screen only the Fc data to obs only)
