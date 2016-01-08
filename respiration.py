@@ -139,7 +139,7 @@ def estimate_Re(data_dict,
                                                              this_rb)                                                         
     return results_array
 
-def generate_results_array(datetime_array):
+def generate_results_dict(datetime_array):
     
     dates_input_index_dict = dtf.get_day_indices(datetime_array)
     date_array = np.array(dates_input_index_dict.keys())
@@ -290,7 +290,7 @@ def main(data_dict, configs_dict):
     dates_input_index_dict = dtf.get_day_indices(data_dict['date_time'])
     
     # Generate a results dictionary for the parameter values (1 for each day)
-    params_out_dict = generate_results_array(data_dict['date_time'])
+    params_out_dict = generate_results_dict(data_dict['date_time'])
     
     # Initalise parameter dicts with prior estimates
     params_in_dict = {'Eo_prior': 100,
