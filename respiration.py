@@ -32,13 +32,18 @@ def calculate_rb(data_dict,
     
     # Calculate rb for windows    
     for date in data_dict.keys():
+
+        # Make a temporary dict with nans and daytime dropped
+        bool_filter = data_dict[date]['all_bool']
+        temp_dict = {var: data_dict[date][var][bool_filter] 
+                     for var in ['TempC', 'Fc_series']}
         
         # Specify Eo value for the relevant year
         params_in_dict['Eo_default'] = params_in_dict['Eo_years'][date.year]
-        data_pct = int(len(data_dict[date]['Fc_series']) / 
+        data_pct = int(len(temp_dict['Fc_series']) / 
                        float((1440 / meas_int) / 2) * 100)
         if not data_pct < min_pct:
-            params, error_code = dark.optimise_rb(data_dict[date], 
+            params, error_code = dark.optimise_rb(temp_dict, 
                                                   params_in_dict)
         else:
             params, error_code = [np.nan], 10
@@ -66,15 +71,20 @@ def calculate_Eo(data_dict,
     Eo_pass_keys = []
     Eo_fail_keys = []
     for year in data_dict.keys():
-    
+
+        # Make a temporary dict with nans and daytime dropped
+        bool_filter = data_dict[year]['all_bool']
+        temp_dict = {var: data_dict[year][var][bool_filter] 
+                     for var in ['TempC', 'Fc_series']}
+
         # Calculate number of nocturnal recs for year
         days = 366 if calendar.isleap(year) else 365
         recs = days * (1440 / meas_int) / 2
     
         # Input indices
-        data_pct = int(len(data_dict[year]['Fc_series']) / float(recs) * 100)
+        data_pct = int(len(temp_dict['Fc_series']) / float(recs) * 100)
         if not data_pct < min_pct:
-            params, error_code = dark.optimise_all(data_dict[year], 
+            params, error_code = dark.optimise_all(temp_dict, 
                                                    params_in_dict)
         else:
             params, error_code = [np.nan, np.nan], 10
@@ -126,14 +136,8 @@ def estimate_Re(data_dict,
         this_dict = {'TempC': data_dict['TempC'][indices[0]: indices[1] + 1]}
         results_array[indices[0]: indices[1] + 1] = dark.TRF(this_dict, 
                                                              this_Eo,
-                                                             this_rb)
+                                                             this_rb)                                                         
     return results_array
-
-def filtering(this_dict):
-    noct_dict = filt.subset_arraydict_on_threshold(this_dict, 'Fsd', 5, '<', 
-                                                   drop = True)    
-    sub_dict = filt.subset_arraydict_on_nan(noct_dict)
-    return sub_dict
 
 def generate_results_array(datetime_array):
     
@@ -149,75 +153,63 @@ def generate_results_array(datetime_array):
             'rb': cp.copy(generic_array),
             'rb_error_code': rb_error_code_array}  
 
-def partition_by_date(data_dict, configs_dict):
-
-    # Create local vars for step and window
-    step = configs_dict['step_size_days']
-    window = configs_dict['window_size_days']
-    
-    # Get the indices of the start and end rows of each year in the source data 
-    # array, then build a dict containing a filtered (nans dropped) data dict 
-    # for each year with year as key
-    years_input_index_dict = dtf.get_year_indices(data_dict['date_time'])
-    years_data_dict = segment_data(data_dict, years_input_index_dict)
-    
-    # Get the indices of the start and end rows of each window (depending on step
-    # and window size) in the source data array, then build a dict containing a 
-    # filtered (nans dropped) data dict for each window with the central date 
-    # for that window as key
-    step_dates_input_index_dict = dtf.get_moving_window_indices(data_dict['date_time'], 
-                                                                window, step)
-    step_data_dict = segment_data(data_dict, step_dates_input_index_dict)    
-    
-    return years_data_dict, step_data_dict
-
 # Nocturnal fits for each window
-def plot_windows(data_dict, configs_dict, datetime_input_index_dict):
+def plot_windows(step_data_dict, configs_dict, params_dict):
+
+    # Don't send plots to screen
+    if plt.isinteractive():
+        is_on = True
+        plt.ioff()
+    else:
+        is_on = False
 
     # Set parameters from dicts
     window = configs_dict['window_size_days']
     
-    x_lab = r'Temperature ($^{o}C$)'
+    x_lab = '$Temperature\/(^{o}C$)'
     
-    for date in datetime_input_index_dict:
+    for date in step_data_dict.keys():
 
-        indices = datetime_input_index_dict[date]
-        x_var = data_dict['TempC'][indices[0]: indices[1] + 1]
-        y_var1 = data_dict['Fc_series'][indices[0]: indices[1] + 1]
-        y_var2 = data_dict['Re'][indices[0]: indices[1] + 1]
+        Eo = params_dict['Eo'][params_dict['date'] == date]
+        rb = params_dict['rb'][params_dict['date'] == date]
+
+        bool_filter = step_data_dict[date]['night_bool']
+        x_var = step_data_dict[date]['TempC'][bool_filter]
+        y_var1 = step_data_dict[date]['Fc_series'][bool_filter]
+        index = x_var.argsort()
+        x_var = x_var[index]
+        y_var1 = y_var1[index]
+        y_var2 = dark.TRF({'TempC': x_var}, Eo, rb)
           
         # Plot
         date_str = dt.datetime.strftime(date,'%Y-%m-%d')
         fig = plt.figure(figsize = (12,8))
         fig.patch.set_facecolor('white')
-        plt.plot(x_var, y_var1, 'o' , label = 'NEE_obs', color = 'black')
-        plt.plot(x_var, y_var2, label = 'NEE_est', color = 'black')
-        plt.title('Fit for ' + str(window) + ' day window centred on ' + 
-                  date_str + '\n', fontsize = 22)
-        plt.xlabel(x_lab, fontsize = 16)
-        plt.ylabel(r'NEE ($\mu mol C\/m^{-2} s^{-1}$)', fontsize = 16)
-        plt.axhline(y = 0, color = 'black')
+        ax = plt.gca()
+        ax.plot(x_var, y_var1, 'o' , markerfacecolor = 'none',
+                 markeredgecolor = 'black', label = 'NEE_obs', color = 'black')
+        ax.plot(x_var, y_var2, linestyle = ':', color = 'black', 
+                 label = 'NEE_est')
+        ax.set_title('Fit for ' + str(window) + ' day window centred on ' + 
+                      date_str + '\n', fontsize = 22)
+        ax.set_xlabel(x_lab, fontsize = 18)
+        ax.set_ylabel('$NEE\/(\mu mol C\/m^{-2} s^{-1}$)', fontsize = 18)
+        ax.axhline(y = 0, color = 'black')
+        ax.xaxis.set_ticks_position('bottom')
+        ax.yaxis.set_ticks_position('left')
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
         plot_out_name = 'noct' + '_' + date_str + '.jpg'
         plt.tight_layout()
-        fig.savefig(os.path.join(configs_dict['full_path'],
+        fig.savefig(os.path.join(configs_dict['output_path'],
                                  plot_out_name))
         plt.close(fig)
     
-        break
+    if is_on:
+        plt.ion()
         
     return
-        
-def segment_data(data_dict, indices_dict):
-
-    d = {}    
-    for key in indices_dict.keys():
-        start = indices_dict[key][0]
-        end = indices_dict[key][1]
-        this_dict = {var: data_dict[var][start: end + 1] 
-                     for var in data_dict.keys()}
-        d[key] = filtering(this_dict)
-    return d        
-        
+                
 #------------------------------------------------------------------------------
 #############
 # Main code #
@@ -257,7 +249,7 @@ def main(data_dict, configs_dict):
                     - 'date_time': numpy array of Python datetimes for each
                       datum in the original time series
                     - 'Re': numpy array of half-hourly estimates of Re
-             2) a results dictionary containing 4 key / value pairs:
+             2) a results dictionary containing 5 key / value pairs:
                     - 'date_time': numpy array of Python dates for each day in 
                                    the original time series 
                     - 'Eo': numpy array of Eo estimates for each day (note that 
@@ -274,11 +266,24 @@ def main(data_dict, configs_dict):
     """
     
     #------------------------------------------------------------------------------
-    
+
+    # Create boolean indices for masking daytime and nan values
+    night_mask = data_dict['Fsd'] < 5
+    nan_mask = filt.subset_arraydict_on_nan(data_dict,
+                                            var_list = ['Fc_series', 'TempC'],
+                                            subset = False)
+    all_mask = [all(rec) for rec in zip(night_mask, nan_mask)]
+    data_dict['night_bool'] = np.array(night_mask)
+    data_dict['all_bool'] = np.array(all_mask)
+
     # Partition the data into year and step pieces
-    years_data_dict, step_data_dict = partition_by_date(data_dict, 
-                                                        configs_dict)
-    
+    years_data_dict = dtf.get_year_window(data_dict,
+                                          'date_time')
+    step_data_dict = dtf.get_moving_window(data_dict, 
+                                           'date_time', 
+                                           configs_dict['window_size_days'],
+                                           configs_dict['step_size_days'])
+
     # Get the indices of the start and end rows of each unique date in the source 
     # data array - no data dict is built from this, since these indices are used to
     # assign Re estimates to the estimated time series output array only
@@ -288,10 +293,11 @@ def main(data_dict, configs_dict):
     params_out_dict = generate_results_array(data_dict['date_time'])
     
     # Initalise parameter dicts with prior estimates
-    all_noct_dict = filtering(data_dict)
     params_in_dict = {'Eo_prior': 100,
-                      'rb_prior': all_noct_dict['Fc_series'].mean()}
-    
+                      'rb_prior': data_dict['Fc_series'][data_dict['all_bool']]
+                      .mean()}
+
+    # Get Eo for all years
     calculate_Eo(years_data_dict, 
                  configs_dict,
                  params_in_dict,
@@ -312,9 +318,8 @@ def main(data_dict, configs_dict):
     # Write Re estimate to data_dict
     data_dict['Re'] = rslt_dict['Re']
 
-    # Do plotting
+    # Do plotting if specified
     if configs_dict['output_fit_plots']:
-        plot_windows(step_data_dict, 
-                     configs_dict)
+        plot_windows(step_data_dict, configs_dict, params_out_dict)
 
     return rslt_dict, params_out_dict
