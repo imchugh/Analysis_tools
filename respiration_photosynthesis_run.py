@@ -17,32 +17,7 @@ import light_response as li
 import data_formatting as dt_fm
 
 reload(io)
-reload(re)
-
-#------------------------------------------------------------------------------    
-# Write error messages to dictionary with codes as keys
-def error_codes():
-    
-    d = {0:'Optimisation successful',
-         1:'Value of k failed range check - setting to zero and ' \
-           'recalculating other parameters',
-         2:'Value of alpha failed range check - using previous ' \
-           'estimate (zero if unavailable) and recalculating other ' \
-           'parameters',
-         3:'Optimisation reached maximum number of iterations' \
-           'without convergence',
-         4:'Value of beta and rb have wrong sign - ' \
-           'rejecting all parameters',
-         5:'Value of beta has wrong sign - rejecting all parameters',
-         6:'Value of daytime rb has wrong sign - rejecting all parameters',
-         7:'Value of nocturnal rb out of range - rejecting',
-         8:'Value of Eo out of range - set to mean of other years or ' \
-           'nearest range limit (50-400)',
-         9:'Value of nocturnal rb has wrong sign - rejecting',
-         10:'Data did not pass minimum percentage threshold - ' \
-            'skipping optimisation'}
-    
-    return d
+reload(li)
 
 # Get the data and format appropriately
 def get_data(configs_dict):
@@ -55,7 +30,7 @@ def get_data(configs_dict):
 
     # Initialise name change dictionary with new names via common keys
     oldNames_dict = configs_dict['variables']
-    newNames_dict = {'carbon_flux':'Fc_series',
+    newNames_dict = {'carbon_flux':'NEE_series',
                      'temperature': 'TempC',
                      'solar_radiation': 'Fsd',
                      'vapour_pressure_deficit': 'VPD',
@@ -82,7 +57,7 @@ def get_data(configs_dict):
                                      data_input_target,
                                      var_list = oldNames_dict.values(),
                                      return_global_attr = True)
-    
+
     # Rename relevant variables    
     data_dict = dt_fm.rename_data_dict_vars(data_dict, names_dict)
 
@@ -109,16 +84,20 @@ re_configs_dict['output_path'] = re_full_path
 li_configs_dict = configs_dict['light_response_configs']
 li_configs_dict['measurement_interval'] = int(attr['time_step'])
 li_full_path = os.path.join(configs_dict['files']['output_path'],
-                           configs_dict['respiration_configs']['output_folder'])
-if not os.path.isdir(re_full_path): os.makedirs(re_full_path)
+                            configs_dict['light_response_configs']
+                                        ['output_folder'])
+if not os.path.isdir(li_full_path): os.makedirs(li_full_path)
 li_configs_dict['output_path'] = li_full_path
 
 # Remove low ustar values according to threshold, then calculate Re
-data_dict['Fc_series'][(data_dict['ustar'] < 
+data_dict['NEE_series'][(data_dict['ustar'] < 
                         re_configs_dict['ustar_threshold']) &
                        (data_dict['Fsd'] < 5)] = np.nan
 re_rslt_dict, re_params_dict = re.main(cp.copy(data_dict), re_configs_dict)
 data_dict['Re'] = re_rslt_dict['Re']
+
+# Convert insolation to PPFD
+data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6
 
 # Call light response function
 test = li.main(data_dict, li_configs_dict, re_params_dict)
