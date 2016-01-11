@@ -36,11 +36,11 @@ def calculate_rb(data_dict,
         # Make a temporary dict with nans and daytime dropped
         bool_filter = data_dict[date]['all_bool']
         temp_dict = {var: data_dict[date][var][bool_filter] 
-                     for var in ['TempC', 'Fc_series']}
+                     for var in ['TempC', 'NEE_series']}
         
         # Specify Eo value for the relevant year
         params_in_dict['Eo_default'] = params_in_dict['Eo_years'][date.year]
-        data_pct = int(len(temp_dict['Fc_series']) / 
+        data_pct = int(len(temp_dict['NEE_series']) / 
                        float((1440 / meas_int) / 2) * 100)
         if not data_pct < min_pct:
             params, error_code = dark.optimise_rb(temp_dict, 
@@ -75,14 +75,14 @@ def calculate_Eo(data_dict,
         # Make a temporary dict with nans and daytime dropped
         bool_filter = data_dict[year]['all_bool']
         temp_dict = {var: data_dict[year][var][bool_filter] 
-                     for var in ['TempC', 'Fc_series']}
+                     for var in ['TempC', 'NEE_series']}
 
         # Calculate number of nocturnal recs for year
         days = 366 if calendar.isleap(year) else 365
         recs = days * (1440 / meas_int) / 2
     
         # Input indices
-        data_pct = int(len(temp_dict['Fc_series']) / float(recs) * 100)
+        data_pct = int(len(temp_dict['NEE_series']) / float(recs) * 100)
         if not data_pct < min_pct:
             params, error_code = dark.optimise_all(temp_dict, 
                                                    params_in_dict)
@@ -175,7 +175,7 @@ def plot_windows(step_data_dict, configs_dict, params_dict):
 
         bool_filter = step_data_dict[date]['night_bool']
         x_var = step_data_dict[date]['TempC'][bool_filter]
-        y_var1 = step_data_dict[date]['Fc_series'][bool_filter]
+        y_var1 = step_data_dict[date]['NEE_series'][bool_filter]
         index = x_var.argsort()
         x_var = x_var[index]
         y_var1 = y_var1[index]
@@ -225,7 +225,7 @@ def main(data_dict, configs_dict):
              not yet enforced!; also, all values in dict must be numpy arrays, 
              and all must be of same length):
                  - 'date_time': numpy array of Python datetimes
-                 - 'Fc_series': numpy array of the NEE time series to be used 
+                 - 'NEE_series': numpy array of the NEE time series to be used 
                                 as the optimisation target (float); note:
                                 - missing values must be np.nan
                                 - no QC is done on values - this must be done 
@@ -270,7 +270,7 @@ def main(data_dict, configs_dict):
     # Create boolean indices for masking daytime and nan values
     night_mask = data_dict['Fsd'] < 5
     nan_mask = filt.subset_arraydict_on_nan(data_dict,
-                                            var_list = ['Fc_series', 'TempC'],
+                                            var_list = ['NEE_series', 'TempC'],
                                             subset = False)
     all_mask = [all(rec) for rec in zip(night_mask, nan_mask)]
     data_dict['night_bool'] = np.array(night_mask)
@@ -294,7 +294,7 @@ def main(data_dict, configs_dict):
     
     # Initalise parameter dicts with prior estimates
     params_in_dict = {'Eo_prior': 100,
-                      'rb_prior': data_dict['Fc_series'][data_dict['all_bool']]
+                      'rb_prior': data_dict['NEE_series'][data_dict['all_bool']]
                       .mean()}
 
     # Get Eo for all years
