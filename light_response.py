@@ -17,6 +17,19 @@ import data_filtering as filt
 import gap_filling as gf
 import light_and_T_response_functions as light
 
+def append_results_array(params_out_dict, noct_flag):
+    
+    for var in ['alpha', 'beta', 'k', 'error_code']:
+        params_out_dict[var] = np.empty(len(params_out_dict['rb']))
+        if not var == 'error_code':
+            params_out_dict[var][:] = np.nan
+        else:
+            params_out_dict[var][:] = 20
+    if not noct_flag:
+        params_out_dict.pop('rb_error_code')
+        params_out_dict['rb'] = np.empty(len(params_out_dict['rb']))
+        params_out_dict['rb'][:] = np.nan
+    
 def calculate_light_response(data_dict,
                              configs_dict,
                              params_in_dict,
@@ -86,8 +99,9 @@ def estimate_GPP_Re(data_dict,
                     all_params_dict, 
                     datetime_input_index_dict):
     
-    # Create output arrays for estimates
+    # Create output dicts for estimates
     results_dict = {}
+    results_dict['date_time'] = data_dict['date_time']
     for var in ['Re', 'GPP']:
         results_dict[var] = np.empty(len(data_dict['TempC']))
         results_dict[var][:] = np.nan
@@ -114,19 +128,6 @@ def estimate_GPP_Re(data_dict,
         results_dict['Re'][indices[0]: indices[1] + 1] = Re
 
     return results_dict
-
-#def append_results_array(dates_input_index_dict):
-#    
-#    date_array = np.array(dates_input_index_dict.keys())
-#    date_array.sort()
-#    generic_array = np.empty(len(dates_input_index_dict))
-#    generic_array[:] = np.nan
-#    rb_error_code_array = np.ones(len(generic_array)) * 20
-#    return {'date': date_array,
-#            'Eo': cp.copy(generic_array),
-#            'Eo_error_code': cp.copy(generic_array),
-#            'rb': cp.copy(generic_array),
-#            'rb_error_code': rb_error_code_array}  
 
 # Nocturnal fits for each window
 def plot_windows(step_data_dict, configs_dict, params_dict):
@@ -191,8 +192,7 @@ def plot_windows(step_data_dict, configs_dict, params_dict):
                                  plot_out_name))
         plt.close(fig)
 
-    if is_on:
-        plt.ion()
+    if is_on: plt.ion()
         
     return
                 
@@ -202,10 +202,12 @@ def plot_windows(step_data_dict, configs_dict, params_dict):
 #############        
 
 def main(data_dict, configs_dict, params_out_dict):
-
     """
-    Calculates Re using Lloyd and Taylor function where Eo is fitted to annual
-    data and rb is fitted to specified combination of step and window;
+    Calculates GPP and Re using rectangular hyperbolic radiation response 
+    function in conjunction with Lloyd and Taylor Arrhenius-style temperature 
+    response function (either Eo or both Eo and rb can be fitted using 
+    nocturnal data, and the remaining parameters are fitted to specified 
+    combination of step and window;
     Pass: 1) a data dictionary containing the following key / value pairs (it 
              is assumed that there are no gaps in the time series, but this is 
              not yet enforced!; also, all values in dict must be numpy arrays, 
@@ -218,6 +220,9 @@ def main(data_dict, configs_dict, params_out_dict):
                                   prior to passing the data
                  - 'TempC': numpy array of temperatures to be used as 
                             optimisation input (float)
+                 - 'VPD': vapour pressure deficit in kilopascals
+                 - 'PAR': photosynthetically active radiation in umol photons
+                          m^2 s^-1
           2) a configs dict containing the following key / value pairs:
                  - 'step_size_days': step size in days between fitting windows
                                      (int; range 0 < x < n days)
@@ -230,11 +235,18 @@ def main(data_dict, configs_dict, params_out_dict):
                                          available window data for fitting of 
                                          rb (int; range 0 <= x <= 100)
                  - 'measurement_interval': measurement interval (minutes) of 
-                                           the input data (int)                                          
+                                           the input data (int)
+                 - 'use_nocturnal_rb': whether to use nocturnal estimates of
+                                       rb or add rb as an additional parameter
+                                       to the daytime fit (boolean)
+                 - 'output_fit_plots': whether to output plots showing the fit
+                                       of the parameters to the data (boolean)
+                 - 'output_path': path for output of plots
     Returns: 1) a results dictionary containing 2 key / value pairs:
                     - 'date_time': numpy array of Python datetimes for each
                       datum in the original time series
                     - 'Re': numpy array of half-hourly estimates of Re
+                    - 'GPP': numpy array of half-hourly estimates of Re
              2) a results dictionary containing 5 key / value pairs:
                     - 'date_time': numpy array of Python dates for each day in 
                                    the original time series 
@@ -243,14 +255,18 @@ def main(data_dict, configs_dict, params_out_dict):
                     - 'Eo_error_code': numpy array of Eo diagnostic errors for 
                                        each day (note that each year has a 
                                        constant value)
-                    - 'rb': numpy array of rb estimates for each day (note that 
-                            linear interpolation is used to gap fill between 
-                            steps)
+                    - 'rb_noct': numpy array of rb estimates from nocturnal fit
+                                 for each day (note that linear interpolation 
+                                 is used to gap fill between steps)
                     - 'rb_error_code': numpy array of rb diagnostic errors for 
                                        each day (including whether the value is 
-                                       interpolated or calculated)                    
+                                       interpolated or calculated)
+                    - 'alpha': numpy array of initial slope of radiation / NEE
+                               curve
+                    - 'beta': numpy array of maximum photosynthetic rate
+                    - 'k': numpy array of exponent coefficient of VPD 
+                           function used to modify beta
     """
-    
     #------------------------------------------------------------------------------
 
     # Create boolean indices for masking daytime and nan values
@@ -273,18 +289,6 @@ def main(data_dict, configs_dict, params_out_dict):
     # data array - no data dict is built from this, since these indices are used to
     # assign Re estimates to the estimated time series output array only
     dates_input_index_dict = dtf.get_day_indices(data_dict['date_time'])
-    
-    # Generate a results dictionary for the parameter values (1 for each day)
-    if configs_dict['use_nocturnal_rb']:
-        rslt_var_list = ['alpha', 'beta', 'k', 'error_code']
-    else:
-        rslt_var_list = ['rb_day', 'alpha', 'beta', 'k', 'error_code']
-    for var in rslt_var_list:
-        params_out_dict[var] = np.empty(len(params_out_dict['rb']))
-        if not var == 'error_code':
-            params_out_dict[var][:] = np.nan
-        else:
-            params_out_dict[var][:] = 20
 
     # Initalise parameter dicts with prior estimates    
     params_in_dict = {'k_prior': 0,
@@ -298,6 +302,9 @@ def main(data_dict, configs_dict, params_out_dict):
                       'beta_default': 0,
                       'k_default': 0 }
 
+    # Append the results dictionary for the parameter values (1 for each day)
+    append_results_array(params_out_dict, configs_dict['use_nocturnal_rb'])
+
     # Write the light response parameters to the existing parameters dict
     calculate_light_response(step_data_dict,
                              configs_dict,
@@ -309,8 +316,13 @@ def main(data_dict, configs_dict, params_out_dict):
                                 params_out_dict,
                                 dates_input_index_dict)
 
+    # Get error codes
+    error_dict = light.error_codes()
+    error_dict[20] = 'Data are linearly interpolated from nearest '\
+                     'non-interpolated neighbour'
+
     # Do plotting if specified
     if configs_dict['output_fit_plots']:
         plot_windows(step_data_dict, configs_dict, params_out_dict)
-#
-#    return rslt_dict, params_out_dict
+
+    return rslt_dict, params_out_dict, error_dict

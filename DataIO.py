@@ -5,7 +5,7 @@ Created on Mon Sep 15 09:29:43 2014
 @author: imchugh
 """
 
-import Tkinter, tkFileDialog
+import Tkinter, tkFileDialog, tkMessageBox
 from configobj import ConfigObj
 from collections import OrderedDict
 import netCDF4
@@ -15,6 +15,13 @@ import datetime as dt
 import ast
 import csv
 import pdb
+
+def ask_question_dialog(header, question):
+    
+    root = Tkinter.Tk(); root.withdraw()
+    do = tkMessageBox.askyesno(header, question)
+    root.destroy()    
+    return do
 
 def file_select_dialog():
     """ Open a file select dialog to get path for file retrieval"""
@@ -67,7 +74,7 @@ def OzFluxQCnc_to_data_structure(file_in,
                                  return_QC = False):
 
     """
-    Pass the following args: 1) valid file path to .nc file
+    Pass the following args: 1) valid file path to .nc file \n
     Optional kwargs: 1) 'var_list' - list of variable name strings
                      2) 'fill_missing_with_nan' - fill any record containing
                          the missing data placeholder [-9999 for OzFluxQC] 
@@ -111,6 +118,8 @@ def OzFluxQCnc_to_data_structure(file_in,
     if var_list == None:
         if return_QC:
             var_list = data_var_list + QC_var_list
+        else:
+            var_list = data_var_list
     else:
         if not isinstance(var_list, list): var_list = [var_list]
 
@@ -274,14 +283,15 @@ def array_dict_to_csv(data_dict, outfile, keyorder = False):
             
     return
         
-
-def var_to_OzFluxQCnc(file_in):
+def text_dict_to_text_file(write_dict, outfile):        
+        
+    with open(outfile, 'w') as f:
+        for key in write_dict.keys():
+            this_key = str(key)
+            this_val = str(write_dict[key])
+            output = this_key + ': ' + this_val + '\n'
+            f.write(output)        
     
-    nc_obj = netCDF4.Dataset(file_in)
-    
-    return nc_obj
-    
-
 def xlsx_to_pandas(file_in,header=True,header_row=0,skiprows_after_header=0,date_col=True,regularise=True,worksheets=[]):
 
     xl_book=xlrd.open_workbook(file_in)

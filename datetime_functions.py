@@ -17,7 +17,7 @@ def get_timestep(datetime_array):
     """
     check_timedelta = datetime_array[1: ] - datetime_array[: -1]
     if not all(check_timedelta[0] == rest for rest in check_timedelta):
-        raise exception('Time series is not continuous!')
+        raise Exception('Time series is not continuous!')
     else:
         return check_timedelta[0].seconds / 60.0
 
@@ -210,3 +210,8 @@ def segment_data(data_dict, indices_dict):
         d[key] = this_dict
 
     return d    
+    
+def get_DOY_first_day_of_month(year):
+    
+    return [int(dt.datetime.strftime(dt.date(2012,m,1), '%j')) - 1 
+            for m in range(1, 13)]

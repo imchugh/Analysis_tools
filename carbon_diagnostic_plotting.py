@@ -10,13 +10,15 @@ import datetime as dt
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
+
 sys.path.append('../Partitioning')
 import partn_wrapper as partn
+import respiration_photosynthesis_run as rp_run
+import DataIO as io
+import datetime_functions as dtf
 import pdb
 
-import DataIO as io
-
-reload (partn)
+reload (dtf)
 
 def get_data():
     
@@ -375,14 +377,79 @@ def plot_estimated_storage_and_Fc_funct_ustar():
     
     return
 
-def plot_test():
+def plot_NEE_cml():
     
+    file_in = '/home/imchugh/Ozflux/Sites/Whroo/Data/Processed/all/Whroo_2011_to_2014_L6.nc'
+    Fc_df = io.OzFluxQCnc_to_data_structure(file_in, var_list = ['Fc'],
+                                            QC_accept_codes = [0], 
+                                            output_structure = 'pandas')    
+    anc_df = io.OzFluxQCnc_to_data_structure(file_in, var_list = ['ustar', 
+                                                                  'Fsd',
+                                                                  'NEE_SOLO'],
+                                             output_structure = 'pandas')      
+    
+    df = Fc_df.join(anc_df)
+    df['Fc_screen'] = df.Fc
+    df['Fc_screen'][(df.ustar < 0.42) & (df.Fsd < 5)] = np.nan
+    
+    model_dict = rp_run.main()[0]
+    df['NEE_est'] = model_dict['Re'] + model_dict['GPP']
+    df['Fc_fill'] = df['Fc_screen']
+    df['Fc_fill'][np.isnan(df['Fc_fill'])] = df['NEE_est']
+
+    # Do daily sums
+    daily_df = (df['Fc_fill'].groupby([lambda x: x.year, 
+                    lambda y: y.dayofyear]).mean() * 0.0864 * 12)
+
+
+    # Split into years and align
+    years = list(set(daily_df.index.levels[0]))
+    new_index = np.arange(1,367)
+    yr_daily_df = pd.concat([daily_df.loc[yr].reindex(new_index) 
+                             for yr in years], axis = 1)
+    years_list = [str(yr) for yr in years]
+    yr_daily_df.columns = years_list
+    
+    # Do cumulative NEE (drop 2011)
+    cml_df = pd.concat([yr_daily_df[var].cumsum() for var in years_list], axis = 1)
+    cml_df.drop('2011', axis = 1, inplace = True)
+
+    fig, ax = plt.subplots(1, 1, figsize = (12, 8))
+    fig.patch.set_facecolor('white')
+    colors = ['0.5', 'black', 'black']
+    styles = ['-', '--', ':']
+    ax.set_xlim([0, 366])
+    ax.set_xticks(dtf.get_DOY_first_day_of_month(2013))
+    ax.set_xticklabels(['J', 'F', 'M', 'A', 'M', 'J', 
+                        'J', 'A', 'S', 'O', 'N', 'D'], fontsize = 14)
+    ax.set_xlabel('$Month$', fontsize = 18)
+    ax.xaxis.set_ticks_position('bottom')
+    ax.tick_params(axis = 'y', labelsize = 14)
+    ax.set_ylabel('$Cumulative\/NEE\/(gC\/m^{-2})$', fontsize = 18)
+    ax.yaxis.set_ticks_position('left')
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.axhline(0, color = 'Black', linewidth = 0.5)
+    for i, col in enumerate(cml_df.columns):
+        ax.plot(cml_df.index, cml_df[col], label = col, color = colors[i], 
+                linestyle = styles[i])
+    ax.legend(frameon = False, loc = [0.57, 0.97], numpoints = 1, ncol = 3)
+    fig.savefig('/media/Data/Dropbox/Work/Manuscripts in progress/Writing/Whroo ' \
+                'basic C paper/Images/Cumulative NEE.png',
+                bbox_inches='tight',
+                dpi = 300) 
+    plt.show()    
+    
+    return
+    
+def plot_test():
+
     num_cats = 50   
     
     # Get data
     df, attr = get_data()
-    lt_df = partn.main()[1]
-    df['Fre_lt'] = lt_df['Nocturnally derived Re']
+    test_dict = rp_run.main()[0]
+    df['Fre_lt'] = test_dict['Re']
 
     # Make variable lists
     storage_vars = ['Fc_storage', 'Fc_storage_1', 'Fc_storage_2', 
@@ -496,7 +563,43 @@ def storage_and_ustar_example_time_series():
     ax2.axhline(0.42, color = 'grey', linestyle = '--')
     ax1.legend(loc = [0.7, 0.72], ncol = 2)
     plt.tight_layout()
-    plt.show()    
+    plt.show()
+    
+    return
+
+def plot_Fc_Sc_diurnal_with_Fsd():
+    
+    file_in = '/home/imchugh/Ozflux/Sites/Whroo/Data/Processed/all/Whroo_2011_to_2014_L6.nc'
+    Fc_df = io.OzFluxQCnc_to_data_structure(file_in, var_list = ['Fc'],
+                                            QC_accept_codes = [0], 
+                                            output_structure = 'pandas')    
+    anc_df = io.OzFluxQCnc_to_data_structure(file_in, var_list = ['Fsd',
+                                                                  'Fc_storage'],
+                                             output_structure = 'pandas')      
+    df = Fc_df.join(anc_df)
+    df.dropna(inplace = True)
+
+    diurnal_df = df.groupby([lambda x: x.hour, lambda y: y.minute]).mean()
+    diurnal_df.index = np.linspace(0, 23.5, 48)
+    diurnal_df['NEE'] = diurnal_df.Fc + diurnal_df.Fc_storage
+    diurnal_df['Sc'] = diurnal_df.Fc_storage
+    diurnal_df.drop('Fc_storage', axis = 1, inplace = True)
+    day_ind = diurnal_df[diurnal_df.Fsd > 5].index
+    
+    fig, ax1 = plt.subplots(1, 1, figsize = (12, 8))
+    ax2 = ax1.twinx()
+    fig.patch.set_facecolor('white')
+
+    for var in ['Fc', 'Sc', 'NEE']:
+        ax1.plot(diurnal_df.index, diurnal_df[var], label = var)
+    ax1.axvline(5.5)#(day_ind[0])
+    ax1.axvline(day_ind[-1])
+    ax1.legend(loc = 'lower right')
+    ax2.plot(diurnal_df.index, diurnal_df.Fsd, label = 'Fsd')
+    
+    plt.show()
+    
+    return
 
 def plot_storage_diurnal_with_ustar():
     
@@ -517,7 +620,8 @@ def plot_storage_diurnal_with_ustar():
     diurnal_df['Fc_storage_std'] = df['Fc_storage'].groupby([lambda x: x.hour, 
                                                              lambda y: y.minute]).std()
     diurnal_df.index = np.linspace(0, 23.5, 48)
-    
+    day_ind = diurnal_df[diurnal_df.Fsd > 5].index
+
     storage_mean = diurnal_df.Fc_storage.mean()
     var_names = ['0-36m', '0-0.5m', '0.5-2m', '2-4m', '4-8m', '8-16m', '16-36m']
     # Create plot
@@ -531,27 +635,28 @@ def plot_storage_diurnal_with_ustar():
     ax1.tick_params(axis = 'x', labelsize = 14)
     ax1.tick_params(axis = 'y', labelsize = 14)
     ax2.tick_params(axis = 'y', labelsize = 14)
-    ax1.set_xlabel('$Time (hours)$', fontsize = 22)
-    ax1.set_ylabel('$S_c\/(\mu mol C\/m^{-2} s^{-1})$', fontsize = 22)
-    ax2.set_ylabel('$u_{*}\/(ms^{-1})$', fontsize = 22)
+    ax1.set_xlabel('$Time\/(hours)$', fontsize = 20)
+    ax1.set_ylabel('$S_c\/(\mu mol C\/m^{-2} s^{-1})$', fontsize = 20)
+    ax2.set_ylabel('$u_{*}\/(m\/s^{-1})$', fontsize = 20)
     series_list = []
     for i, var in enumerate(storage_vars[1:]):
         series_list.append(ax1.plot(diurnal_df.index, diurnal_df[var], 
                                     color = plt.cm.cool(colour_idx[i]), 
                                     label = var_names[i + 1]))
     series_list.append(ax1.plot(diurnal_df.index, diurnal_df.Fc_storage, 
-                                color = '0.5', label = var_names[i + 1]))
+                                color = '0.5', label = var_names[0]))
     series_list.append(ax2.plot(diurnal_df.index, diurnal_df.ustar, 
-                                color = 'black', linestyle = ':', 
-                                label = '$u_*$'))
+                                color = 'black', label = '$u_*$'))
     ax1.axhline(storage_mean, color = 'black')
+    ax1.axvline(day_ind[0], color = 'black', linestyle = ':')
+    ax1.axvline(day_ind[-1], color = 'black', linestyle = ':')
     ax2.axhline(0.42, linestyle = '--', color = 'black')    
     plt.setp(ax1.get_yticklabels()[0], visible = False)
     plt.setp(ax2.get_yticklabels()[0], visible = False)
     labs = [ser[0].get_label() for ser in series_list]
     lst = [i[0] for i in series_list]
-    ax1.legend(lst, labs, fontsize = 16, loc = [0.035,0.75], 
-               numpoints = 1, ncol = 2)
+    ax1.legend(lst, labs, fontsize = 16, loc = [0.08,0.75], 
+               numpoints = 1, ncol = 2, frameon = False)
     plt.tight_layout()
     fig.savefig('/media/Data/Dropbox/Work/Manuscripts in progress/Writing/Whroo ' \
                 'basic C paper/Images/diurnal_storage.png',

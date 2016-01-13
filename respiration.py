@@ -21,6 +21,8 @@ import data_filtering as filt
 import gap_filling as gf
 import dark_T_response_functions as dark
 
+reload(dark)
+
 def calculate_rb(data_dict,
                  configs_dict,
                  params_in_dict,
@@ -38,22 +40,33 @@ def calculate_rb(data_dict,
         temp_dict = {var: data_dict[date][var][bool_filter] 
                      for var in ['TempC', 'NEE_series']}
         
-        # Specify Eo value for the relevant year
-        params_in_dict['Eo_default'] = params_in_dict['Eo_years'][date.year]
+        # Get the index for the current date
+        date_index = np.where(params_out_dict['date'] == date)
+        
+        # Check data availability 
         data_pct = int(len(temp_dict['NEE_series']) / 
                        float((1440 / meas_int) / 2) * 100)
+        
+        # If enough data, go ahead
         if not data_pct < min_pct:
-            params, error_code = dark.optimise_rb(temp_dict, 
-                                                  params_in_dict)
-        else:
-            params, error_code = [np.nan], 10
-        out_index = np.where(params_out_dict['date'] == date)
-        params_out_dict['rb'][out_index] = params
-        params_out_dict['rb_error_code'][out_index] = error_code
 
+            # Do fit
+            params_in_dict['Eo_default'] = params_in_dict['Eo_years'][date.year]            
+            fit_dict = dark.optimise_rb(temp_dict, params_in_dict)
+            fit_dict['rb_error_code'] = fit_dict.pop('error_code')
+
+            # Write data to results arrays
+            for key in fit_dict.keys():
+                params_out_dict[key][date_index] = fit_dict[key]
+            
+        else:
+            
+            # Error code for not enough data
+            params_out_dict['error_code'][date_index] = 10
+        
     # Interpolate rb
     params_out_dict['rb'] = gf.generic_2d_linear(params_out_dict['rb'])
-    
+
     return
 
 def calculate_Eo(data_dict,
@@ -80,17 +93,16 @@ def calculate_Eo(data_dict,
         # Calculate number of nocturnal recs for year
         days = 366 if calendar.isleap(year) else 365
         recs = days * (1440 / meas_int) / 2
-    
+
         # Input indices
         data_pct = int(len(temp_dict['NEE_series']) / float(recs) * 100)
         if not data_pct < min_pct:
-            params, error_code = dark.optimise_all(temp_dict, 
-                                                   params_in_dict)
+            fit_dict = dark.optimise_all(temp_dict, params_in_dict)
         else:
-            params, error_code = [np.nan, np.nan], 10
-        Eo_annual_data_dict[year] = params[0]
-        Eo_annual_error_dict[year] = error_code
-        if error_code == 0: 
+            fit_dict = {'Eo': np.nan, 'error_code' : 10}
+        Eo_annual_data_dict[year] = fit_dict['Eo']
+        Eo_annual_error_dict[year] = fit_dict['error_code']
+        if fit_dict['error_code'] == 0: 
             Eo_pass_keys.append(year)
         else:
             Eo_fail_keys.append(year)
@@ -123,9 +135,11 @@ def estimate_Re(data_dict,
                 all_params_dict, 
                 datetime_input_index_dict):
     
-    # Create output arrays for Re estimates
-    results_array = np.empty(len(data_dict['TempC']))
-    results_array[:] = np.nan
+    # Create output dicts for estimates
+    results_dict = {}
+    results_dict['Re'] = np.empty(len(data_dict['TempC']))
+    results_dict['Re'][:] = np.nan
+    results_dict['date_time'] = data_dict['date_time']
     
     # Estimate time series Re
     for i, date in enumerate(all_params_dict['date']):
@@ -134,10 +148,10 @@ def estimate_Re(data_dict,
         this_Eo = all_params_dict['Eo'][i]
         this_rb = all_params_dict['rb'][i]
         this_dict = {'TempC': data_dict['TempC'][indices[0]: indices[1] + 1]}
-        results_array[indices[0]: indices[1] + 1] = dark.TRF(this_dict, 
-                                                             this_Eo,
-                                                             this_rb)                                                         
-    return results_array
+        Re = dark.TRF(this_dict, this_Eo, this_rb)                                                         
+        results_dict['Re'][indices[0]: indices[1] + 1] = Re
+
+    return results_dict
 
 def generate_results_dict(datetime_array):
     
@@ -244,7 +258,10 @@ def main(data_dict, configs_dict):
                                          available window data for fitting of 
                                          rb (int; range 0 <= x <= 100)
                  - 'measurement_interval': measurement interval (minutes) of 
-                                           the input data (int)                                          
+                                           the input data (int)
+                 - 'output_fit_plots': whether to output plots showing the fit
+                                       of the parameters to the data (boolean)
+                 - 'output_path': path for output of plots (str)
     Returns: 1) a results dictionary containing 2 key / value pairs:
                     - 'date_time': numpy array of Python datetimes for each
                       datum in the original time series
@@ -288,14 +305,14 @@ def main(data_dict, configs_dict):
     # data array - no data dict is built from this, since these indices are used to
     # assign Re estimates to the estimated time series output array only
     dates_input_index_dict = dtf.get_day_indices(data_dict['date_time'])
-    
-    # Generate a results dictionary for the parameter values (1 for each day)
-    params_out_dict = generate_results_dict(data_dict['date_time'])
-    
+
     # Initalise parameter dicts with prior estimates
     params_in_dict = {'Eo_prior': 100,
                       'rb_prior': data_dict['NEE_series'][data_dict['all_bool']]
                       .mean()}
+    
+    # Generate a results dictionary for the parameter values (1 for each day)
+    params_out_dict = generate_results_dict(data_dict['date_time'])
 
     # Get Eo for all years
     calculate_Eo(years_data_dict, 
@@ -310,16 +327,17 @@ def main(data_dict, configs_dict):
                  params_out_dict)
     
     # Estimate Re for all data
-    rslt_dict = {'Re': estimate_Re(data_dict,
-                                   params_out_dict,
-                                   dates_input_index_dict),
-                 'date_time': data_dict['date_time']}
+    rslt_dict = estimate_Re(data_dict,
+                            params_out_dict,
+                            dates_input_index_dict)
 
-    # Write Re estimate to data_dict
-    data_dict['Re'] = rslt_dict['Re']
+    # Get error codes
+    error_dict = dark.error_codes()
+    error_dict[20] = 'Data are linearly interpolated from nearest '\
+                     'non-interpolated neighbour'
 
     # Do plotting if specified
     if configs_dict['output_fit_plots']:
         plot_windows(step_data_dict, configs_dict, params_out_dict)
 
-    return rslt_dict, params_out_dict
+    return rslt_dict, params_out_dict, error_dict

@@ -45,9 +45,7 @@ def error_codes():
          5:'Optimisation reached maximum number of iterations' \
            'without convergence',
          10:'Data did not pass minimum percentage threshold - ' \
-            'skipping optimisation',
-         20:'Data are linearly interpolated from nearest non-interpolated ' \
-            'neighbour'}
+            'skipping optimisation'}
     
     return d
 
@@ -197,7 +195,7 @@ def optimise_free_rb(data_dict, params_dict):
         params = beta_params_dict['beta']
         error_state = beta_error_dict['beta']
 
-    params_dict = {'rb_day': params[0],
+    params_dict = {'rb': params[0],
                    'alpha': params[1],
                    'beta': params[2],
                    'k': params[3],

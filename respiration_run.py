@@ -54,11 +54,12 @@ def get_data(configs_dict):
 
     # Initialise name change dictionary with new names via common keys
     oldNames_dict = configs_dict['variables']
-    newNames_dict = {'carbon_flux':'Fc_series',
+    newNames_dict = {'carbon_flux':'NEE_series',
                      'temperature': 'TempC',
                      'solar_radiation': 'Fsd',
                      'vapour_pressure_deficit': 'VPD',
-                     'friction_velocity': 'ustar'}
+                     'friction_velocity': 'ustar',
+                     'wind_speed': 'ws'}
     names_dict = {oldNames_dict[key]: newNames_dict[key] for key in oldNames_dict}                     
 
     # get data (screen only the Fc data to obs only)
@@ -106,12 +107,11 @@ configs_dict['measurement_interval'] = int(attr['time_step'])
 configs_dict['output_path'] = full_path
 
 # Remove low ustar values according to threshold
-data_dict['Fc_series'][data_dict['ustar'] < 
-                       configs_dict['ustar_threshold']] = np.nan
+data_dict['NEE_series'][data_dict['ustar'] < 
+                        configs_dict['ustar_threshold']] = np.nan
 
 # Calculate Re by sending data to main respiration function
-re_dict, params_dict = re.main(cp.copy(data_dict), configs_dict)
-data_dict['Re'] = re_dict['Re']
+re_dict, params_dict, error_dict = re.main(cp.copy(data_dict), configs_dict)
 
 # Write data to file
 io.array_dict_to_csv(params_dict, 

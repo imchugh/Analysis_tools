@@ -16,9 +16,6 @@ import respiration as re
 import light_response as li
 import data_formatting as dt_fm
 
-reload(io)
-reload(li)
-
 # Get the data and format appropriately
 def get_data(configs_dict):
 
@@ -64,47 +61,84 @@ def get_data(configs_dict):
     return data_dict, global_attr
     
 #------------------------------------------------------------------------------    
-# Do the respiration fit
+def main():
+    
+    # Do the respiration fit
 
-# Get configurations
-configs_dict = io.config_to_dict(io.file_select_dialog())
+    # Get configurations
+    configs_dict = io.config_to_dict(io.file_select_dialog())
 
-# Get data
-data_dict, attr = get_data(configs_dict)
+    # Do light response?
+    do_light_response = io.ask_question_dialog('Run options', 
+                                               'Do you want to fit light '\
+                                               'response parameters?')
+    
+    # Get data
+    data_dict, attr = get_data(configs_dict)
+    
+    # Set up respiration configs and add measurement interval and output path
+    re_configs_dict = configs_dict['respiration_configs']
+    re_configs_dict['measurement_interval'] = int(attr['time_step'])
+    re_full_path = os.path.join(configs_dict['files']['output_path'],
+                               configs_dict['respiration_configs']['output_folder'])
+    if not os.path.isdir(re_full_path): os.makedirs(re_full_path)
+    re_configs_dict['output_path'] = re_full_path
+    
+    # Remove low ustar values according to threshold, then calculate Re
+    data_dict['NEE_series'][(data_dict['ustar'] < 
+                            re_configs_dict['ustar_threshold']) &
+                            (data_dict['Fsd'] < 5)] = np.nan
+    re_rslt_dict, re_params_dict, re_error_dict = re.main(cp.copy(data_dict), 
+                                                          re_configs_dict)
+    
+    # Write data to file
+    io.array_dict_to_csv(re_params_dict, 
+                         os.path.join(re_full_path, 'params.csv'), 
+                         ['date', 'Eo', 'Eo_error_code', 'rb', 'rb_error_code'])
+    io.array_dict_to_csv(re_rslt_dict, os.path.join(re_full_path, 'Re.csv'), 
+                         ['date_time', 'Re'])
+    io.text_dict_to_text_file(re_error_dict, os.path.join(re_full_path, 'error_codes.txt'))
+    
+    #--------------------------------------------------------------------------
+    # Do the light response parameters
 
-# Set up respiration configs and add measurement interval and output path
-re_configs_dict = configs_dict['respiration_configs']
-re_configs_dict['measurement_interval'] = int(attr['time_step'])
-re_full_path = os.path.join(configs_dict['files']['output_path'],
-                           configs_dict['respiration_configs']['output_folder'])
-if not os.path.isdir(re_full_path): os.makedirs(re_full_path)
-re_configs_dict['output_path'] = re_full_path
+    if do_light_response:
+    
+        # Set up light response configs and add measurement interval and output path
+        li_configs_dict = configs_dict['light_response_configs']
+        li_configs_dict['measurement_interval'] = int(attr['time_step'])
+        li_full_path = os.path.join(configs_dict['files']['output_path'],
+                                    configs_dict['light_response_configs']
+                                                ['output_folder'])
+        if not os.path.isdir(li_full_path): os.makedirs(li_full_path)
+        li_configs_dict['output_path'] = li_full_path
+        
+        # Convert insolation to PPFD
+        data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6
+        
+        # Call light response function
+        li_rslt_dict, li_params_dict, li_error_dict = li.main(data_dict, 
+                                                              li_configs_dict, 
+                                                              re_params_dict)
+        
+        # Write data to file
+        var_order_list = ['date', 'Eo', 'Eo_error_code', 'rb', 'alpha', 'beta', 'k', 
+                          'light_response_error_code']
+        if li_configs_dict['use_nocturnal_rb']:
+            var_order_list.insert(4, 'rb_error_code')
+        io.array_dict_to_csv(li_params_dict, 
+                             os.path.join(li_full_path, 'params.csv'), 
+                             var_order_list)
+        io.array_dict_to_csv(li_rslt_dict, os.path.join(li_full_path, 'Re_GPP.csv'), 
+                             ['date_time', 'Re', 'GPP'])
+        io.text_dict_to_text_file(li_error_dict, os.path.join(li_full_path, 'error_codes.txt'))
 
-# Set up light response configs and add measurement interval and output path
-li_configs_dict = configs_dict['light_response_configs']
-li_configs_dict['measurement_interval'] = int(attr['time_step'])
-li_full_path = os.path.join(configs_dict['files']['output_path'],
-                            configs_dict['light_response_configs']
-                                        ['output_folder'])
-if not os.path.isdir(li_full_path): os.makedirs(li_full_path)
-li_configs_dict['output_path'] = li_full_path
+        return li_rslt_dict, li_params_dict
+        
+    else:
+        
+        return re_rslt_dict, re_params_dict
 
-# Remove low ustar values according to threshold, then calculate Re
-data_dict['NEE_series'][(data_dict['ustar'] < 
-                        re_configs_dict['ustar_threshold']) &
-                       (data_dict['Fsd'] < 5)] = np.nan
-re_rslt_dict, re_params_dict = re.main(cp.copy(data_dict), re_configs_dict)
-data_dict['Re'] = re_rslt_dict['Re']
+if __name__ == "__main__":
 
-# Convert insolation to PPFD
-data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6
-
-# Call light response function
-test = li.main(data_dict, li_configs_dict, re_params_dict)
-
-## Write data to file
-#io.array_dict_to_csv(params_dict, 
-#                     os.path.join(full_path, 'params.csv'), 
-#                     ['date', 'Eo', 'Eo_error_code', 'rb', 'rb_error_code'])
-#io.array_dict_to_csv(re_dict, os.path.join(full_path, 'Re.csv'), ['date_time',
-#                                                                  'Re'])                                                                  
+   main()

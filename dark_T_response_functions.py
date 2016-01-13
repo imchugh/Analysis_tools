@@ -9,9 +9,26 @@ from scipy.optimize import curve_fit
 import numpy as np
 import pdb
 
-# No fixed parameters    
+#------------------------------------------------------------------------------
+# Data optimisation algorithm
+
 def TRF(data_dict, Eo, rb):
     return rb * np.exp(Eo * (1 / (10 + 46.02) - 1 / (data_dict['TempC'] + 46.02)))
+
+#------------------------------------------------------------------------------    
+# Write error messages to dictionary with codes as keys
+def error_codes():
+    
+    d = {0:'Optimisation successful',
+         1:'Value of Eo failed range check - rejecting all parameters',
+         2:'Value of rb has wrong sign - rejecting all parameters',
+         3:'Optimisation reached maximum number of iterations' \
+           'without convergence',
+         10:'Data did not pass minimum percentage threshold - ' \
+            'skipping optimisation'}
+    
+    return d
+#------------------------------------------------------------------------------    
 
 # rb and Eo
 def optimise_all(data_dict, params_dict):
@@ -34,13 +51,13 @@ def optimise_all(data_dict, params_dict):
 
     # If negative rb returned, set to nan
     if params[0] < 50 or params[0] > 400: 
-        error_state = 8
+        error_state = 1
         params = [np.nan, np.nan]
     elif params[1] < 0:
-        error_state = 9
+        error_state = 2
         params = [np.nan, np.nan]
 
-    return params, error_state        
+    return {'Eo': params[0], 'rb': params[1], 'error_code': error_state}
 
 # rb   
 def optimise_rb(data_dict, params_dict):
@@ -63,7 +80,7 @@ def optimise_rb(data_dict, params_dict):
 
     # If negative rb returned, set to nan
     if params[0] < 0:
-        error_state = 9
+        error_state = 2
         params = [np.nan]
        
-    return params, error_state
+    return {'rb': params[0], 'error_code': error_state}
