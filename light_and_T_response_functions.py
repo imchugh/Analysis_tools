@@ -10,11 +10,16 @@ import numpy as np
 #------------------------------------------------------------------------------
 # Data optimisation algorithm
 
+#    GPP = (alpha * data_d['PAR']) / (1 - (data_d['PAR'] / 2000) + 
+#           (alpha * data_d['PAR'] / Aopt_VPD))
+
 def LRF_part(data_d, Eo, rb, alpha, beta, k):
     beta_VPD = beta * np.exp(-k * (data_d['VPD'] - 1))
     index = data_d['VPD'] <= 1
     beta_VPD[index] = beta
-    GPP = (alpha * beta_VPD * data_d['PAR']) / (alpha * data_d['PAR'] + beta_VPD)    
+    GPP = (alpha * data_d['PAR']) / (1 - (data_d['PAR'] / 2000) + 
+           (alpha * data_d['PAR'] / beta_VPD))
+#    GPP = (alpha * beta_VPD * data_d['PAR']) / (alpha * data_d['PAR'] + beta_VPD)    
     index = data_d['PAR'] < 5
     GPP[index] = 0
     Reco = rb * np.exp(Eo * (1 / (10 + 46.02) - 1 / (data_d['TempC'] + 46.02)))
@@ -22,9 +27,11 @@ def LRF_part(data_d, Eo, rb, alpha, beta, k):
 
 def LRF(data_d, Eo, rb, alpha, beta, k):
     beta_VPD = beta * np.exp(-k * (data_d['VPD'] - 1))
-    index = np.where(data_d['VPD'] <= 1)[0]
+    index = data_d['VPD'] <= 1
     beta_VPD[index] = beta
-    GPP = (alpha * beta_VPD * data_d['PAR']) / (alpha * data_d['PAR'] + beta_VPD)     
+    GPP = (alpha * data_d['PAR']) / (1 - (data_d['PAR'] / 2000) + 
+           (alpha * data_d['PAR'] / beta_VPD))    
+#    GPP = (alpha * beta_VPD * data_d['PAR']) / (alpha * data_d['PAR'] + beta_VPD)     
     index = data_d['PAR'] < 5
     GPP[index] = 0
     Reco = rb * np.exp(Eo * (1 / (10 + 46.02) - 1 / (data_d['TempC'] + 46.02)))
