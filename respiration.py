@@ -5,7 +5,6 @@ Created on Wed Dec  2 11:23:04 2015
 @author: imchugh
 """
 # Python modules
-import sys
 import os
 import numpy as np
 import copy as cp
@@ -15,7 +14,6 @@ import datetime as dt
 import pdb
 
 # My modules
-sys.path.append('../Partitioning')
 import datetime_functions as dtf
 import data_filtering as filt
 import gap_filling as gf
@@ -60,9 +58,9 @@ def calculate_rb(data_dict,
                 params_out_dict[key][date_index] = fit_dict[key]
             
         else:
-            
+
             # Error code for not enough data
-            params_out_dict['error_code'][date_index] = 10
+            params_out_dict['rb_error_code'][date_index] = 10
         
     # Interpolate rb
     params_out_dict['rb'] = gf.generic_2d_linear(params_out_dict['rb'])
