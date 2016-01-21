@@ -95,7 +95,7 @@ def OzFluxQCnc_to_data_structure(file_in,
              2) global attributes of the .nc file (if specified)
     
     """
-    
+
     def get_var_from_nc(nc_obj, var):
         
         ndims = len(nc_obj.variables[var].shape)
@@ -127,7 +127,7 @@ def OzFluxQCnc_to_data_structure(file_in,
     for var in var_list:
 
         if not var in nc_obj.variables.keys():
-            print 'Variable ' + var + 'was not found in specified target file'
+            print 'Variable ' + var + ' was not found in specified target file'
             continue
 
         # Check dimensions and get data from variable
