@@ -16,6 +16,8 @@ import respiration as re
 import light_response as li
 import data_formatting as dt_fm
 
+reload(re)
+
 # Get the data and format appropriately
 def get_data(configs_dict):
 
@@ -28,6 +30,7 @@ def get_data(configs_dict):
     # Initialise name change dictionary with new names via common keys
     oldNames_dict = configs_dict['variables']
     newNames_dict = {'carbon_flux':'NEE_series',
+                     'carbon_storage': 'Fc_storage',
                      'temperature': 'TempC',
                      'solar_radiation': 'Fsd',
                      'vapour_pressure_deficit': 'VPD',
@@ -55,9 +58,12 @@ def get_data(configs_dict):
                                      var_list = oldNames_dict.values(),
                                      return_global_attr = True)
 
+    # Sum Fc and Fc_storage
+#    data_dict['Fc'] = data_dict['Fc'] + data_dict['Fc_storage']
+
     # Rename relevant variables    
     data_dict = dt_fm.rename_data_dict_vars(data_dict, names_dict)
-
+        
     return data_dict, global_attr
     
 #------------------------------------------------------------------------------    
