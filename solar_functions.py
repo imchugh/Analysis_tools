@@ -34,7 +34,6 @@ def get_zenith(data_dict, lat, lon, alt, GMT_zone):
 
     # Get zenith for each date_time
     z_list = []
-
     for i, this_dt in enumerate(UTC_datetime):
         if 'T' in data_dict.keys():
             obs.temp = data_dict['T'][i]
@@ -56,7 +55,7 @@ def Insol_calc(data_dict, GMT_zone, latit, longit, ALT_m, k, use_ephem = False):
                       key / value pair of:
                           - 'date_time': array of datetimes (python datetime);
                       additionally, if using pyephem for zenith calculation and
-                      accurate refraction correction required, include two 
+                      accurate refraction correction is required, include two 
                       additional key / value pairs of: 
                           - 'T': array of temperatures in C (float)
                           - 'P': array of pressures in hPa (float)
@@ -67,7 +66,7 @@ def Insol_calc(data_dict, GMT_zone, latit, longit, ALT_m, k, use_ephem = False):
         6) k: extinction coefficient - unitless with range 0-1 (int or float)
 
     Optional kwargs:
-        1) use_ephem - use pyephem instead of algoirthms here (boolean); if 
+        1) use_ephem - use pyephem instead of algorithms here (boolean); if 
                        valid entries for T and P are found in data_dict, the 
                        atmospheric refraction correction will be more accurate
                        (otherwise defaults to )
@@ -80,19 +79,16 @@ def Insol_calc(data_dict, GMT_zone, latit, longit, ALT_m, k, use_ephem = False):
     
     Duffie, J. and W. Beckman (1980). Solar Engineering of Thermal Processes. 
     New York, John Wiley and Sons.
-    
-    Wunderlich, W. (1972), Heat and Mass Transfer between a Water Surface
-    and the Atmosphere, Report No 14, Report Publication No. 0-6803,
-    Water Resources Research Laboratory, TennesseeValleyAuthority,Division
-    of Water Control Planning, Engineering Laboratory, Norris, TN.
+
+    Kasten, F. and Young, A.T. (1989) Revised optical air mass tables and 
+    approximation formula. Applied Optics 28: 4735-4738.
     
     Note that solar disk diameter or refraction corrections are not yet 
     included; if u want these, set use_ephem to True
     """
-    
-    date_time = data_dict['date_time']    
-    
+
     # Get date and time components
+    date_time = data_dict['date_time']    
     try: 
         iter(date_time)
     except:
@@ -110,7 +106,7 @@ def Insol_calc(data_dict, GMT_zone, latit, longit, ALT_m, k, use_ephem = False):
     TOArad = (1 + 0.034 * np.cos(DOY / 365.25 * 2 * np.pi)) * 1367.0 # Duffie and Beckman (1980)
 
     # Calculate hour angle    
-    hr_angle =abs(np.radians((solar_noon - (minute/60.0 + hour)) * 15))
+    hr_angle = abs(np.radians((solar_noon - (minute/60.0 + hour)) * 15))
 
     # Calculate solar zenith angle
     if use_ephem:
@@ -122,10 +118,15 @@ def Insol_calc(data_dict, GMT_zone, latit, longit, ALT_m, k, use_ephem = False):
                  np.cos(np.radians(latit)) * np.cos(decl) * np.cos(hr_angle))
     zenith_msk = np.ma.masked_greater_equal(zenith, np.pi / 2) # Mask night values
 
-    # Calculate optical air mass term
-    m = (np.exp(-1 * ALT_m / 8343.5) / (np.cos(zenith_msk) + 0.15 *
-         (np.degrees(np.pi - zenith) + 3.855)** -1.253)) # Wunderlich (1972)
-    
+    # Calculate optical air mass term (correct for optical effects of reduced 
+    # air density [by calculating ratio of pressure at altitude to pressure at
+    # sea level])
+    # Kasten and Young (1989)
+    m_sl = 1 / (np.cos(zenith_msk) + 0.50572 * 
+                (96.07995 - np.degrees(zenith_msk)) ** -1.6364)
+    p_p0 = np.exp(-0.0001184 * ALT_m) # Generic pressure/height approximation
+    m = p_p0 * m_sl
+
     # Instantaneous clear sky surface radiation in Wm-2 (Beer-Lambert variant)
     Kdown = (TOArad * np.exp(-k * m) * np.cos (zenith_msk)).filled(0)
     m = m.filled(np.nan)
@@ -139,5 +140,4 @@ def Insol_calc(data_dict, GMT_zone, latit, longit, ALT_m, k, use_ephem = False):
     d['optical_air_mass'] = m
     d['Kdown'] = Kdown
     
-    return d    
-
+    return d
