@@ -58,16 +58,13 @@ def get_data(configs_dict):
                                      var_list = oldNames_dict.values(),
                                      return_global_attr = True)
 
-    # Sum Fc and Fc_storage
-#    data_dict['Fc'] = data_dict['Fc'] + data_dict['Fc_storage']
-
     # Rename relevant variables    
     data_dict = dt_fm.rename_data_dict_vars(data_dict, names_dict)
         
     return data_dict, global_attr
     
 #------------------------------------------------------------------------------    
-def main():
+def main(use_storage = False):
     
     # Do the respiration fit
 
@@ -81,6 +78,9 @@ def main():
     
     # Get data
     data_dict, attr = get_data(configs_dict)
+    
+    if use_storage:
+        data_dict['Fc'] = data_dict['Fc'] + data_dict['Fc_storage']
     
     # Set up respiration configs and add measurement interval and output path
     re_configs_dict = configs_dict['respiration_configs']
