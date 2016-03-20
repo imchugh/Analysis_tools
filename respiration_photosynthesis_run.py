@@ -9,6 +9,7 @@ Created on Wed Jan  6 16:08:41 2016
 import os
 import copy as cp
 import numpy as np
+import pdb
 
 # My modules
 import DataIO as io
@@ -60,54 +61,68 @@ def get_data(configs_dict):
 
     # Rename relevant variables    
     data_dict = dt_fm.rename_data_dict_vars(data_dict, names_dict)
-        
+
+    # Make NEE the sum of Fc + storage if specified
+    if configs_dict['global_configs']['use_storage']:
+        data_dict['NEE_series'] = data_dict['NEE_series'] + data_dict['Fc_storage']
+
+    # Drop all cases where there is no storage data
+    data_dict['NEE_series'][np.isnan(data_dict['Fc_storage'])] = np.nan
+
+    # Remove low ustar values according to threshold
+    ustar_threshold = configs_dict['global_configs']['ustar_threshold']
+    data_dict['NEE_series'][(data_dict['ustar'] < ustar_threshold) &
+                            (data_dict['Fsd'] < 5)] = np.nan    
+   
     return data_dict, global_attr
     
 #------------------------------------------------------------------------------    
-def main(use_storage = False):
+def main(use_storage = False, ustar_threshold = False, 
+         config_file = False, do_light_response = False):
+    """
+    No positional arguments - prompts for a configuration file
+    Kwargs: use_storage - if True then algorithm looks for a variable called 
+                          Fc_storage and then sums that with Fc
+            ustar_threshold - set to a particular value to override the ustar
+                              threshold set in the global configs root item of
+                              the configuration file (this is done so that can
+                              be set in function call from another script)
+    """
     
     # Do the respiration fit
 
     # Get configurations
-    configs_dict = io.config_to_dict(io.file_select_dialog())
+    if not config_file:
+        configs_dict = io.config_to_dict(io.file_select_dialog())
+    else:
+        configs_dict = io.config_to_dict(config_file)
+    configs_dict['global_configs']['use_storage'] = use_storage
 
-    # Do light response?
-    do_light_response = io.ask_question_dialog('Run options', 
-                                               'Do you want to fit light '\
-                                               'response parameters?')
-    
+    # Override default ustar_threshold if requested by user
+    if not isinstance(ustar_threshold, bool):
+        if isinstance(ustar_threshold, (int, float)):
+            configs_dict['global_configs']['ustar_threshold'] = ustar_threshold
+
     # Get data
     data_dict, attr = get_data(configs_dict)
     
-    if use_storage:
-        data_dict['Fc'] = data_dict['Fc'] + data_dict['Fc_storage']
-    
-    # Set up respiration configs and add measurement interval and output path
-    re_configs_dict = configs_dict['respiration_configs']
+    # Set up respiration configs and add measurement interval, ustar and output path
+    re_configs_dict = dict(configs_dict['respiration_configs'], **
+                           configs_dict['global_configs'])
     re_configs_dict['measurement_interval'] = int(attr['time_step'])
     re_full_path = os.path.join(configs_dict['files']['output_path'],
                                configs_dict['respiration_configs']['output_folder'])
     if not os.path.isdir(re_full_path): os.makedirs(re_full_path)
     re_configs_dict['output_path'] = re_full_path
     
-    # Remove low ustar values according to threshold, then calculate Re
-    data_dict['NEE_series'][(data_dict['ustar'] < 
-                            re_configs_dict['ustar_threshold']) &
-                            (data_dict['Fsd'] < 5)] = np.nan
+    # Calculate Re                            
     re_rslt_dict, re_params_dict, re_error_dict = re.main(cp.copy(data_dict), 
                                                           re_configs_dict)
     
-    # Write data to file
-    io.array_dict_to_csv(re_params_dict, 
-                         os.path.join(re_full_path, 'params.csv'), 
-                         ['date', 'Eo', 'Eo_error_code', 'rb', 'rb_error_code'])
-    io.array_dict_to_csv(re_rslt_dict, os.path.join(re_full_path, 'Re.csv'), 
-                         ['date_time', 'Re'])
-    io.text_dict_to_text_file(re_error_dict, os.path.join(re_full_path, 'error_codes.txt'))
+    # Add original time series                                                              
+    re_rslt_dict['NEE_series'] = data_dict['NEE_series']
     
-    #--------------------------------------------------------------------------
-    # Do the light response parameters
-
+    # Do the light response parameters (or not)
     if do_light_response:
     
         # Set up light response configs and add measurement interval and output path
@@ -126,6 +141,9 @@ def main(use_storage = False):
         li_rslt_dict, li_params_dict, li_error_dict = li.main(data_dict, 
                                                               li_configs_dict, 
                                                               re_params_dict)
+
+        # Add original time series                                                              
+        li_rslt_dict['NEE_series'] = data_dict['NEE_series']
         
         # Write data to file
         var_order_list = ['date', 'Eo', 'Eo_error_code', 'rb', 'alpha', 'beta', 'k', 
@@ -142,6 +160,14 @@ def main(use_storage = False):
         return li_rslt_dict, li_params_dict
         
     else:
+        
+        # Write data to file
+        io.array_dict_to_csv(re_params_dict, 
+                             os.path.join(re_full_path, 'params.csv'), 
+                             ['date', 'Eo', 'Eo_error_code', 'rb', 'rb_error_code'])
+        io.array_dict_to_csv(re_rslt_dict, os.path.join(re_full_path, 'Re.csv'), 
+                             ['date_time', 'Re'])
+        io.text_dict_to_text_file(re_error_dict, os.path.join(re_full_path, 'error_codes.txt'))        
         
         return re_rslt_dict, re_params_dict
 
