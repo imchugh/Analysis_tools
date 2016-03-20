@@ -8,8 +8,48 @@ Created on Wed Jan 20 15:59:38 2016
 import ephem
 import datetime as dt
 import numpy as np
+import pdb
 
-def get_zenith(data_dict, lat, lon, alt, GMT_zone):
+def get_ephem_solar(data_dict, lat, lon, alt, GMT_zone, return_var = 'zenith'):
+    """
+    Pass as positional args:
+        1) 'data_dict': dictionary containing key / value pairs of:
+                - 'date_time': numpy array of datetimes
+                - 'T': numpy array of air temperature (float); optional but 
+                       affects calculation of sunrise and sunset due to 
+                       refraction effects
+                - 'P': numpy array of air pressure (float); optional but 
+                       affects calculation of sunrise and sunset due to 
+                       refraction effects
+        2) 'lat': latitude either in float (decimal radians) or str (decimal
+                  degrees); this is just ephem convention!
+        3) 'lon': longitude either in float (decimal radians) or str (decimal
+                  degrees); this is just ephem convention!
+        4) 'alt': altitude in m (int or float)
+        5) 'GMT_zone': time zone relative to Greenwich (int or float)
+    pass as kwarg:
+        1) 'return_var': type of observation required (str); choices are:
+                - 'zenith' (solar zenith)
+                - 'altitude' (solar elevation)
+                - 'rise' (sunrise time)
+                - 'set' (sunset time)
+    Returns:
+        dictionary containing either ...
+    """
+    
+    # Map function variable names to ephem sun properties
+    var_dict = {'zenith': 'alt',
+                'altitude': 'alt',
+                'rise': 'rise_time',
+                'set': 'set_time'}
+
+    # Check the requested variable is available for output
+    if not return_var in var_dict:
+        raise Exception('Invalid input variable! Valid variables are zenith, '\
+                        'altitude, rise and set... exiting')
+
+    # Check if user wants sunrise or sunset times
+    time_bool = True if return_var == 'rise' or return_var == 'set' else False
 
     # set local variable datetime
     date_time = data_dict['date_time']
@@ -32,8 +72,16 @@ def get_zenith(data_dict, lat, lon, alt, GMT_zone):
     except:
         UTC_datetime = np.array([UTC_datetime, ])
 
-    # Get zenith for each date_time
-    z_list = []
+    # Convert to dates if user wants sunrise or sunset times
+    if time_bool:
+        UTC_datetime = np.unique(np.array([this_date.date() for 
+                                           this_date in UTC_datetime]))
+        my_datetime = np.unique(np.array([this_date.date() for 
+                                          this_date in date_time]))
+
+    # Get data for each date_time
+    var_list = []
+    eval_string = 'sun.' + var_dict[return_var]
     for i, this_dt in enumerate(UTC_datetime):
         if 'T' in data_dict.keys():
             obs.temp = data_dict['T'][i]
@@ -41,12 +89,24 @@ def get_zenith(data_dict, lat, lon, alt, GMT_zone):
             obs.pressure = data_dict['P'][i]
         obs.date = this_dt
         sun.compute(obs)
-        z_list.append(sun.alt)
-        
-    z_array = np.array(z_list)
-        
-    return np.pi / 2 - z_array
-        
+        this_val = eval(eval_string)
+        var_list.append(this_val)    
+
+    # Convert to python datetime.time if user wants sunrise or sunset times
+    if time_bool: 
+        for i, this_val in enumerate(var_list):
+            (y, m, d, h, mins, s) = this_val.tuple()
+            this_time = dt.time(h, mins, int(s))
+            var_list[i] = (dt.datetime.combine(dt.date.today(), this_time) + 
+                           dt.timedelta(hours = GMT_zone)).time()
+        return {'date': my_datetime,
+                return_var: np.array(var_list)}
+    else:
+        out_array = np.array(var_list)
+        if return_var == 'zenith':
+            out_array = np.pi / 2 - out_array
+        return {return_var: out_array}
+    
 # Estimate clear sky radiation
 def Insol_calc(data_dict, GMT_zone, latit, longit, ALT_m, k, use_ephem = False):
     """
