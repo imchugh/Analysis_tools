@@ -49,7 +49,9 @@ def rename_data_dict_vars(data_dict, names_dict, pass_through = True):
     Renames variables in a data dictionary according to key / value pairs in 
     a names dictionary specifying the old (key) and new (value) names (note 
     that by default variables in the data dictionary that are not in the keys
-    of the names dictionary are passed through - switching )
+    of the names dictionary are passed through - switching pass_through to 
+    'False' will stop these variables from being passed to dictionary that is
+    returned).
     Pass the following args: 'data_dict' - a dictionary containing key / value
                                            pairs of variable name and numpy
                                            array
