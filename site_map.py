@@ -102,7 +102,7 @@ plt.annotate('$N$', xy = (arrow_x, arrow_y), xycoords = 'data',
                 color='black', fontsize = 24, verticalalignment = 'center',
                 horizontalalignment = 'center', 
                 arrowprops = dict(shrink = 0.05,
-                                  width = 2,                                    
+                                  width = 0.5,                                    
                                   color = 'black'))
 
 # Draw scale bar
