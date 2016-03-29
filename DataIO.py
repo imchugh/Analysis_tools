@@ -7,7 +7,6 @@ Created on Mon Sep 15 09:29:43 2014
 
 import Tkinter, tkFileDialog, tkMessageBox
 from configobj import ConfigObj
-from collections import OrderedDict
 import netCDF4
 import numpy as np
 import pandas as pd
@@ -31,11 +30,17 @@ def file_select_dialog():
     root.destroy()
     return file_in
 
+def get_nc_global_attr(file_in):
+    
+    nc_obj=netCDF4.Dataset(file_in)
+    return nc_obj.__dict__
+    
+
 def OzFluxQCnc_to_pandasDF(file_in, var_list = None):
     
     nc_obj=netCDF4.Dataset(file_in)
     
-    dates_list = netCDF4.num2date(nc_obj.variables['time'], 
+    dates_list = netCDF4.num2date(nc_obj.variables['time'][:], 
                                   'days since 1800-01-01 00:00:00')
     
     d_data = {}
@@ -210,28 +215,20 @@ def DINGO_df_to_data_structure(file_in,
 #------------------------------------------------------------------------------
 def config_to_dict(file_in):
     
-    cf = ConfigObj(file_in)
-
-    cf_dict = {}
-
-    for outer_key in cf.keys():
-        cf_dict[outer_key] = {}
-        for inner_key in cf[outer_key].keys():
-            this_item = cf[outer_key][inner_key]
+    def this_funct(section, key):
+        try:
+            section[key] = ast.literal_eval(section[key])
+        except:
             try:
-                cf_dict[outer_key][inner_key] = ast.literal_eval(this_item)
+                section[key] = float(section[key])
             except:
-                if isinstance(this_item, dict):
-                    try:
-                        cf_dict[outer_key][inner_key] = (
-                            {key: float(this_item[key]) 
-                             for key in this_item.keys()})
-                    except:
-                        cf_dict[outer_key][inner_key]
-                else:
-                    cf_dict[outer_key][inner_key] = cf[outer_key][inner_key]
-        
-    return cf_dict
+                pass
+
+    cf = ConfigObj(file_in)
+    
+    cf.walk(this_funct)
+
+    return cf  
     
 def dict_to_csv(data_dict, outfile, keyorder = False):
     """
