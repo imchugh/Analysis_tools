@@ -11,16 +11,99 @@ import copy as cp
 import calendar
 import matplotlib.pyplot as plt
 import datetime as dt
+from scipy.optimize import curve_fit
 import pdb
 
 # My modules
 import datetime_functions as dtf
 import data_filtering as filt
 import gap_filling as gf
-import dark_T_response_functions as dark
 
-reload(dark)
 
+#------------------------------------------------------------------------------
+# Data optimisation algorithm
+def TRF(data_dict, Eo, rb):
+    
+    return rb * np.exp(Eo * (1 / (10 + 46.02) - 1 / (data_dict['TempC'] + 46.02)))
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Write error messages to dictionary with codes as keys
+def error_codes():
+    
+    d = {0:'Optimisation successful',
+         1:'Value of Eo failed range check - rejecting all parameters',
+         2:'Value of rb has wrong sign - rejecting all parameters',
+         3:'Optimisation reached maximum number of iterations' \
+           'without convergence',
+         10:'Data did not pass minimum percentage threshold - ' \
+            'skipping optimisation'}
+    
+    return d
+#------------------------------------------------------------------------------    
+
+#------------------------------------------------------------------------------
+# run optimisation and raise error code for combined rb and Eo
+def optimise_all(data_dict, params_dict):
+
+    # Initialise error state variable
+    error_state = 0              
+    drivers_dict = {driver: data_dict[driver] for driver in ['TempC']}
+    response_array = data_dict['NEE_series']
+
+    try:
+        params = curve_fit(lambda x, a, b:
+                           TRF(x, a, b),
+                           drivers_dict, 
+                           response_array, 
+                           p0 = [params_dict['Eo_prior'], 
+                                 params_dict['rb_prior']])[0]
+    except RuntimeError:
+        params = [np.nan, np.nan]
+        error_state = 3
+
+    # If negative rb returned, set to nan
+    if params[0] < 50 or params[0] > 400: 
+        error_state = 1
+        params = [np.nan, np.nan]
+    elif params[1] < 0:
+        error_state = 2
+        params = [np.nan, np.nan]
+
+    return {'Eo': params[0], 'rb': params[1], 'error_code': error_state}
+#------------------------------------------------------------------------------
+    
+#------------------------------------------------------------------------------    
+# run optimisation and raise error code for rb with fixed Eo
+def optimise_rb(data_dict, params_dict):
+
+    # Initialise error state variable
+    error_state = 0              
+    
+    # Get drivers and response
+    drivers_dict = {driver: data_dict[driver] for driver in ['TempC']}
+    response_array = data_dict['NEE_series']        
+    
+    try:
+        params = curve_fit(lambda x, b:
+                           TRF(x, params_dict['Eo_default'], b),
+                           drivers_dict, 
+                           response_array, 
+                           p0 = [params_dict['rb_prior']])[0]                           
+    except RuntimeError:
+        params = [np.nan]
+
+    # If negative rb returned, set to nan
+    if params[0] < 0:
+        error_state = 2
+        params = [np.nan]
+       
+    return {'rb': params[0], 'error_code': error_state}
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Iterate through dates and write optimisation results for rb parameter to
+# parameter results dictionary
 def calculate_rb(data_dict,
                  configs_dict,
                  params_in_dict,
@@ -50,7 +133,7 @@ def calculate_rb(data_dict,
 
             # Do fit
             params_in_dict['Eo_default'] = params_in_dict['Eo_years'][date.year]            
-            fit_dict = dark.optimise_rb(temp_dict, params_in_dict)
+            fit_dict = optimise_rb(temp_dict, params_in_dict)
             fit_dict['rb_error_code'] = fit_dict.pop('error_code')
 
             # Write data to results arrays
@@ -66,7 +149,11 @@ def calculate_rb(data_dict,
     params_out_dict['rb'] = gf.generic_2d_linear(params_out_dict['rb'])
 
     return
+#------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+# Iterate through years and write optimisation results for Eo parameter to
+# parameter results dictionary
 def calculate_Eo(data_dict,
                  configs_dict,
                  params_in_dict,
@@ -95,7 +182,7 @@ def calculate_Eo(data_dict,
         # Input indices
         data_pct = int(len(temp_dict['NEE_series']) / float(recs) * 100)
         if not data_pct < min_pct:
-            fit_dict = dark.optimise_all(temp_dict, params_in_dict)
+            fit_dict = optimise_all(temp_dict, params_in_dict)
         else:
             fit_dict = {'Eo': np.nan, 'error_code' : 10}
         Eo_annual_data_dict[year] = fit_dict['Eo']
@@ -128,7 +215,10 @@ def calculate_Eo(data_dict,
             Eo_annual_error_dict[year])
 
     return
+#------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+# Use observed meteorology and optimised respiration parameters to estimate Re
 def estimate_Re(data_dict, 
                 all_params_dict, 
                 datetime_input_index_dict):
@@ -146,11 +236,14 @@ def estimate_Re(data_dict,
         this_Eo = all_params_dict['Eo'][i]
         this_rb = all_params_dict['rb'][i]
         this_dict = {'TempC': data_dict['TempC'][indices[0]: indices[1] + 1]}
-        Re = dark.TRF(this_dict, this_Eo, this_rb)                                                         
+        Re = TRF(this_dict, this_Eo, this_rb)                                                         
         results_dict['Re'][indices[0]: indices[1] + 1] = Re
 
     return results_dict
+#------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+# Build the dictionary for 
 def generate_results_dict(datetime_array):
     
     dates_input_index_dict = dtf.get_day_indices(datetime_array)
@@ -164,7 +257,9 @@ def generate_results_dict(datetime_array):
             'Eo_error_code': cp.copy(generic_array),
             'rb': cp.copy(generic_array),
             'rb_error_code': rb_error_code_array}  
-
+#------------------------------------------------------------------------------
+            
+#------------------------------------------------------------------------------            
 # Nocturnal fits for each window
 def plot_windows(step_data_dict, configs_dict, params_dict):
 
@@ -191,7 +286,7 @@ def plot_windows(step_data_dict, configs_dict, params_dict):
         index = x_var.argsort()
         x_var = x_var[index]
         y_var1 = y_var1[index]
-        y_var2 = dark.TRF({'TempC': x_var}, Eo, rb)
+        y_var2 = TRF({'TempC': x_var}, Eo, rb)
           
         # Plot
         date_str = dt.datetime.strftime(date,'%Y-%m-%d')
@@ -221,12 +316,12 @@ def plot_windows(step_data_dict, configs_dict, params_dict):
         plt.ion()
         
     return
+#------------------------------------------------------------------------------
                 
 #------------------------------------------------------------------------------
 #############
 # Main code #
 #############        
-
 def main(data_dict, configs_dict):
 
     """
@@ -280,8 +375,6 @@ def main(data_dict, configs_dict):
                                        interpolated or calculated)                    
     """
     
-    #------------------------------------------------------------------------------
-
     # Create boolean indices for masking daytime and nan values
     night_mask = data_dict['Fsd'] < 5
     nan_mask = filt.subset_arraydict_on_nan(data_dict,
@@ -330,7 +423,7 @@ def main(data_dict, configs_dict):
                             dates_input_index_dict)
 
     # Get error codes
-    error_dict = dark.error_codes()
+    error_dict = error_codes()
     error_dict[20] = 'Data are linearly interpolated from nearest '\
                      'non-interpolated neighbour'
 
@@ -339,3 +432,4 @@ def main(data_dict, configs_dict):
         plot_windows(step_data_dict, configs_dict, params_out_dict)
 
     return rslt_dict, params_out_dict, error_dict
+#------------------------------------------------------------------------------
