@@ -60,7 +60,9 @@ def rename_data_dict_vars(data_dict, names_dict, pass_through = True):
                                             variable name
     Optional kwargs: 'pass_through' - boolean specifying whether to keep 
                                       variables that are not specified in the 
-                                      keys of the names dictionary
+                                      keys of the names dictionary (this can 
+                                      be used to pass through variables that 
+                                      do not require name changes)
     """
     wrong_keys = [i for i in names_dict.keys() if not i in data_dict.keys()]
     if not len(wrong_keys) == 0:
@@ -77,6 +79,17 @@ def rename_data_dict_vars(data_dict, names_dict, pass_through = True):
             new_dict[key] = data_dict[key]
         
     return new_dict
+
+def standard_names_dictionary():
+    
+    return {'carbon_flux':'NEE_series',
+            'carbon_storage': 'Sc',
+            'temperature': 'TempC',
+            'solar_radiation': 'Fsd',
+            'vapour_pressure_deficit': 'VPD',
+            'friction_velocity': 'ustar',
+            'wind_speed': 'ws',
+            'modelled_carbon_flux': 'NEE_model'}
 
 # Get the data and format appropriately
 def get_data(configs_dict):
