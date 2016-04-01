@@ -9,73 +9,101 @@ Created on Wed Jan  6 16:08:41 2016
 import os
 import copy as cp
 import numpy as np
-import pdb
 
 # My modules
 import DataIO as io
 import respiration as re
 import light_response as li
 import data_formatting as dt_fm
+import data_filtering as data_filter
 
-reload(re)
-
-# Get the data and format appropriately
+#------------------------------------------------------------------------------
+# Fetch data from configurations
 def get_data(configs_dict):
 
-    # Get file extension and target
-    paths_dict = configs_dict['files']
-    ext = os.path.splitext(paths_dict['input_file'])[1]
-    data_input_target = os.path.join(paths_dict['input_path'],
-                                     paths_dict['input_file'])
-
-    # Initialise name change dictionary with new names via common keys
-    oldNames_dict = configs_dict['variables']
-    newNames_dict = {'carbon_flux':'NEE_series',
-                     'carbon_storage': 'Fc_storage',
-                     'temperature': 'TempC',
-                     'solar_radiation': 'Fsd',
-                     'vapour_pressure_deficit': 'VPD',
-                     'friction_velocity': 'ustar',
-                     'wind_speed': 'ws'}
-    names_dict = {oldNames_dict[key]: newNames_dict[key] for key in oldNames_dict}                     
-
-    # get data (screen only the Fc data to obs only)
-    if ext == '.nc':
-        Fc_dict = io.OzFluxQCnc_to_data_structure(data_input_target,
-                                                  var_list = [oldNames_dict
-                                                              ['carbon_flux']],
-                                                  QC_accept_codes = [0])
-        Fc_dict.pop('date_time')
-        ancillary_vars = [oldNames_dict[var] for var in oldNames_dict.keys() 
-                          if not var == 'carbon_flux']
-        ancillary_dict, global_attr = io.OzFluxQCnc_to_data_structure(
-                                          data_input_target,
-                                          var_list = ancillary_vars,
-                                          return_global_attr = True)
-        data_dict = dict(Fc_dict, **ancillary_dict)
-    elif ext == '.df':
-        data_dict, global_attr = io.DINGO_df_to_data_structure(
-                                     data_input_target,
-                                     var_list = oldNames_dict.values(),
-                                     return_global_attr = True)
-
-    # Rename relevant variables    
-    data_dict = dt_fm.rename_data_dict_vars(data_dict, names_dict)
-
-    # Make NEE the sum of Fc + storage if specified
-    if configs_dict['global_configs']['use_storage']:
-        data_dict['NEE_series'] = data_dict['NEE_series'] + data_dict['Fc_storage']
-
-    # Drop all cases where there is no storage data
-    data_dict['NEE_series'][np.isnan(data_dict['Fc_storage'])] = np.nan
-
-    # Remove low ustar values according to threshold
-    ustar_threshold = configs_dict['global_configs']['ustar_threshold']
-    data_dict['NEE_series'][(data_dict['ustar'] < ustar_threshold) &
-                            (data_dict['Fsd'] < 5)] = np.nan    
-   
-    return data_dict, global_attr
+    # Get data (screen Fc data to obs only - keep gap-filled drivers etc)
+    data_input_target = os.path.join(configs_dict['files']['input_path'],
+                                     configs_dict['files']['input_file'])
+    Fc_dict = io.OzFluxQCnc_to_data_structure(data_input_target,
+                                              var_list = [configs_dict['variables']
+                                                                      ['carbon_flux']],
+                                              QC_accept_codes = [0])
+    Fc_dict.pop('date_time')
+    ancillary_vars = [configs_dict['variables'][var] for var in 
+                      configs_dict['variables'] if not var == 'carbon_flux']
+    ancillary_dict, attr = io.OzFluxQCnc_to_data_structure(
+                               data_input_target,
+                               var_list = ancillary_vars,
+                               return_global_attr = True)
+    data_dict = dict(Fc_dict, **ancillary_dict)
     
+    # Rename to generic names used by scripts
+    old_names_dict = configs_dict['variables']
+    std_names_dict = dt_fm.standard_names_dictionary()
+    map_names_dict = {old_names_dict[key]: std_names_dict[key] 
+                      for key in old_names_dict}
+    data_dict = dt_fm.rename_data_dict_vars(data_dict, map_names_dict)
+    
+    return data_dict, attr
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Rebuild the master configuration file for passing to respiration and light 
+# response (if requested) functions
+def build_config_file(configs_master_dict, do_light_response):
+    
+    # Build a specific configuration file
+    configs_dict = {'files': configs_master_dict['global_configs']['files'],
+                    'global_options': (configs_master_dict['global_configs']
+                                                          ['options'])}                                                          
+    if do_light_response:
+        configs_dict['variables'] = dict(configs_master_dict
+                                         ['respiration_configs']['variables'],
+                                         ** configs_master_dict
+                                            ['light_response_configs']
+                                            ['variables'])
+    else:
+        configs_dict['variables'] = (configs_master_dict['respiration_configs']
+                                                        ['variables'])
+    return configs_dict                                                         
+#------------------------------------------------------------------------------
+    
+#------------------------------------------------------------------------------
+# Remove low ustar values
+def screen_low_ustar(data_dict, configs_dict):
+    
+    ustar_threshold = configs_dict['global_options']['ustar_threshold']
+    noct_threshold = configs_dict['global_options']['noct_threshold']
+    if isinstance(ustar_threshold, dict):
+        years_data_dict = data_filter.subset_datayear_from_arraydict(data_dict, 
+                                                                     'date_time')
+        threshold_keys = [int(key) for key in ustar_threshold.keys()]
+        miss_list = [year for year in years_data_dict.keys() 
+                     if not year in threshold_keys]
+        if not len(miss_list) == 0:
+            miss_string = ', '.join([str(this_year) for this_year in miss_list])
+            raise Exception('Missing years: %s' %miss_string + '; please edit ' \
+                            'your configuration file so that years specified ' \
+                            'for ustar threshold match those available in ' \
+                            'data file, or alternatively specify a single ' \
+                            'value (float) in the configuration file under ' \
+                            '[global_configs][options][ustar_threshold]. '\
+                            'Exiting...')
+        data_list = []
+        for this_year in years_data_dict.keys():
+            this_threshold = ustar_threshold[str(this_year)]
+            this_NEE = years_data_dict[this_year]['NEE_series']
+            this_NEE[(years_data_dict[this_year]['ustar'] < this_threshold) &
+                     (years_data_dict[this_year]['Fsd'] < noct_threshold)] = np.nan
+            data_list.append(this_NEE)
+        data_dict['NEE_series'] = np.concatenate(data_list)
+    else:
+        data_dict['NEE_series'][(data_dict['ustar'] < ustar_threshold) &
+                                (data_dict['Fsd'] < noct_threshold)] = np.nan
+                                
+    return
+#------------------------------------------------------------------------------    
+
 #------------------------------------------------------------------------------    
 def main(use_storage = False, ustar_threshold = False, 
          config_file = False, do_light_response = False):
@@ -91,27 +119,39 @@ def main(use_storage = False, ustar_threshold = False,
     
     # Do the respiration fit
 
-    # Get configurations
+    # Get master configuration file
     if not config_file:
-        configs_dict = io.config_to_dict(io.file_select_dialog())
+        configs_master_dict = io.config_to_dict(io.file_select_dialog())
     else:
-        configs_dict = io.config_to_dict(config_file)
-    configs_dict['global_configs']['use_storage'] = use_storage
-
-    # Override default ustar_threshold if requested by user
-    if not isinstance(ustar_threshold, bool):
-        if isinstance(ustar_threshold, (int, float)):
-            configs_dict['global_configs']['ustar_threshold'] = ustar_threshold
+        configs_master_dict = io.config_to_dict(config_file)
+    
+    # Build custom configuration file for this script
+    configs_dict = build_config_file(configs_master_dict, do_light_response)
 
     # Get data
     data_dict, attr = get_data(configs_dict)
+
+    # Override default configuration file ustar_threshold if requested by user
+    if not isinstance(ustar_threshold, bool):
+        if isinstance(ustar_threshold, (int, float, dict)):
+            configs_dict['global_configs']['ustar_threshold'] = ustar_threshold
+
+    # Sum Fc and Sc if storage is to be included, otherwise if requested, 
+    # remove all Fc where Sc is missing
+    if configs_dict['global_options']['use_storage']:
+        data_dict['NEE_series'] = (data_dict['NEE_series'] + 
+                                   data_dict['Fc_storage'])
+    elif configs_dict['global_options']['unify_flux_storage_cases']:
+        data_dict['NEE_series'][np.isnan(data_dict['Fc_storage'])] = np.nan
+
+    # Remove low ustar data
+    screen_low_ustar(data_dict, configs_dict)     
     
-    # Set up respiration configs and add measurement interval, ustar and output path
-    re_configs_dict = dict(configs_dict['respiration_configs'], **
-                           configs_dict['global_configs'])
+    # Set up respiration configs and add measurement interval and output path
+    re_configs_dict = configs_master_dict['respiration_configs']['options']
     re_configs_dict['measurement_interval'] = int(attr['time_step'])
     re_full_path = os.path.join(configs_dict['files']['output_path'],
-                               configs_dict['respiration_configs']['output_folder'])
+                                re_configs_dict['output_folder'])
     if not os.path.isdir(re_full_path): os.makedirs(re_full_path)
     re_configs_dict['output_path'] = re_full_path
     
@@ -126,11 +166,10 @@ def main(use_storage = False, ustar_threshold = False,
     if do_light_response:
     
         # Set up light response configs and add measurement interval and output path
-        li_configs_dict = configs_dict['light_response_configs']
+        li_configs_dict = configs_master_dict['light_response_configs']['options']
         li_configs_dict['measurement_interval'] = int(attr['time_step'])
         li_full_path = os.path.join(configs_dict['files']['output_path'],
-                                    configs_dict['light_response_configs']
-                                                ['output_folder'])
+                                    li_configs_dict['output_folder'])
         if not os.path.isdir(li_full_path): os.makedirs(li_full_path)
         li_configs_dict['output_path'] = li_full_path
         
