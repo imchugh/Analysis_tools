@@ -236,7 +236,7 @@ def estimate_sigma_delta(NEE_array, stats_dict):
            
     Returns a numpy array of sigma_delta estimates
     """    
-    
+
     # Calculate the estimated sigma_delta for each datum
     return np.where(NEE_array > 0, 
                     NEE_array * stats_dict['pos']['slope'] 
