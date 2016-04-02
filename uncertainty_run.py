@@ -8,6 +8,7 @@ Created on Mon Aug 10 16:20:41 2015
 # Standard modules
 import numpy as np
 import os
+import copy as cp
 import pdb
 
 # My modules
@@ -16,6 +17,8 @@ import data_filtering as data_filter
 import random_error as rand_err
 import model_error as mod_err
 import data_formatting as dt_fm
+import respiration as re
+import light_response as li
 
 reload(dt_fm)
 #------------------------------------------------------------------------------
@@ -49,13 +52,34 @@ def get_data(configs_dict):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+# Rebuild the master configuration file for passing to respiration and light 
+# response (if requested) functions
+def build_config_file(configs_master_dict):
+    
+    # Build a specific configuration file
+    configs_dict = {'files': configs_master_dict['global_configs']['files'],
+                    'global_options': (configs_master_dict['global_configs']
+                                                          ['options'])}                                                          
+    configs_dict['variables'] = {}
+    dict_list = [configs_master_dict['random_error_configs']['variables'],
+                 configs_master_dict['model_error_configs']['variables'],
+                 configs_master_dict['respiration_configs']['variables'],
+                 configs_master_dict['light_response_configs']['variables']]
+    for d in dict_list:
+        configs_dict['variables'].update(d)
+    
+    return configs_dict                                                         
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
 # Screen out low ustar and separate into day and night
 def filter_data(data_dict, configs_dict):
     
     ustar_threshold = configs_dict['ustar_threshold']
     noct_threshold = configs_dict['noct_threshold']
-    data_dict['Fc'][(data_dict['Fsd'] < noct_threshold) & 
-                    (data_dict['ustar'] < ustar_threshold)] = np.nan
+    data_dict['NEE_series'][(data_dict['Fsd'] < noct_threshold) & 
+                            (data_dict['ustar'] < ustar_threshold)] = np.nan
+    data_dict['sigma_delta'][np.isnan(data_dict['NEE_series'])] = np.nan
     subset_dict = {}
     subset_dict['day'] = data_filter.subset_arraydict_on_threshold(
                              data_dict, 'Fsd', noct_threshold, '>', drop = True)
@@ -74,19 +98,39 @@ def main():
     reload(io)
     reload(data_filter)
 
-    # Unpack master config file and rebuild single config file
+    #---------------------------
+    # Preparation and formatting
+    #---------------------------
+
+    # Get master config file
     configs_master_dict = io.config_to_dict(io.file_select_dialog())
-    configs_dict = {'variables': dict(configs_master_dict['random_error_configs']['variables'],
-                                      **configs_master_dict['model_error_configs']['variables']),
-                    'model_options': configs_master_dict['model_error_configs']['options'],
-                    'random_options': configs_master_dict['random_error_configs']['options'],
-                    'global_options': configs_master_dict['global_configs']['options'],
-                    'files': configs_master_dict['global_configs']['files'],
-                    'uncertainty_options': configs_master_dict['NEE_uncertainty_configs']} 
+
+    # Build custom configuration file for this script
+    configs_dict = build_config_file(configs_master_dict)
 
     # Get the data
     data_dict, attr = get_data(configs_dict)
 
+    # Build required configuration files for imported scripts (random error,
+    # model error, respiration, light response)
+    rand_err_configs_dict = configs_master_dict['random_error_configs']['options']
+    mod_err_configs_dict = configs_master_dict['model_error_configs']['options']
+    re_configs_dict = configs_master_dict['respiration_configs']['options']
+    li_configs_dict = configs_master_dict['light_response_configs']['options']
+
+    # Save the time step information into the individual configuration files
+    for d in [rand_err_configs_dict, mod_err_configs_dict, 
+              re_configs_dict, li_configs_dict]: 
+        d['measurement_interval'] = int(attr['time_step'])
+    
+    # For respiration and light response, turn off the output option for 
+    # window fits of the functions, even if requested in the configuration file
+    # - they are WAY too computationally expensive!!!
+    if re_configs_dict['output_fit_plots']:
+        re_configs_dict['output_fit_plots'] = False 
+    if li_configs_dict['output_fit_plots']:
+        li_configs_dict['output_fit_plots'] = False 
+    
     # Sum Fc and Sc if storage is to be included, otherwise if requested, 
     # remove all Fc where Sc is missing
     if configs_dict['global_options']['use_storage']:
@@ -95,13 +139,35 @@ def main():
     elif configs_dict['global_options']['unify_flux_storage_cases']:
         data_dict['NEE_series'][np.isnan(data_dict['Fc_storage'])] = np.nan
 
-    # Save the time step information into the configuration file
-    configs_dict['random_options']['measurement_interval'] = int(attr['time_step'])
-    configs_dict['model_options']['measurement_interval'] = int(attr['time_step'])
+    # Convert insolation to PPFD for light response calculations
+    data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6       
+
+    #---------------------------------------------
+    # Initial model estimation for random error
+    # (note: low u* data is left in intentionally)
+    #---------------------------------------------
+
+    # Generate initial model series...
+    # For Re...     
+    re_rslt_dict, re_params_dict, re_error_dict = re.main(data_dict, 
+                                                          re_configs_dict)
+
+    # For GPP...                                      
+    li_rslt_dict, li_params_dict, li_error_dict = li.main(data_dict, 
+                                                          li_configs_dict, 
+                                                          re_params_dict)                                                          
+
+    # Now combine                                                          
+    data_dict['NEE_model'] = li_rslt_dict['GPP'] + li_rslt_dict['Re']
+
+    #----------------------------------------
+    # Random error calculation and statistics
+    #----------------------------------------
 
     # Calculate the linear regression parameters of sigma_delta as a function 
     # of flux magnitude
-    fig, stats_dict = rand_err.regress_sigma_delta(data_dict, configs_dict['random_options'])
+    fig, stats_dict = rand_err.regress_sigma_delta(data_dict, 
+                                                   rand_err_configs_dict)
     fig.savefig(os.path.join(configs_dict['files']['output_path'], 
                              'Random_error_plots.jpg')) 
 
@@ -109,18 +175,20 @@ def main():
     # where no observational estimate is available (only has an effect if the 
     # propagation series is a model - which is recommended!!!);                             
     sig_del_array = (rand_err.estimate_sigma_delta
-                        (data_dict[configs_dict['random_options']['propagation_series']], 
+                        (data_dict[rand_err_configs_dict['propagation_series']], 
                          stats_dict))
-    sig_del_array[np.isnan(data_dict['NEE_series'])] = np.nan
+#    sig_del_array[np.isnan(data_dict['NEE_series'])] = np.nan
     data_dict['sigma_delta'] = sig_del_array 
 
-    # Create copy dataset separated into years
+    #---------------------
+    # Uncertainty analysis
+    #---------------------
+
+    # Create dataset separated into years
     years_data_dict = data_filter.subset_datayear_from_arraydict(data_dict, 
                                                                 'date_time')   
-
-    return
-
-    # do the uncertainty analysis for each year
+                                                        
+    # Do the uncertainty analysis for each year
     num_trials = configs_dict['uncertainty_options']['num_trials']
     for this_year in years_data_dict.keys():
 
@@ -137,18 +205,21 @@ def main():
         # when ustar_uncertainty is set to false
         filter_flag = False
 
+        # Do trials
         for this_trial in xrange(configs_dict['uncertainty_options']['num_trials']):
 
             # If including ustar uncertainty, set ustar threshold, then filter,
-            # then generate model estimates
+            # then generate model estimates (make this_dict a deep copy so that
+            # there is no overwrite of the original dictionary)
             if configs_dict['uncertainty_options']['do_ustar_uncertainty']:
                 this_config_dict = {'ustar_threshold': ustar_array[this_trial],
                                     'noct_threshold': (configs_dict['Global_options']
                                                            ['noct_threshold'])}
-                this_dict = filter_data(years_data_dict[this_year].copy(), 
+                this_dict = filter_data(cp.deepcopy(years_data_dict[this_year]), 
                                         this_config_dict)
             # ... otherwise just do the filtering with the best estimate ustar
-            # but only do it once (flip the filter flag on the first pass)!
+            # but only do it once (flip the filter flag on the first pass - no 
+            # need for deepcopy because the filter is the same for all trials)!
             else:
                 if not filter_flag:
                     this_config_dict = {'ustar_threshold': (configs_dict
@@ -158,7 +229,7 @@ def main():
                                         'noct_threshold': (configs_dict
                                                            ['Global_options']
                                                            ['noct_threshold'])}
-                    this_dict = filter_data(years_data_dict[this_year].copy(), 
+                    this_dict = filter_data(years_data_dict[this_year], 
                                             configs_dict)
                     filter_flag = True
 
