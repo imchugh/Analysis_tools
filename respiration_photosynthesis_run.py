@@ -136,13 +136,17 @@ def main(use_storage = False, ustar_threshold = False,
         if isinstance(ustar_threshold, (int, float, dict)):
             configs_dict['global_configs']['ustar_threshold'] = ustar_threshold
 
+    # Override defauly configuration file use_storage if user set to True
+    if use_storage:
+        configs_dict['global_options']['use_storage'] = use_storage
+
     # Sum Fc and Sc if storage is to be included, otherwise if requested, 
     # remove all Fc where Sc is missing
     if configs_dict['global_options']['use_storage']:
         data_dict['NEE_series'] = (data_dict['NEE_series'] + 
-                                   data_dict['Fc_storage'])
+                                   data_dict['Sc'])
     elif configs_dict['global_options']['unify_flux_storage_cases']:
-        data_dict['NEE_series'][np.isnan(data_dict['Fc_storage'])] = np.nan
+        data_dict['NEE_series'][np.isnan(data_dict['Sc'])] = np.nan
 
     # Remove low ustar data
     screen_low_ustar(data_dict, configs_dict)     
