@@ -177,7 +177,6 @@ def main():
     sig_del_array = (rand_err.estimate_sigma_delta
                         (data_dict[rand_err_configs_dict['propagation_series']], 
                          stats_dict))
-#    sig_del_array[np.isnan(data_dict['NEE_series'])] = np.nan
     data_dict['sigma_delta'] = sig_del_array 
 
     #---------------------
@@ -188,8 +187,21 @@ def main():
     years_data_dict = data_filter.subset_datayear_from_arraydict(data_dict, 
                                                                 'date_time')   
                                                         
-    # Do the uncertainty analysis for each year
+    # Set up results dictionary for each year
     num_trials = configs_dict['uncertainty_options']['num_trials']
+    years_rslt_dict = {yr: {} for yr in years_data_dict.keys()}
+    for yr in years_rslt_dict.keys():
+        years_rslt_dict[yr]['NEE'] = np.empty(num_trials)
+        years_rslt_dict[yr]['u*th'] = np.empty(num_trials)
+        for var in ['random_realisation', 'model_realisation']:
+            years_rslt_dict[yr][var] = {'day': np.empty(num_trials),
+                                        'day_n': np.empty(num_trials),  
+                                        'night': np.empty(num_trials),
+                                        'night_n': np.empty(num_trials),   
+                                        'total': np.empty(num_trials),
+                                        'total_n': np.empty(num_trials)}
+        
+    # Do the uncertainty analysis for each year        
     for this_year in years_data_dict.keys():
 
         # Generate an array of ustar values based on mu and sigma from change 
