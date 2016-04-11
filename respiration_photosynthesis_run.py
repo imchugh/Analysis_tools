@@ -9,6 +9,7 @@ Created on Wed Jan  6 16:08:41 2016
 import os
 import copy as cp
 import numpy as np
+import pdb
 
 # My modules
 import DataIO as io
@@ -105,12 +106,16 @@ def screen_low_ustar(data_dict, configs_dict):
 #------------------------------------------------------------------------------    
 
 #------------------------------------------------------------------------------    
-def main(use_storage = False, ustar_threshold = False, 
-         config_file = False, do_light_response = False):
+def main(use_storage = 'from_config', storage_var = 'from_config',
+         ustar_threshold = 'from_config', 
+         config_file = False, 
+         do_light_response = False):
     """
     No positional arguments - prompts for a configuration file
     Kwargs: use_storage - if True then algorithm looks for a variable called 
-                          Fc_storage and then sums that with Fc
+                          Fc_storage and then sums that with Fc; if False uses
+                          Fc alone; if set to 'from_config', looks in 
+                          config file
             ustar_threshold - set to a particular value to override the ustar
                               threshold set in the global configs root item of
                               the configuration file (this is done so that can
@@ -128,17 +133,33 @@ def main(use_storage = False, ustar_threshold = False,
     # Build custom configuration file for this script
     configs_dict = build_config_file(configs_master_dict, do_light_response)
 
+    # Override default configuration storage_var if not set to from_config
+    if not storage_var == 'from_config':
+        if isinstance(storage_var, str):
+            configs_dict['variables']['carbon_storage'] = storage_var
+        else:
+            raise Exception('storage_var kwarg must be a string if not '\
+                            'set to from_config! Quitting...')
+
     # Get data
     data_dict, attr = get_data(configs_dict)
 
-    # Override default configuration file ustar_threshold if requested by user
-    if not isinstance(ustar_threshold, bool):
-        if isinstance(ustar_threshold, (int, float, dict)):
-            configs_dict['global_configs']['ustar_threshold'] = ustar_threshold
+    # Override default configuration file use_storage if not set to from_config
+    if not use_storage == 'from_config':
+        if isinstance(use_storage, (bool, str)):
+            configs_dict['global_options']['use_storage'] = use_storage
+        else:
+            raise Exception('use_storage kwarg must be a boolean if not '\
+                            'set to from_config! Quitting...')
 
-    # Override defauly configuration file use_storage if user set to True
-    if use_storage:
-        configs_dict['global_options']['use_storage'] = use_storage
+    # Override default configuration file ustar_threshold if requested by user
+    if not ustar_threshold == 'from_config':
+        if isinstance(ustar_threshold, (int, float, dict)):
+            configs_dict['global_options']['ustar_threshold'] = ustar_threshold
+        else:
+            raise Exception('ustar_threshold kwarg must be set to a number or '\
+                            'dictionary of numbers (year[int] as key, ' \
+                            'threshold [float] as value)! Quitting...')
 
     # Sum Fc and Sc if storage is to be included, otherwise if requested, 
     # remove all Fc where Sc is missing
