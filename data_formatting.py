@@ -89,7 +89,8 @@ def standard_names_dictionary():
             'vapour_pressure_deficit': 'VPD',
             'friction_velocity': 'ustar',
             'wind_speed': 'ws',
-            'modelled_carbon_flux': 'NEE_model'}
+            'modelled_carbon_flux': 'NEE_model',
+            'generic': 'filter_var'}
 
 # Get the data and format appropriately
 def get_data(configs_dict):
