@@ -7,6 +7,7 @@ Created on Mon Aug 24 12:13:41 2015
 
 import numpy as np
 import operator
+import copy as cp
 import pdb
 
 #------------------------------------------------------------------------------
@@ -148,3 +149,87 @@ def subset_datayear_from_arraydict(data_dict, date_time_var, year = None):
         new_dict[yr] = subset_numpy_dict(data_dict, year_index)
 
     return new_dict
+    
+#------------------------------------------------------------------------------
+    
+#------------------------------------------------------------------------------
+    
+def IQR_filter(data_array, outlier_value = 1.5, minimum_data_avail = 50,
+               inplace = True):
+    
+    valid_data_array = data_array[~np.isnan(data_array)]
+    
+    if not len(valid_data_array) / float(len(data_array)) * 100 > minimum_data_avail:
+        print 'Percentage of valid data below minimum threshold - returning...'
+        return
+
+    lo_qtl = np.percentile(valid_data_array, 25)
+    hi_qtl = np.percentile(valid_data_array, 75)
+    qtl_range = hi_qtl - lo_qtl
+    lo_threshold = lo_qtl - outlier_value * qtl_range
+    hi_threshold = hi_qtl + outlier_value * qtl_range
+    print 'Lower threshold is ' + str(lo_threshold)
+    print 'Upper threshold is ' + str(hi_threshold)
+    lo_bool_array = data_array < lo_threshold
+    hi_bool_array = data_array > hi_threshold
+    all_bool_array = lo_bool_array | hi_bool_array
+    if not inplace:
+        new_array = cp.copy(data_array)
+    else:
+        new_array = data_array
+    new_array[all_bool_array] = np.nan
+    
+    return new_array
+
+def slide_IQR_filter(data_array, outlier_value = 2, window_size = 11,
+                     inplace = True):
+
+    if window_size > len(data_array):
+        raise Exception('Window size cannot exceed array size! Quitting...')
+
+    if window_size == len(data_array):
+        iter_array = np.array([0])
+    else:
+        if window_size % 2 == 0:
+            window_size = window_size + 1
+            if window_size == len(data_array):
+                iter_array = np.array([0])
+        else:
+            iter_array = np.arange(0, len(data_array) - window_size)
+
+    # Create lower and upper threshold arrays
+    lo_threshold_array = np.empty(len(data_array))
+    lo_threshold_array[:] = np.nan
+    hi_threshold_array = np.empty(len(data_array))
+    hi_threshold_array[:] = np.nan
+
+    # Calculate outliers for each window
+    rslt_index_int = int(window_size / 2)
+    for i in iter_array:
+        this_array = data_array[i: i + window_size]
+        lo_qtl = np.percentile(this_array, 25)
+        hi_qtl = np.percentile(this_array, 75)
+        qtl_range = hi_qtl - lo_qtl
+        lo_threshold_array[i + rslt_index_int] = lo_qtl - outlier_value * qtl_range
+        hi_threshold_array[i + rslt_index_int] = hi_qtl + outlier_value * qtl_range
+
+    # Fill gaps using median of low and high thresholds over whole array
+    lo_median = np.median(lo_threshold_array[~np.isnan(lo_threshold_array)])
+    lo_threshold_array[np.isnan(lo_threshold_array)] = lo_median
+    hi_median = np.median(hi_threshold_array[~np.isnan(hi_threshold_array)])
+    hi_threshold_array[np.isnan(hi_threshold_array)] = hi_median    
+
+    # Create boolean array (where values outside range will be True)
+    bool_array = ((data_array < lo_threshold_array) |
+                  (data_array > hi_threshold_array))
+    
+    
+    # Filter original series (or copy if requested)
+    if not inplace:
+        new_array = cp.copy(data_array)
+        new_array[bool_array] = np.nan
+        return new_array
+    else:
+        data_array[bool_array] = np.nan
+        print 'This many at end of filter: ' + str(len(data_array[~np.isnan(data_array)]))
+        return
