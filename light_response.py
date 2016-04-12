@@ -17,6 +17,8 @@ import datetime_functions as dtf
 import data_filtering as filt
 import gap_filling as gf
 
+reload(filt)
+
 #------------------------------------------------------------------------------
 # Data optimisation algorithm
 
@@ -436,9 +438,14 @@ def calculate_light_response(data_dict,
             # Error code for not enough data
             params_out_dict['error_code'][date_index] = 10
 
-    # Interpolate
+    # Filter and interpolate
+    filter_index = np.where(params_out_dict['error_code'] < 3)
     for key in fit_dict.keys():
         if not key == 'error_code':
+            trunc_set = params_out_dict[key][filter_index]
+            trunc_set = filt.slide_IQR_filter(trunc_set, outlier_value = 1.5, inplace = False)
+            print 'This many after return: ' + str(len(params_out_dict[key][~np.isnan(params_out_dict[key])]))
+            pdb.set_trace()
             params_out_dict[key] = gf.generic_2d_linear(params_out_dict[key])
 
     # Rename the error code variable
