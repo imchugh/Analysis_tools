@@ -18,6 +18,10 @@ import light_response as li
 import data_formatting as dt_fm
 import data_filtering as data_filter
 
+reload(dt_fm)
+reload(li)
+reload(re)
+
 #------------------------------------------------------------------------------
 # Fetch data from configurations
 def get_data(configs_dict):
@@ -72,7 +76,7 @@ def build_config_file(configs_master_dict, do_light_response):
 #------------------------------------------------------------------------------
 # Remove low ustar values
 def screen_low_ustar(data_dict, configs_dict):
-    
+
     ustar_threshold = configs_dict['global_options']['ustar_threshold']
     noct_threshold = configs_dict['global_options']['noct_threshold']
     if isinstance(ustar_threshold, dict):
@@ -167,7 +171,8 @@ def main(use_storage = 'from_config', storage_var = 'from_config',
         data_dict['NEE_series'] = (data_dict['NEE_series'] + 
                                    data_dict['Sc'])
     elif configs_dict['global_options']['unify_flux_storage_cases']:
-        data_dict['NEE_series'][np.isnan(data_dict['Sc'])] = np.nan
+#        data_dict['NEE_series'][np.isnan(data_dict['Sc'])] = np.nan
+        data_dict['NEE_series'][np.isnan(data_dict['filter_var'])] = np.nan
 
     # Remove low ustar data
     screen_low_ustar(data_dict, configs_dict)     
