@@ -231,5 +231,4 @@ def slide_IQR_filter(data_array, outlier_value = 2, window_size = 11,
         return new_array
     else:
         data_array[bool_array] = np.nan
-        print 'This many at end of filter: ' + str(len(data_array[~np.isnan(data_array)]))
         return
