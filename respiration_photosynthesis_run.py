@@ -21,6 +21,7 @@ import data_filtering as data_filter
 reload(dt_fm)
 reload(li)
 reload(re)
+reload(data_filter)
 
 #------------------------------------------------------------------------------
 # Fetch data from configurations
@@ -45,11 +46,14 @@ def get_data(configs_dict):
     # Rename to generic names used by scripts
     old_names_dict = configs_dict['variables']
     std_names_dict = dt_fm.standard_names_dictionary()
-    map_names_dict = {old_names_dict[key]: std_names_dict[key] 
-                      for key in old_names_dict}
-    data_dict = dt_fm.rename_data_dict_vars(data_dict, map_names_dict)
+    try:
+        new_dict = {std_names_dict[key]: data_dict[old_names_dict[key]] 
+                    for key in old_names_dict.keys()}
+        new_dict['date_time'] = data_dict.pop('date_time')
+    except:
+        raise Exception()
     
-    return data_dict, attr
+    return new_dict, attr
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
