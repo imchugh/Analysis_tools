@@ -14,7 +14,7 @@ import pdb
 # My modules
 import DataIO as io
 import respiration as re
-import light_response as li
+import photosynthesis as ps
 import data_formatting as dt_fm
 import data_filtering as data_filter
 
@@ -211,7 +211,7 @@ def main(use_storage = 'from_config', storage_var = 'from_config',
         data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6
         
         # Call light response function
-        li_rslt_dict, li_params_dict, li_error_dict = li.main(data_dict, 
+        li_rslt_dict, li_params_dict, li_error_dict = ps.main(data_dict, 
                                                               li_configs_dict, 
                                                               re_params_dict)
 
