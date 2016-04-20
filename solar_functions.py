@@ -29,10 +29,10 @@ def get_ephem_solar(data_dict, lat, lon, alt, GMT_zone, return_var = 'zenith'):
         5) 'GMT_zone': time zone relative to Greenwich (int or float)
     pass as kwarg:
         1) 'return_var': type of observation required (str); choices are:
-                - 'zenith' (solar zenith)
-                - 'altitude' (solar elevation)
-                - 'rise' (sunrise time)
-                - 'set' (sunset time)
+                - 'zenith' (solar zenith for all datetimes in series)
+                - 'altitude' (solar elevation for all datetimes in series)
+                - 'rise' (sunrise time - only one per date)
+                - 'set' (sunset time - only one per date)
     Returns:
         dictionary containing either ...
     """
@@ -172,7 +172,7 @@ def Insol_calc(data_dict, GMT_zone, latit, longit, ALT_m, k, use_ephem = False):
     if use_ephem:
         date_time = np.array([this_dt - dt.timedelta(minutes = 15) 
                               for this_dt in date_time])
-        zenith = get_zenith(data_dict, latit, longit, ALT_m, GMT_zone)
+        zenith = get_ephem_solar(data_dict, latit, longit, ALT_m, GMT_zone)
     else:
         zenith = np.arccos(np.sin(np.radians(latit)) * np.sin(decl) + 
                  np.cos(np.radians(latit)) * np.cos(decl) * np.cos(hr_angle))
