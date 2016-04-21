@@ -13,12 +13,12 @@ import pdb
 
 # My modules
 import DataIO as io
-import data_filtering as data_filter
+import data_filtering as filt
 import random_error as rand_err
 import model_error as mod_err
 import data_formatting as dt_fm
 import respiration as re
-import light_response as li
+import photosynthesis as ps
 
 reload(dt_fm)
 #------------------------------------------------------------------------------
@@ -184,8 +184,8 @@ def main():
     #---------------------
 
     # Create dataset separated into years
-    years_data_dict = data_filter.subset_datayear_from_arraydict(data_dict, 
-                                                                'date_time')   
+    years_data_dict = filt.subset_datayear_from_arraydict(data_dict, 
+                                                          'date_time')   
                                                         
     # Set up results dictionary for each year
     num_trials = configs_dict['uncertainty_options']['num_trials']
@@ -244,6 +244,13 @@ def main():
                     this_dict = filter_data(years_data_dict[this_year], 
                                             configs_dict)
                     filter_flag = True
+
+            for cond in this_dict[this_year].keys():
+                
+                if cond == 'day':
+
+
+
 
     return ustar_array
 
