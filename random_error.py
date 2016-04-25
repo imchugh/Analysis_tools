@@ -221,7 +221,7 @@ def regress_sigma_delta(data_dict, configs_dict):
     ax2.plot(efflux_x, efflux_y, linestyle=':', color='black')
     
     fig.tight_layout()
-    fig.show()
+    plt.close()
 
     return fig, stats_dict
 
