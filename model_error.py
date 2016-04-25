@@ -11,8 +11,8 @@ from scipy import stats
 def estimate_model_error(data_dict, configs_dict):
 
     # Create data arrays, then count all
-    obs_array = data_dict['Fc']
-    mod_array = data_dict['Fc_model']
+    obs_array = data_dict['NEE_series']
+    mod_array = data_dict['NEE_model']
     total_records = len(obs_array)
 
     # Rescale to gC m-2
