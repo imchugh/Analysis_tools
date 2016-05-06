@@ -41,7 +41,7 @@ def get_data(configs_dict):
                                var_list = ancillary_vars,
                                return_global_attr = True)
     data_dict = dict(Fc_dict, **ancillary_dict)
-    
+
     # Rename to generic names used by scripts
     old_names_dict = configs_dict['variables']
     std_names_dict = dt_fm.standard_names_dictionary()
@@ -187,8 +187,8 @@ def main():
 
     # Calculate the linear regression parameters of sigma_delta as a function 
     # of flux magnitude
-    fig, stats_dict = rand_err.regress_sigma_delta(data_dict, 
-                                                   rand_err_configs_dict)
+    fig, stats_dict, rslt_dict = rand_err.regress_sigma_delta(
+                                     data_dict, rand_err_configs_dict)
     fig.savefig(os.path.join(configs_dict['files']['output_path'], 
                              'Random_error_plots.jpg'))
 
