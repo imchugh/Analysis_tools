@@ -42,7 +42,7 @@ def get_data(configs_dict):
                                var_list = ancillary_vars,
                                return_global_attr = True)
     data_dict = dict(Fc_dict, **ancillary_dict)
-    
+
     # Rename to generic names used by scripts
     old_names_dict = configs_dict['variables']
     std_names_dict = dt_fm.standard_names_dictionary()
@@ -69,7 +69,7 @@ def build_config_file(configs_master_dict, do_light_response):
         configs_dict['variables'] = dict(configs_master_dict
                                          ['respiration_configs']['variables'],
                                          ** configs_master_dict
-                                            ['light_response_configs']
+                                            ['photosynthesis_configs']
                                             ['variables'])
     else:
         configs_dict['variables'] = (configs_master_dict['respiration_configs']
@@ -195,12 +195,12 @@ def main(use_storage = 'from_config', storage_var = 'from_config',
     
     # Add original time series                                                              
     re_rslt_dict['NEE_series'] = data_dict['NEE_series']
-    
+
     # Do the light response parameters (or not)
     if do_light_response:
     
         # Set up light response configs and add measurement interval and output path
-        li_configs_dict = configs_master_dict['light_response_configs']['options']
+        li_configs_dict = configs_master_dict['photosynthesis_configs']['options']
         li_configs_dict['measurement_interval'] = int(attr['time_step'])
         li_full_path = os.path.join(configs_dict['files']['output_path'],
                                     li_configs_dict['output_folder'])
