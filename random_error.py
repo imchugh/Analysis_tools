@@ -223,7 +223,7 @@ def regress_sigma_delta(data_dict, configs_dict):
     fig.tight_layout()
     plt.close()
 
-    return fig, stats_dict
+    return fig, stats_dict, rslt_dict
 
 #-----------------------------------------------------------------------------#
 def estimate_sigma_delta(NEE_array, stats_dict):
