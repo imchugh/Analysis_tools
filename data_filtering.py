@@ -232,3 +232,39 @@ def slide_IQR_filter(data_array, outlier_value = 2, window_size = 11,
     else:
         data_array[bool_array] = np.nan
         return
+        
+# Remove low ustar values
+def screen_low_ustar(data_dict, configs_dict):
+
+    ustar_threshold = configs_dict['ustar_threshold']
+    noct_threshold = configs_dict['noct_threshold']
+    if isinstance(ustar_threshold, dict):
+        years_data_dict = subset_datayear_from_arraydict(data_dict, 'date_time')
+        threshold_keys = [int(key) for key in ustar_threshold.keys()]
+        miss_list = [year for year in years_data_dict.keys() 
+                     if not year in threshold_keys]
+        if not len(miss_list) == 0:
+            miss_string = ', '.join([str(this_year) for this_year in miss_list])
+            raise Exception('Missing years: %s' %miss_string + '; please edit ' \
+                            'your configuration file so that years specified ' \
+                            'for ustar threshold match those available in ' \
+                            'data file, or alternatively specify a single ' \
+                            'value (float) in the configuration file under ' \
+                            '[global_configs][options][ustar_threshold]. '\
+                            'Exiting...')
+        data_list = []
+        for this_year in years_data_dict.keys():
+            this_threshold = ustar_threshold[str(this_year)]
+            this_NEE = years_data_dict[this_year]['NEE_series']
+            this_NEE[(years_data_dict[this_year]['ustar'] < this_threshold) &
+                     (years_data_dict[this_year]['Fsd'] < noct_threshold)] = np.nan
+            data_list.append(this_NEE)
+        data_dict['NEE_series'] = np.concatenate(data_list)
+    elif isinstance(ustar_threshold, float):
+        data_dict['NEE_series'][(data_dict['ustar'] < ustar_threshold) &
+                                (data_dict['Fsd'] < noct_threshold)] = np.nan
+    else:
+        raise TypeError('ustar_threshold object must be dtype float or dict!' \
+                        'Please edit your configuration file')
+
+    return
