@@ -10,6 +10,7 @@ import numpy as np
 import os
 import copy as cp
 import calendar
+import sys
 import pdb
 
 # My modules
@@ -22,6 +23,7 @@ import respiration as re
 import photosynthesis as ps
 
 reload(dt_fm)
+reload(filt)
 #------------------------------------------------------------------------------
 # Fetch data from configurations
 def get_data(configs_dict):
@@ -55,7 +57,7 @@ def get_data(configs_dict):
 # Rebuild the master configuration file for passing to respiration and light 
 # response (if requested) functions
 def build_config_file(configs_master_dict):
-    
+
     # Build a specific configuration file
     configs_dict = {'files': configs_master_dict['global_configs']['files'],
                     'global_options': (configs_master_dict['global_configs']
@@ -100,8 +102,10 @@ def separate_night_day(data_dict, noct_threshold):
 def init_interm_rslt_dict(num_trials):
     var_list = ['random_error_day', 'model_error_day', 'obs_avail_day',  
                 'random_error_night', 'model_error_night', 'obs_avail_night',
-                'ustar_error']           
-    return {var: np.zeros(num_trials) for var in var_list} 
+                'ustar_error']
+    nan_array = np.zeros(num_trials)
+    nan_array[:] = np.nan
+    return {var: cp.copy(nan_array) for var in var_list} 
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -211,34 +215,61 @@ def main():
     # Uncertainty analysis
     #---------------------
 
-    # Create dataset separated into years
-    years_data_dict = filt.subset_datayear_from_arraydict(data_dict, 
-                                                          'date_time')   
+    print '\nRunning uncertainty analysis'
+    print '----------------------------\n'
 
     # Write universal config items to local variables
     num_trials = configs_dict['uncertainty_options']['num_trials']
     noct_threshold = configs_dict['global_options']['noct_threshold']
+    ustar_threshold = configs_dict['global_options']['ustar_threshold']
     do_ustar_uncertainty = configs_dict['uncertainty_options']['do_ustar_uncertainty']
     do_random_uncertainty = configs_dict['uncertainty_options']['do_random_uncertainty']
     do_model_uncertainty = configs_dict['uncertainty_options']['do_model_uncertainty']
 
-    # Generate a final results dictionary
-    final_rslt_dict = init_final_rslt_dict(years_data_dict, configs_dict)
+#    # Generate a final results dictionary
+#    final_rslt_dict = init_final_rslt_dict(years_data_dict, configs_dict)
 
+#    # Generate a standard data dictionary and calculate annual NEE for all years
+#    # using best estimate of ustar
+#    this_dict = cp.deepcopy(data_dict)
+#    filt.screen_low_ustar(this_dict, {'noct_threshold': noct_threshold,
+#                                      'ustar_threshold': ustar_threshold})
+#    print ('This much after return to main function: ' + 
+#            str(len(data_dict['NEE_series'][~np.isnan(data_dict['NEE_series'])])))
+#    filter_sigma_delta(this_dict)
+#    run_model(this_dict, re_configs_dict, ps_configs_dict)
+#    years_data_dict = filt.subset_datayear_from_arraydict(this_dict, 
+#                                                          'date_time')
+#    annual_NEE_sum_dict = {}
+#    for this_year in years_data_dict.keys():
+#        annual_NEE_sum_dict[this_year] = (years_data_dict[this_year]['NEE_filled'] * 
+#                                          configs_dict['measurement_interval'] *
+#                                          60 * 12 * 10**-6).sum()
+#
+#    # 
+#    for this_trial in xrange(num_trials):
+#
+#        # If including ustar uncertainty, generate a u* estimate for each year
+#
+#        continue
 
+    # Create dataset separated into years
+    years_data_dict = filt.subset_datayear_from_arraydict(data_dict, 
+                                                          'date_time')   
 
-
-
+    final_rslt_dict = {}
         
     # Do the uncertainty analysis for each year        
     for this_year in years_data_dict.keys():
+
+        print 'Running analysis for ' + str(this_year) + ':'
 
         # Make an intermediate results dictionary
         interm_rslt_dict = init_interm_rslt_dict(num_trials)
         
         # Write ustar thresholds for years to local variables
-        if not isinstance(configs_dict['global_options']['ustar_threshold'],
-                          dict):
+        if isinstance(configs_dict['global_options']['ustar_threshold'],
+                      dict):
             ustar_threshold = (configs_dict['global_options']
                                            ['ustar_threshold']
                                            [str(this_year)])
@@ -246,8 +277,8 @@ def main():
             ustar_threshold = configs_dict['global_options']['ustar_threshold']
         
         # Write ustar uncertainty for years to local variables
-        if not isinstance(configs_dict['global_options']['ustar_uncertainty'],
-                          dict):
+        if isinstance(configs_dict['global_options']['ustar_uncertainty'],
+                      dict):
             ustar_uncertainty = (configs_dict['global_options']
                                              ['ustar_uncertainty']
                                              [str(this_year)])
@@ -259,14 +290,17 @@ def main():
         # ustar uncertainty is set to True, but the reference value for NEE
         # will be retained
         this_dict = cp.deepcopy(years_data_dict[this_year])
-        filter_ustar(this_dict, ustar_threshold, noct_threshold)
-        filter_sigma_delta(this_dict)
-        run_model(this_dict, re_configs_dict, ps_configs_dict)
-        pdb.set_trace()
+        filt.screen_low_ustar(this_dict, {'noct_threshold': noct_threshold,
+                                          'ustar_threshold': ustar_threshold})
+        try:
+            run_model(this_dict, re_configs_dict, ps_configs_dict)
+        except:
+            print ('    - Excluding the year ' + str(this_year) + 
+                   ' - insufficient data!')
+            continue # Do the next year
         NEE_sum = (this_dict['NEE_filled'] * 
                    configs_dict['measurement_interval'] *
                    60 * 12 * 10**-6).sum()
-        this_dict = separate_night_day(this_dict, noct_threshold)
 
         # If including ustar uncertainty:
         #   1) generate an array of ustar values based 
@@ -292,6 +326,14 @@ def main():
         # Do trials
         for this_trial in xrange(num_trials):
 
+            # Print progress
+            if this_trial == 0:
+                print '    - Trial: ' + str(this_trial + 1),
+            elif this_trial == num_trials - 1:
+                print str(this_trial + 1) + ' ... Done!'
+            else:
+                print this_trial + 1,
+
             # If including ustar uncertainty:
             #   1) make a deep copy of the original data so it doesn't get overwritten
             #   2) set ustar threshold 
@@ -302,14 +344,22 @@ def main():
             if do_ustar_uncertainty:
                 this_dict = cp.deepcopy(years_data_dict[this_year])
                 ustar_threshold = ustar_array[this_trial]
-                filter_ustar(this_dict, ustar_threshold, noct_threshold)
-                filter_sigma_delta(this_dict)
-                run_model(this_dict, re_configs_dict, ps_configs_dict)
+                filt.screen_low_ustar(this_dict, {'noct_threshold': noct_threshold,
+                                                  'ustar_threshold': ustar_threshold})
+                try:
+                    run_model(this_dict, re_configs_dict, ps_configs_dict)
+                except:
+                    next
                 this_sum = (this_dict['NEE_filled'] * 
                             configs_dict['measurement_interval'] * 60 *
                             12 * 10**-6).sum()
-                interm_rslt_dict['u_star_error'][this_trial] = NEE_sum - this_sum
-                this_dict = separate_night_day(this_dict, noct_threshold)
+                interm_rslt_dict['ustar_error'][this_trial] = NEE_sum - this_sum
+            
+            # Before random and model error estimation:
+            #   1) screen all sigma_delta values where observations are missing
+            #   2) split into day and night
+            filter_sigma_delta(this_dict)
+            this_dict = separate_night_day(this_dict, noct_threshold)            
 
             # For each of day and night
             for cond in this_dict.keys():
@@ -317,7 +367,7 @@ def main():
                 # If including ustar uncertainty, write the available n to the 
                 # intermediate results dictionary for day and night
                 if do_ustar_uncertainty:
-                    interm_rslt_dict['obs_avail_' + cond] = len(
+                    interm_rslt_dict['obs_avail_' + cond][this_trial] = len(
                         this_dict[cond]['NEE_series']
                             [~np.isnan(this_dict[cond]['NEE_series'])])
 
@@ -339,16 +389,20 @@ def main():
                         mod_err.estimate_model_error(sub_dict, 
                                                      mod_err_configs_dict))
 
-        # Do statistics
-        lst = [var for var in interm_rslt_dict.keys() if 'error' in var]
-        this_dict = {var: np.round(interm_rslt_dict[var].std() * 2, 1) for 
-                     var in lst}
-        total_error_float = np.sqrt((np.array(this_dict.values())**2).sum())
-        this_dict['total_error'] = np.round(total_error_float, 2)
-        final_rslt_dict[this_year].update(this_dict)
-        
-#        test_array = (interm_rslt_dict['random_error_day'] + interm_rslt_dict['random_error_night'] + 
-#                      interm_rslt_dict['model_error_day'])
-#        print 'This is calc' + str(round(test_array.std() * 2, 2))
-        
-    return final_rslt_dict, interm_rslt_dict
+        final_rslt_dict[this_year] = interm_rslt_dict
+
+    return final_rslt_dict
+
+#        # Do statistics
+#        lst = [var for var in interm_rslt_dict.keys() if 'error' in var]
+#        this_dict = {var: np.round(interm_rslt_dict[var].std() * 2, 1) for 
+#                     var in lst}
+#        total_error_float = np.sqrt((np.array(this_dict.values())**2).sum())
+#        this_dict['total_error'] = np.round(total_error_float, 2)
+#        final_rslt_dict[this_year].update(this_dict)
+#        
+##        test_array = (interm_rslt_dict['random_error_day'] + interm_rslt_dict['random_error_night'] + 
+##                      interm_rslt_dict['model_error_day'])
+##        print 'This is calc' + str(round(test_array.std() * 2, 2))
+#        
+#    return final_rslt_dict, interm_rslt_dict
