@@ -72,6 +72,7 @@ def build_config_file(configs_master_dict):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+# Set all sigma delta values to nan where there are no observational data
 def filter_sigma_delta(data_dict):
     data_dict['sigma_delta'][np.isnan(data_dict['NEE_series'])] = np.nan    
 #------------------------------------------------------------------------------    
@@ -223,6 +224,11 @@ def main():
 
     # Generate a final results dictionary
     final_rslt_dict = init_final_rslt_dict(years_data_dict, configs_dict)
+
+
+
+
+
         
     # Do the uncertainty analysis for each year        
     for this_year in years_data_dict.keys():
@@ -255,8 +261,8 @@ def main():
         this_dict = cp.deepcopy(years_data_dict[this_year])
         filter_ustar(this_dict, ustar_threshold, noct_threshold)
         filter_sigma_delta(this_dict)
-        pdb.set_trace()
         run_model(this_dict, re_configs_dict, ps_configs_dict)
+        pdb.set_trace()
         NEE_sum = (this_dict['NEE_filled'] * 
                    configs_dict['measurement_interval'] *
                    60 * 12 * 10**-6).sum()
