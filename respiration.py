@@ -65,6 +65,7 @@ def optimise_all(data_dict, params_dict):
     # If negative rb returned, set to nan
     if params[0] < 50 or params[0] > 400: 
         error_state = 1
+        print params[0]
         params = [np.nan, np.nan]
     elif params[1] < 0:
         error_state = 2
@@ -327,6 +328,7 @@ def main(data_dict, configs_dict):
     """
     Calculates Re using Lloyd and Taylor function where Eo is fitted to annual
     data and rb is fitted to specified combination of step and window;
+    
     Pass: 1) a data dictionary containing the following key / value pairs (it 
              is assumed that there are no gaps in the time series, but this is 
              not yet enforced!; also, all values in dict must be numpy arrays, 
@@ -339,6 +341,7 @@ def main(data_dict, configs_dict):
                                   prior to passing the data
                  - 'TempC': numpy array of temperatures to be used as 
                             optimisation input (float)
+                            
           2) a configs dict containing the following key / value pairs:
                  - 'step_size_days': step size in days between fitting windows
                                      (int; range 0 < x < n days)
@@ -355,10 +358,12 @@ def main(data_dict, configs_dict):
                  - 'output_fit_plots': whether to output plots showing the fit
                                        of the parameters to the data (boolean)
                  - 'output_path': path for output of plots (str)
+                 
     Returns: 1) a results dictionary containing 2 key / value pairs:
                     - 'date_time': numpy array of Python datetimes for each
                       datum in the original time series
                     - 'Re': numpy array of half-hourly estimates of Re
+                    
              2) a results dictionary containing 5 key / value pairs:
                     - 'date_time': numpy array of Python dates for each day in 
                                    the original time series 
