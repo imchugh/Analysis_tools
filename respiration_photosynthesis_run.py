@@ -30,18 +30,25 @@ def get_data(configs_dict):
     # Get data (screen Fc data to obs only - keep gap-filled drivers etc)
     data_input_target = os.path.join(configs_dict['files']['input_path'],
                                      configs_dict['files']['input_file'])
-    Fc_dict = io.OzFluxQCnc_to_data_structure(data_input_target,
-                                              var_list = [configs_dict['variables']
-                                                                      ['carbon_flux']],
-                                              QC_accept_codes = [0])
-    Fc_dict.pop('date_time')
-    ancillary_vars = [configs_dict['variables'][var] for var in 
-                      configs_dict['variables'] if not var == 'carbon_flux']
-    ancillary_dict, attr = io.OzFluxQCnc_to_data_structure(
-                               data_input_target,
-                               var_list = ancillary_vars,
-                               return_global_attr = True)
-    data_dict = dict(Fc_dict, **ancillary_dict)
+    
+    ext = os.path.splitext(data_input_target)[1]
+    if ext == '.nc':
+        Fc_dict = io.OzFluxQCnc_to_data_structure(data_input_target,
+                                                  var_list = [configs_dict['variables']
+                                                                          ['carbon_flux']],
+                                                  QC_accept_codes = [0])
+        Fc_dict.pop('date_time')
+        ancillary_vars = [configs_dict['variables'][var] for var in 
+                          configs_dict['variables'] if not var == 'carbon_flux']
+        ancillary_dict, attr = io.OzFluxQCnc_to_data_structure(
+                                   data_input_target,
+                                   var_list = ancillary_vars,
+                                   return_global_attr = True)
+        data_dict = dict(Fc_dict, **ancillary_dict)
+    elif ext == '.df':
+        data_dict, attr = io.DINGO_df_to_data_structure(data_input_target,
+                              var_list = configs_dict['variables'].values(),
+                              return_global_attr = True)
 
     # Rename to generic names used by scripts
     old_names_dict = configs_dict['variables']
@@ -77,42 +84,6 @@ def build_config_file(configs_master_dict, do_light_response):
     return configs_dict                                                         
 #------------------------------------------------------------------------------
     
-#------------------------------------------------------------------------------
-# Remove low ustar values
-def screen_low_ustar(data_dict, configs_dict):
-
-    ustar_threshold = configs_dict['global_options']['ustar_threshold']
-    noct_threshold = configs_dict['global_options']['noct_threshold']
-    if isinstance(ustar_threshold, dict):
-        years_data_dict = data_filter.subset_datayear_from_arraydict(data_dict, 
-                                                                     'date_time')
-        threshold_keys = [int(key) for key in ustar_threshold.keys()]
-        miss_list = [year for year in years_data_dict.keys() 
-                     if not year in threshold_keys]
-        if not len(miss_list) == 0:
-            miss_string = ', '.join([str(this_year) for this_year in miss_list])
-            raise Exception('Missing years: %s' %miss_string + '; please edit ' \
-                            'your configuration file so that years specified ' \
-                            'for ustar threshold match those available in ' \
-                            'data file, or alternatively specify a single ' \
-                            'value (float) in the configuration file under ' \
-                            '[global_configs][options][ustar_threshold]. '\
-                            'Exiting...')
-        data_list = []
-        for this_year in years_data_dict.keys():
-            this_threshold = ustar_threshold[str(this_year)]
-            this_NEE = years_data_dict[this_year]['NEE_series']
-            this_NEE[(years_data_dict[this_year]['ustar'] < this_threshold) &
-                     (years_data_dict[this_year]['Fsd'] < noct_threshold)] = np.nan
-            data_list.append(this_NEE)
-        data_dict['NEE_series'] = np.concatenate(data_list)
-    else:
-        data_dict['NEE_series'][(data_dict['ustar'] < ustar_threshold) &
-                                (data_dict['Fsd'] < noct_threshold)] = np.nan
-                                
-    return
-#------------------------------------------------------------------------------    
-
 #------------------------------------------------------------------------------    
 def main(use_storage = 'from_config', storage_var = 'from_config',
          ustar_threshold = 'from_config', 
@@ -179,7 +150,9 @@ def main(use_storage = 'from_config', storage_var = 'from_config',
         data_dict['NEE_series'][np.isnan(data_dict['filter_var'])] = np.nan
 
     # Remove low ustar data
-    screen_low_ustar(data_dict, configs_dict)     
+    data_filter.screen_low_ustar(data_dict, 
+                                 configs_dict['global_options']['ustar_threshold'],
+                                 configs_dict['global_options']['noct_threshold'])     
     
     # Set up respiration configs and add measurement interval and output path
     re_configs_dict = configs_master_dict['respiration_configs']['options']
@@ -195,6 +168,8 @@ def main(use_storage = 'from_config', storage_var = 'from_config',
     
     # Add original time series                                                              
     re_rslt_dict['NEE_series'] = data_dict['NEE_series']
+
+    
 
     # Do the light response parameters (or not)
     if do_light_response:
