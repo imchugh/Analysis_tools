@@ -8,8 +8,11 @@ Created on Mon Aug 24 12:13:41 2015
 import numpy as np
 import operator
 import copy as cp
+import warnings
 import pdb
 
+import datetime_functions as dtf
+reload(dtf)
 #------------------------------------------------------------------------------
 # Numpy functions
 
@@ -28,10 +31,6 @@ def set_numpy_array_to_nan(data_array, boolean_index):
     data_array[~boolean_index] = np.nan
     return data_array
 
-def subset_numpy_array(data_array, boolean_index):
-    
-    return data_array[boolean_index]
-    
 def threshold_numpy_array(data_array, threshold, operation):
     """
     Creates a boolean index indicating whether values of numpy array are 
@@ -59,8 +58,7 @@ def set_numpy_dict_to_nan(data_dict, boolean_index):
 
 def subset_numpy_dict(data_dict, boolean_index):
     
-    return {var: subset_numpy_array(data_dict[var], boolean_index) 
-            for var in data_dict.keys()}
+    return {var: data_dict[var][boolean_index] for var in data_dict.keys()}
 
 #------------------------------------------------------------------------------
 # Higher level Numpy array dictionary filtering functions
@@ -125,30 +123,6 @@ def subset_arraydict_on_threshold(data_dict, threshold_var, threshold,
         return subset_numpy_dict(data_dict, boolean_index)
     else:
         return set_numpy_dict_to_nan(data_dict, boolean_index)
-
-def subset_datayear_from_arraydict(data_dict, date_time_var, year = None):
-    """
-    Pass: 1) data_dict - a dictionary containing arrays, one of which must be a 
-             python datetime;
-          2) date_time_var - namestring of datetime variable
-          3) year to be returned as optional kwarg
-    Returns: if year is specified, return the same dictionary structure with 
-             only data for that year; if no year is specified, return a 
-             dictionary with each data year contained as the value with the 
-             year as the key
-    """    
-    years_array = np.array([date_.year for date_ in data_dict[date_time_var]])
-    if not year:
-        year_list = set(list(years_array))    
-    else:
-        if not isinstance(year, list): year = [year]
-    
-    new_dict = {}
-    for yr in year_list:
-        year_index = years_array == yr            
-        new_dict[yr] = subset_numpy_dict(data_dict, year_index)
-
-    return new_dict
     
 #------------------------------------------------------------------------------
     
@@ -234,12 +208,10 @@ def slide_IQR_filter(data_array, outlier_value = 2, window_size = 11,
         return
         
 # Remove low ustar values
-def screen_low_ustar(data_dict, configs_dict):
+def screen_low_ustar(data_dict, ustar_threshold, noct_threshold):
 
-    ustar_threshold = configs_dict['ustar_threshold']
-    noct_threshold = configs_dict['noct_threshold']
     if isinstance(ustar_threshold, dict):
-        years_data_dict = subset_datayear_from_arraydict(data_dict, 'date_time')
+        years_data_dict = dtf.subset_datayear_from_arraydict(data_dict, 'date_time')
         threshold_keys = [int(key) for key in ustar_threshold.keys()]
         miss_list = [year for year in years_data_dict.keys() 
                      if not year in threshold_keys]
@@ -248,10 +220,15 @@ def screen_low_ustar(data_dict, configs_dict):
             raise Exception('Missing years: %s' %miss_string + '; please edit ' \
                             'your configuration file so that years specified ' \
                             'for ustar threshold match those available in ' \
-                            'data file, or alternatively specify a single ' \
-                            'value (float) in the configuration file under ' \
-                            '[global_configs][options][ustar_threshold]. '\
-                            'Exiting...')
+                            'data file; alternatively, specify a single ' \
+                            'value (float or int) for ustar. Exiting...')
+        extra_list = [year for year in threshold_keys 
+                      if not year in years_data_dict.keys()]
+        if not len(extra_list) == 0:
+            extra_string = ', '.join([str(this_year) for this_year in miss_list])
+            warnings.warn('Years %s' %extra_string + ' specified in ustar ' \
+                          'dictionary are not present in passed data dictionary' \
+                          'and have been ignored! Continuing...')
         data_list = []
         for this_year in years_data_dict.keys():
             this_threshold = ustar_threshold[str(this_year)]
@@ -260,7 +237,7 @@ def screen_low_ustar(data_dict, configs_dict):
                      (years_data_dict[this_year]['Fsd'] < noct_threshold)] = np.nan
             data_list.append(this_NEE)
         data_dict['NEE_series'] = np.concatenate(data_list)
-    elif isinstance(ustar_threshold, float):
+    elif isinstance(ustar_threshold, (float, int)):
         data_dict['NEE_series'][(data_dict['ustar'] < ustar_threshold) &
                                 (data_dict['Fsd'] < noct_threshold)] = np.nan
     else:
