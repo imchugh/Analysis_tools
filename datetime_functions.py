@@ -215,3 +215,27 @@ def get_DOY_first_day_of_month(year):
     
     return [int(dt.datetime.strftime(dt.date(2012,m,1), '%j')) - 1 
             for m in range(1, 13)]
+                
+def subset_datayear_from_arraydict(data_dict, date_time_var, year = None):
+    """
+    Pass: 1) data_dict - a dictionary containing arrays, one of which must be a 
+             python datetime;
+          2) date_time_var - namestring of datetime variable
+          3) year to be returned as optional kwarg
+    Returns: if year is specified, return the same dictionary structure with 
+             only data for that year; if no year is specified, return a 
+             dictionary with each data year contained as the value with the 
+             year as the key
+    """    
+    years_array = np.array([date_.year for date_ in data_dict[date_time_var]])
+    if not year:
+        year_list = set(list(years_array))    
+    else:
+        if not isinstance(year, list): year = [year]
+    
+    new_dict = {}
+    for yr in year_list:
+        year_index = years_array == yr            
+        new_dict[yr] = {var: data_dict[var][year_index] 
+                        for var in data_dict.keys()}
+    return new_dict                
