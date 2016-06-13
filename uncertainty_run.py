@@ -310,13 +310,13 @@ def main():
         # Do trials
         for this_trial in xrange(num_trials):
 
-#            # Print progress
-#            if this_trial == 0:
-#                print '    - Trial: ' + str(this_trial + 1),
-#            elif this_trial == num_trials - 1:
-#                print str(this_trial + 1) + ' ... Done!'
-#            else:
-#                print this_trial + 1,
+            # Print progress
+            if this_trial == 0:
+                print '    - Trial: ' + str(this_trial + 1),
+            elif this_trial == num_trials - 1:
+                print str(this_trial + 1) + ' ... Done!'
+            else:
+                print this_trial + 1,
 
             # If including ustar uncertainty:
             #   1) make a deep copy of the original data so it doesn't get overwritten
