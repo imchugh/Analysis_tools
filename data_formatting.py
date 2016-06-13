@@ -90,6 +90,7 @@ def standard_names_dictionary():
             'friction_velocity': 'ustar',
             'wind_speed': 'ws',
             'modelled_carbon_flux': 'NEE_model',
+            'soil_moisture': 'Sws',
             'generic': 'filter_var'}
 
 # Get the data and format appropriately
