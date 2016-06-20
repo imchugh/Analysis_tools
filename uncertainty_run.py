@@ -9,18 +9,18 @@ Created on Mon Aug 10 16:20:41 2015
 import numpy as np
 import os
 import copy as cp
-import calendar
 import pdb
 
 # My modules
 import DataIO as io
 import data_filtering as filt
+import datetime_functions as dtf
 import random_error as rand_err
 import model_error as mod_err
 import data_formatting as dt_fm
 import respiration as re
 import photosynthesis as ps
-
+import gap_filling as gf
 
 #------------------------------------------------------------------------------
 # Fetch data from configurations
@@ -123,14 +123,38 @@ def init_interm_rslt_dict(num_trials, do_ustar, do_random, do_model):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def run_model(data_dict, re_configs_dict, ps_configs_dict):
+def run_model(data_dict, NEE_model, re_configs_dict, ps_configs_dict):
     
-    re_rslt_dict, re_params_dict = re.main(data_dict, re_configs_dict)[0: 2]
-    ps_rslt_dict = ps.main(data_dict, ps_configs_dict, re_params_dict)[0]
-    data_dict['NEE_model'] = ps_rslt_dict['GPP'] + ps_rslt_dict['Re']
-    data_dict['NEE_filled'] = np.where(np.isnan(data_dict['NEE_series']),
-                                       data_dict['NEE_model'],
-                                       data_dict['NEE_series'])
+    if NEE_model == 'LT':    
+        
+        re_rslt_dict, re_params_dict = re.main(data_dict, re_configs_dict)[0: 2]
+        ps_rslt_dict = ps.main(data_dict, ps_configs_dict, re_params_dict)[0]
+        data_dict['NEE_model'] = ps_rslt_dict['GPP'] + ps_rslt_dict['Re']
+        data_dict['NEE_filled'] = np.where(np.isnan(data_dict['NEE_series']),
+                                           data_dict['NEE_model'],
+                                           data_dict['NEE_series'])
+                                           
+    elif NEE_model == 'ANN':
+        
+        len_int = len(data_dict['NEE_series'])
+        input_array = np.empty([len_int, 4])
+        for i, var in enumerate(['TempC', 'Sws', 'Fsd', 'VPD']):
+            input_array[:, i] = data_dict[var]
+        target_array = np.empty([len_int, 1])
+        target_array[:, 0] = data_dict['NEE_series']
+        
+        data_dict['NEE_model'] = gf.train_ANN(input_array, target_array, 
+                                              100, 
+                                              [4, 24, 16, 1])[:, 0]
+        data_dict['NEE_filled'] = np.where(np.isnan(data_dict['NEE_series']),
+                                           data_dict['NEE_model'],
+                                           data_dict['NEE_series'])                                                     
+
+    else:
+        
+        raise Exception('\'' + NEE_model + '\' is not a valid model type! ' \
+                        'Valid choices are \'ANN\' or \'LT\'')
+                                           
     return    
 #------------------------------------------------------------------------------
 
@@ -142,6 +166,7 @@ def main():
     reload(io)
     reload(filt)
     reload(re)
+    reload(gf)
 
     #---------------------------
     # Preparation and formatting
@@ -188,12 +213,13 @@ def main():
     data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6       
 
     # Write universal config items to local variables
-    num_trials = configs_dict['uncertainty_options']['num_trials']
     noct_threshold = configs_dict['global_options']['noct_threshold']
     ustar_threshold = configs_dict['global_options']['ustar_threshold']
+    num_trials = configs_dict['uncertainty_options']['num_trials']
     do_ustar_uncertainty = configs_dict['uncertainty_options']['do_ustar_uncertainty']
     do_random_uncertainty = configs_dict['uncertainty_options']['do_random_uncertainty']
     do_model_uncertainty = configs_dict['uncertainty_options']['do_model_uncertainty']
+    NEE_model = configs_dict['uncertainty_options']['NEE_model']
 
     # Print stuff
     print_dict = {'ustar error': do_ustar_uncertainty,
@@ -220,7 +246,7 @@ def main():
 
         # Generate initial model series for Re and GPP then combine
         # (note: low u* data is left in intentionally)
-        run_model(data_dict, re_configs_dict, ps_configs_dict)
+        run_model(data_dict, NEE_model, re_configs_dict, ps_configs_dict)
     
         # Calculate the linear regression parameters of sigma_delta as a function 
         # of flux magnitude
@@ -240,7 +266,7 @@ def main():
     #---------------------
 
     # Create dataset separated into years
-    years_data_dict = filt.subset_datayear_from_arraydict(data_dict, 
+    years_data_dict = dtf.subset_datayear_from_arraydict(data_dict, 
                                                           'date_time')   
 
     # Create a results dictionary
@@ -280,10 +306,9 @@ def main():
         # ustar uncertainty is set to True, but the reference value for NEE
         # will be retained
         this_dict = cp.deepcopy(years_data_dict[this_year])
-        filt.screen_low_ustar(this_dict, {'noct_threshold': noct_threshold,
-                                          'ustar_threshold': ustar_threshold})
+        filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
         try:
-            run_model(this_dict, re_configs_dict, ps_configs_dict)
+            run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
         except:
             print ('    - Excluding the year ' + str(this_year) + 
                    ' - insufficient data!')
@@ -327,10 +352,9 @@ def main():
             if do_ustar_uncertainty:
                 this_dict = cp.deepcopy(years_data_dict[this_year])
                 ustar_threshold = ustar_array[this_trial]
-                filt.screen_low_ustar(this_dict, {'noct_threshold': noct_threshold,
-                                                  'ustar_threshold': ustar_threshold})
+                filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
                 try:
-                    run_model(this_dict, re_configs_dict, ps_configs_dict)
+                    run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
                 except:
                     next
                 this_sum = (this_dict['NEE_filled'] * 
