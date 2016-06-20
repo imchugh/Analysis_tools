@@ -231,7 +231,7 @@ def subset_datayear_from_arraydict(data_dict, date_time_var, year = None):
     if not year:
         year_list = set(list(years_array))    
     else:
-        if not isinstance(year, list): year = [year]
+        if not isinstance(year, list): year_list = [year]
     
     new_dict = {}
     for yr in year_list:
