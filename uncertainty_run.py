@@ -452,4 +452,7 @@ def main(output_trial_results = False):
         # Write summary results for the year to final summary dictionary
         final_summary_dict[this_year] = interm_summary_dict
 
-    return final_summary_dict
+    if output_trial_results:    
+        return final_rslt_dict, final_summary_dict
+    else:
+        return final_summary_dict
