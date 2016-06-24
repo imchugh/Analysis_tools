@@ -9,6 +9,7 @@ Created on Mon Aug 10 16:20:41 2015
 import numpy as np
 import os
 import copy as cp
+from scipy import stats
 import pdb
 
 # My modules
@@ -158,7 +159,7 @@ def run_model(data_dict, NEE_model, re_configs_dict, ps_configs_dict):
     return    
 #------------------------------------------------------------------------------
 
-def main():    
+def main(output_trial_results = False):    
 
     # Update
     reload(rand_err)
@@ -271,6 +272,10 @@ def main():
 
     # Create a results dictionary
     final_rslt_dict = {}
+    final_summary_dict = {}
+    
+    # Get the t-statistic for the 95% CI
+    t_stat = stats.t.ppf(0.975, num_trials)
         
     # Do the uncertainty analysis for each year        
     for this_year in years_data_dict.keys():
@@ -282,6 +287,9 @@ def main():
                                                  do_ustar_uncertainty,
                                                  do_random_uncertainty,
                                                  do_model_uncertainty)
+        
+        # Make an intermediate summary dict
+        interm_summary_dict = {}
         
         # Write ustar thresholds for years to local variables
         if isinstance(configs_dict['global_options']['ustar_threshold'],
@@ -413,5 +421,35 @@ def main():
 
         # Write the results for the year to the results dictionary
         final_rslt_dict[this_year] = interm_rslt_dict
+        
+        # Write the results for the year to the intermediate summary dictionary
+        vars_list = []
+        if do_random_uncertainty:
+            vars_list.extend(['random_error_day', 'random_error_night'])
+            interm_summary_dict['random_error_day'] = (
+                interm_rslt_dict['random_error_day'].std() * t_stat)
+            interm_summary_dict['random_error_night'] = (
+                interm_rslt_dict['random_error_night'].std() * t_stat)
+            interm_summary_dict['random_error_tot'] = (
+                interm_rslt_dict['random_error_day'] +
+                interm_rslt_dict['random_error_night']).std() * t_stat
+        if do_model_uncertainty:
+            vars_list.extend(['model_error_day', 'model_error_night'])
+            interm_summary_dict['model_error_day'] = (
+                interm_rslt_dict['model_error_day'].std() * t_stat)
+            interm_summary_dict['model_error_night'] = (
+                interm_rslt_dict['model_error_night'].std() * t_stat)
+            interm_summary_dict['model_error_tot'] = (
+                interm_rslt_dict['model_error_day'] +
+                interm_rslt_dict['model_error_night']).std() * t_stat
+        if do_ustar_uncertainty:
+            vars_list.append('ustar_error')            
+            interm_summary_dict['ustar_error'] = (
+                interm_rslt_dict['ustar_error']).std() * t_stat
+        l = [interm_rslt_dict[this_var] for this_var in vars_list]
+        interm_summary_dict['total_error'] = sum(l).std() * t_stat
 
-    return final_rslt_dict
+        # Write summary results for the year to final summary dictionary
+        final_summary_dict[this_year] = interm_summary_dict
+
+    return final_summary_dict
