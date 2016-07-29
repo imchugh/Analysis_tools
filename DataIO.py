@@ -110,7 +110,6 @@ def OzFluxQCnc_to_data_structure(file_in,
             return nc_obj.variables[var][:]
         
     nc_obj=netCDF4.Dataset(file_in)
-    
     dates_array = netCDF4.num2date(nc_obj.variables['time'][:], 
                                    'days since 1800-01-01 00:00:00')
 
