@@ -72,8 +72,8 @@ xx, yy = np.meshgrid(x, y)
 # Do plotting
 fig, ax = plt.subplots(1, 1, figsize = (12, 9))
 fig.patch.set_facecolor('white')
-cmap = plt.get_cmap('gray')
-new_cmap = truncate_colormap(cmap, 0.3, 1)
+cmap = plt.get_cmap('cubehelix')
+new_cmap = truncate_colormap(cmap, 0.5, 1)
 color_min = int(data.min() / 10.0) * 10
 color_max = int(data.max() / 10.0 + 1) * 10
 colormesh = map.pcolormesh(xx, yy, data, vmin = color_min, 
