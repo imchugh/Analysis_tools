@@ -317,7 +317,7 @@ def main(output_trial_results = False):
         filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
         try:
             run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
-        except:
+        except Exception, e:
             print ('    - Excluding the year ' + str(this_year) + 
                    ' - insufficient data!')
             continue # Do the next year
@@ -363,11 +363,15 @@ def main(output_trial_results = False):
                 filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
                 try:
                     run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
-                except:
+                except Exception, e:
+                    print 'Skipped!'
                     next
-                this_sum = (this_dict['NEE_filled'] * 
-                            configs_dict['measurement_interval'] * 60 *
-                            12 * 10**-6).sum()
+                try:
+                    this_sum = (this_dict['NEE_filled'] * 
+                                configs_dict['measurement_interval'] * 60 *
+                                12 * 10**-6).sum()
+                except:
+                    pdb.set_trace()
                 interm_rslt_dict['ustar_error'][this_trial] = NEE_sum - this_sum
 
             # Switch off resampling after first pass if not doing ustar uncertainty                
