@@ -282,12 +282,6 @@ def main(output_trial_results = False):
 
         print 'Running analysis for year ' + str(this_year) + ':'
 
-        # Make an intermediate results dictionary
-        interm_rslt_dict = init_interm_rslt_dict(num_trials,
-                                                 do_ustar_uncertainty,
-                                                 do_random_uncertainty,
-                                                 do_model_uncertainty)
-        
         # Make an intermediate summary dict
         interm_summary_dict = {}
         
@@ -314,6 +308,22 @@ def main(output_trial_results = False):
         # ustar uncertainty is set to True, but the reference value for NEE
         # will be retained
         this_dict = cp.deepcopy(years_data_dict[this_year])
+        bool_array = this_dict['Fsd'] < 5
+        temp_ustar_array = this_dict['ustar'][bool_array]
+        temp_NEE_array = this_dict['NEE_series'][bool_array]
+        filt_ustar_array = temp_ustar_array[~np.isnan(temp_NEE_array)]
+        max_ustar = np.percentile(filt_ustar_array, 
+                                  100 - re_configs_dict['minimum_pct_annual'])
+
+        pdb.set_trace()
+        # Make an intermediate results dictionary
+        interm_rslt_dict = init_interm_rslt_dict(num_trials,
+                                                 do_ustar_uncertainty,
+                                                 do_random_uncertainty,
+                                                 do_model_uncertainty)
+
+        # Screen current dict copy using the best estimate of u_star threshold,
+        # run model and calculate annual sum
         filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
         try:
             run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
@@ -363,16 +373,13 @@ def main(output_trial_results = False):
                 filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
                 try:
                     run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
-                except Exception, e:
-                    print 'Skipped!'
-                    next
-                try:
                     this_sum = (this_dict['NEE_filled'] * 
                                 configs_dict['measurement_interval'] * 60 *
                                 12 * 10**-6).sum()
-                except:
-                    pdb.set_trace()
-                interm_rslt_dict['ustar_error'][this_trial] = NEE_sum - this_sum
+                    interm_rslt_dict['ustar_error'][this_trial] = NEE_sum - this_sum                                
+                except Exception, e:
+                    print 'Skipped!'
+                    next
 
             # Switch off resampling after first pass if not doing ustar uncertainty                
             if not do_ustar_uncertainty:
