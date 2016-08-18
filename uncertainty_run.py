@@ -314,8 +314,9 @@ def main(output_trial_results = False):
         filt_ustar_array = temp_ustar_array[~np.isnan(temp_NEE_array)]
         max_ustar = np.percentile(filt_ustar_array, 
                                   100 - re_configs_dict['minimum_pct_annual'])
+                             
+        print 'Maximum ustar for year ' + str(this_year) + ' is ' + str(round(max_ustar, 3))                          
 
-        pdb.set_trace()
         # Make an intermediate results dictionary
         interm_rslt_dict = init_interm_rslt_dict(num_trials,
                                                  do_ustar_uncertainty,
@@ -370,16 +371,17 @@ def main(output_trial_results = False):
             if do_ustar_uncertainty:
                 this_dict = cp.deepcopy(years_data_dict[this_year])
                 ustar_threshold = ustar_array[this_trial]
-                filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
-                try:
-                    run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
-                    this_sum = (this_dict['NEE_filled'] * 
-                                configs_dict['measurement_interval'] * 60 *
-                                12 * 10**-6).sum()
-                    interm_rslt_dict['ustar_error'][this_trial] = NEE_sum - this_sum                                
-                except Exception, e:
-                    print 'Skipped!'
-                    next
+                if ustar_threshold > 0 and ustar_threshold < max_ustar:
+                    filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
+                    try:
+                        run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
+                        this_sum = (this_dict['NEE_filled'] * 
+                                    configs_dict['measurement_interval'] * 60 *
+                                    12 * 10**-6).sum()
+                        interm_rslt_dict['ustar_error'][this_trial] = NEE_sum - this_sum                                
+                    except Exception, e:
+                        print 'Skipped! ustar was: ' + str(ustar_threshold)
+                        continue
 
             # Switch off resampling after first pass if not doing ustar uncertainty                
             if not do_ustar_uncertainty:
@@ -438,25 +440,30 @@ def main(output_trial_results = False):
         if do_random_uncertainty:
             vars_list.extend(['random_error_day', 'random_error_night'])
             interm_summary_dict['random_error_day'] = (
-                interm_rslt_dict['random_error_day'].std() * t_stat)
+                interm_rslt_dict['random_error_day']
+                [~np.isnan(interm_rslt_dict['random_error_day'])].std() * t_stat)
             interm_summary_dict['random_error_night'] = (
-                interm_rslt_dict['random_error_night'].std() * t_stat)
+                interm_rslt_dict['random_error_night']
+                [~np.isnan(interm_rslt_dict['random_error_night'])].std() * t_stat)
             interm_summary_dict['random_error_tot'] = (
                 interm_rslt_dict['random_error_day'] +
                 interm_rslt_dict['random_error_night']).std() * t_stat
         if do_model_uncertainty:
             vars_list.extend(['model_error_day', 'model_error_night'])
             interm_summary_dict['model_error_day'] = (
-                interm_rslt_dict['model_error_day'].std() * t_stat)
+                interm_rslt_dict['model_error_day']
+                [~np.isnan(interm_rslt_dict['model_error_day'])].std() * t_stat)
             interm_summary_dict['model_error_night'] = (
-                interm_rslt_dict['model_error_night'].std() * t_stat)
+                interm_rslt_dict['model_error_night']
+                [~np.isnan(interm_rslt_dict['model_error_night'])].std() * t_stat)
             interm_summary_dict['model_error_tot'] = (
                 interm_rslt_dict['model_error_day'] +
                 interm_rslt_dict['model_error_night']).std() * t_stat
         if do_ustar_uncertainty:
             vars_list.append('ustar_error')            
             interm_summary_dict['ustar_error'] = (
-                interm_rslt_dict['ustar_error']).std() * t_stat
+                interm_rslt_dict['ustar_error']
+                [~np.isnan(interm_rslt_dict['ustar_error'])].std() * t_stat)
         l = [interm_rslt_dict[this_var] for this_var in vars_list]
         interm_summary_dict['total_error'] = sum(l).std() * t_stat
 
