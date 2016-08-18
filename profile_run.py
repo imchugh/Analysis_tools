@@ -12,14 +12,14 @@ import DataIO as io
 reload (ps)
 
 configs_dict = {'met_file_in': '/home/imchugh/Ozflux/Sites/Whroo/Data/' \
-                               'Processed/all/Whroo_2011_to_2014_L6.nc'}
+                               'Processed/all/Whroo_2011_to_2015_L4.nc'}
 
 outer_dict = {'C_names_dict': {'Cc_1': 'Cc_LI840_0.5m',
                                'Cc_2': 'Cc_LI840_2m',
                                'Cc_3': 'Cc_LI840_4m',
                                'Cc_4': 'Cc_LI840_8m',
                                'Cc_5': 'Cc_LI840_16m',
-                               'Cc_6': 'Cc_LI840_32m'},
+                               'Cc_6': 'Cc_LI840_36m'},
               'met_names_dict': {'Ta': 'Ta',
                                  'Press': 'ps'},
               'C_heights_dict': {'Cc_1': 0.5,
