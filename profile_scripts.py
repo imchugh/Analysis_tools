@@ -92,7 +92,7 @@ def get_CO2_data():
 
     # Set some other stuff    
     coeff_correct = 2.5
-    true_heights = [0.5, 2, 4, 8, 16, 32]
+    true_heights = [0.5, 2, 4, 8, 16, 36]
     CO2_range = [300, 600]
 
     # Import and clean up datasets
@@ -106,7 +106,7 @@ def get_CO2_data():
     
     # Change the earliest data to two minute frequency to match later data, then 
     # concatenate everything
-    df = pd.concat([df_dict[files[0]].loc[:last_1min_date].resample('2T'),
+    df = pd.concat([df_dict[files[0]].loc[:last_1min_date].resample('2T').mean(),
                     df_dict[files[0]].loc[first_2min_date:],
                     df_dict[files[1]],
                     df_dict[files[2]],
