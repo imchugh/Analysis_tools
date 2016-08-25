@@ -10,6 +10,9 @@ import numpy as np
 import os
 import copy as cp
 from scipy import stats
+import matplotlib.pyplot as plt
+from scipy.stats import norm
+import matplotlib.gridspec as gridspec
 import pdb
 
 # My modules
@@ -159,7 +162,129 @@ def run_model(data_dict, NEE_model, re_configs_dict, ps_configs_dict):
     return    
 #------------------------------------------------------------------------------
 
-def main(output_trial_results = False):    
+#------------------------------------------------------------------------------
+def plot_data(data_d):
+    """
+    Pass a dictionary containing the following key / value pairs:
+    keys: year(int or str) / values: dictionary containing following 
+    key / value pairs: 
+    keys: 'ustar_error', 'model_error_day', 'model_error_night', 
+    'random_error_day' and 'random_error_night' as keys / values: equal length 
+    numpy arrays (may contain np.nan - will be filtered)
+    """
+    
+    key_id_list = [isinstance(key, int) for key in data_d.keys()]    
+    if not all(key_id_list):
+        raise Exception('Expected integer years as outer dictionary key!')
+    
+    for this_year in data_d.keys():
+    
+        this_d = data_d[this_year]    
+    
+        ustar_err = this_d['ustar_error'][~np.isnan(this_d['ustar_error'])]    
+        
+        rand_err = this_d['random_error_day'] + this_d['random_error_night']
+        rand_err = rand_err[~np.isnan(this_d['ustar_error'])]
+        
+        mod_err = this_d['model_error_day'] + this_d['model_error_night']
+        mod_err = mod_err[~np.isnan(this_d['ustar_error'])]
+        
+        total_err = rand_err + mod_err + ustar_err
+    
+        labels = ['total', 'model', 'random', 'ustar']
+        colors = ['grey', 'magenta', 'cyan', 'blue']
+        pos = [0.9, 0.6, 0.3, 0]
+    
+        # Do the stats
+        mu_dict = {}
+        sig_dict = {}
+        this_list = [total_err, mod_err, rand_err, ustar_err]
+        for i, this_one in enumerate(this_list):
+            mu_dict[labels[i]] = this_one.mean()
+            sig_dict[labels[i]] = this_one.std()
+            
+    
+        # Create the plot
+        fig = plt.figure(figsize = (12, 10))
+        fig.patch.set_facecolor('white')
+        gs = gridspec.GridSpec(2, 1, height_ratios=[4,1.5])
+        ax1 = plt.subplot(gs[0])
+        ax2 = plt.subplot(gs[1])
+    
+        # Set up the first subplot
+        ax1.set_xlabel('$Uncertainty\/(\mu mol\/CO_2\/m^{-2}s^{-1})$',
+                      fontsize=18)
+        ax1.set_ylabel('$Frequency$', fontsize=18)
+        ax1.tick_params(axis = 'y', labelsize = 14)
+        ax1.tick_params(axis = 'x', labelsize = 14)
+        ax1.axvline(0, color = 'black', linewidth = 2, linestyle = '--')
+        ax1.xaxis.set_ticks_position('bottom')
+        ax1.yaxis.set_ticks_position('left')
+        ax1.spines['right'].set_visible(False)
+        ax1.spines['top'].set_visible(False)
+        
+        # Plot the histogram
+        for i, var in enumerate(this_list):
+            if i == 0:
+                ax1.hist(total_err, 50, facecolor = colors[i], edgecolor = 'none',
+                         orientation = 'vertical', label = labels[i], normed = True)
+            else:
+                
+                ax1.hist(var, 50, facecolor = 'none', edgecolor = colors[i], 
+                         histtype = 'step', orientation = 'vertical',
+                         label = labels[i], normed = True)
+        ax1.legend(loc='upper right', frameon = False)
+
+        # Put year in plot
+        xmin, xmax = ax1.get_xlim()
+        ymin, ymax = ax1.get_ylim()
+        ax1.text(xmin + (xmax - xmin) / 10, ymax - (ymax - ymin) / 20, 
+                 str(this_year), fontsize = 20)
+    
+        # Plot the normal distribution
+        x = np.linspace(xmin, xmax, 100)
+        p = stats.norm.pdf(x, mu_dict['total'], sig_dict['total'])
+        ax1.plot(x, p, color = 'black')
+    
+        # Set up the second plot
+        ax2.axes.get_yaxis().set_visible(False)
+        ax2.spines['top'].set_visible(False)
+        ax2.spines['left'].set_visible(False)
+        ax2.spines['right'].set_visible(False)
+        ax2.xaxis.set_ticks_position('bottom')
+        ax2.set_xticklabels([])                    
+        ax2.set_xlim(ax1.get_xlim())
+        ax2.set_ylim([0, 1])
+        the_buffer = 0.12
+        
+        # Plot the confidence intervals
+        for i, this_one in enumerate(labels[:-1]):
+            ax2.plot((mu_dict[this_one] - sig_dict[this_one] * 2, 
+                      mu_dict[this_one] + sig_dict[this_one] * 2), 
+                     (pos[i], pos[i]), color = colors[i], linewidth = 2)
+            ax2.plot(mu_dict[this_one] - sig_dict[this_one] * 2, pos[i], 
+                     marker = '|', color = colors[i], markersize = 10,
+                     mew = 2)
+            ax2.plot(mu_dict[this_one] + sig_dict[this_one] * 2, pos[i], 
+                     marker = '|', color = colors[i], markersize = 10,
+                     mew = 2)
+            ax2.plot(mu_dict[this_one], pos[i], 
+                     marker = 'o', color = colors[i], markersize = 10,
+                     mec = 'none')
+            ax2.text(mu_dict[this_one] - sig_dict[this_one] * 2, pos[i] - the_buffer, 
+                     str(round(mu_dict[this_one] - sig_dict[this_one] * 2, 1)),
+                     verticalalignment = 'center',
+                     horizontalalignment = 'center',
+                     fontsize = 14)
+            ax2.text(mu_dict[this_one] + sig_dict[this_one] * 2, pos[i] - the_buffer, 
+                     str(round(mu_dict[this_one] + sig_dict[this_one] * 2, 1)),
+                     verticalalignment = 'center',
+                     horizontalalignment = 'center',
+                     fontsize = 14)
+    
+    return    
+
+def main(output_trial_results = True, output_plot = True):    
 
     # Update
     reload(rand_err)
@@ -469,6 +594,9 @@ def main(output_trial_results = False):
 
         # Write summary results for the year to final summary dictionary
         final_summary_dict[this_year] = interm_summary_dict
+
+        if output_plot:
+            plot_data({this_year: interm_summary_dict})
 
     if output_trial_results:    
         return final_rslt_dict, final_summary_dict
