@@ -439,7 +439,7 @@ def main(output_trial_results = True, output_plot = True):
         filt_ustar_array = temp_ustar_array[~np.isnan(temp_NEE_array)]
         max_ustar = np.percentile(filt_ustar_array, 
                                   100 - re_configs_dict['minimum_pct_annual'])
-                             
+        pdb.set_trace()                     
         print 'Maximum ustar for year ' + str(this_year) + ' is ' + str(round(max_ustar, 3))                          
 
         # Make an intermediate results dictionary
