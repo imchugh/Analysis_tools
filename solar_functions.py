@@ -63,6 +63,12 @@ def get_ephem_solar(data_dict, lat, lon, alt, GMT_zone, return_var = 'zenith'):
     # Specify body
     sun = ephem.Sun(obs)
 
+    # Convert to array if single value
+    try: 
+        iter(date_time)
+    except:
+        date_time = np.array([date_time, ])
+
     # Convert to UTC
     UTC_datetime = date_time - dt.timedelta(hours = GMT_zone)
 
@@ -71,6 +77,8 @@ def get_ephem_solar(data_dict, lat, lon, alt, GMT_zone, return_var = 'zenith'):
         iter(UTC_datetime)
     except:
         UTC_datetime = np.array([UTC_datetime, ])
+
+#    pdb.set_trace()
 
     # Convert to dates if user wants sunrise or sunset times
     if time_bool:
