@@ -226,8 +226,11 @@ def plot_data(data_d):
         # Plot the histogram
         for i, var in enumerate(this_list):
             if i == 0:
-                ax1.hist(total_err, 50, facecolor = colors[i], edgecolor = 'none',
-                         orientation = 'vertical', label = labels[i], normed = True)
+                try:
+                    ax1.hist(total_err, 50, facecolor = colors[i], edgecolor = 'none',
+                             orientation = 'vertical', label = labels[i], normed = True)
+                except:
+                    pdb.set_trace()
             else:
                 
                 ax1.hist(var, 50, facecolor = 'none', edgecolor = colors[i], 
@@ -439,7 +442,6 @@ def main(output_trial_results = True, output_plot = True):
         filt_ustar_array = temp_ustar_array[~np.isnan(temp_NEE_array)]
         max_ustar = np.percentile(filt_ustar_array, 
                                   100 - re_configs_dict['minimum_pct_annual'])
-        pdb.set_trace()                     
         print 'Maximum ustar for year ' + str(this_year) + ' is ' + str(round(max_ustar, 3))                          
 
         # Make an intermediate results dictionary
@@ -594,9 +596,9 @@ def main(output_trial_results = True, output_plot = True):
 
         # Write summary results for the year to final summary dictionary
         final_summary_dict[this_year] = interm_summary_dict
-
+        pdb.set_trace()
         if output_plot:
-            plot_data({this_year: interm_summary_dict})
+            plot_data({this_year: interm_rslt_dict})
 
     if output_trial_results:    
         return final_rslt_dict, final_summary_dict
