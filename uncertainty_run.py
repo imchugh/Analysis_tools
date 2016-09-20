@@ -92,13 +92,6 @@ def filter_sigma_delta(data_dict):
 #------------------------------------------------------------------------------    
 
 #------------------------------------------------------------------------------
-# Screen out low ustar
-def filter_ustar(data_dict, ustar_threshold, noct_threshold):
-    data_dict['NEE_series'][(data_dict['Fsd'] < noct_threshold) & 
-                            (data_dict['ustar'] < ustar_threshold)] = np.nan
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
 # Split into day and night
 def separate_night_day(data_dict, noct_threshold):
     subset_dict = {}
@@ -202,8 +195,7 @@ def plot_data(data_d):
         for i, this_one in enumerate(this_list):
             mu_dict[labels[i]] = this_one.mean()
             sig_dict[labels[i]] = this_one.std()
-            
-    
+                
         # Create the plot
         fig = plt.figure(figsize = (12, 10))
         fig.patch.set_facecolor('white')
@@ -226,13 +218,9 @@ def plot_data(data_d):
         # Plot the histogram
         for i, var in enumerate(this_list):
             if i == 0:
-                try:
-                    ax1.hist(total_err, 50, facecolor = colors[i], edgecolor = 'none',
-                             orientation = 'vertical', label = labels[i], normed = True)
-                except:
-                    pdb.set_trace()
+                ax1.hist(total_err, 50, facecolor = colors[i], edgecolor = 'none',
+                         orientation = 'vertical', label = labels[i], normed = True)
             else:
-                
                 ax1.hist(var, 50, facecolor = 'none', edgecolor = colors[i], 
                          histtype = 'step', orientation = 'vertical',
                          label = labels[i], normed = True)
@@ -330,17 +318,6 @@ def main(output_trial_results = True, output_plot = True):
     if ps_configs_dict['output_fit_plots']:
         ps_configs_dict['output_fit_plots'] = False 
     
-    # Sum Fc and Sc if storage is to be included, otherwise if requested, 
-    # remove all Fc where Sc is missing
-    if configs_dict['global_options']['use_storage']:
-        data_dict['NEE_series'] = (data_dict['NEE_series'] + 
-                                   data_dict['Sc'])
-    elif configs_dict['global_options']['unify_flux_storage_cases']:
-        data_dict['NEE_series'][np.isnan(data_dict['Sc'])] = np.nan
-
-    # Convert insolation to PPFD for light response calculations
-    data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6       
-
     # Write universal config items to local variables
     noct_threshold = configs_dict['global_options']['noct_threshold']
     ustar_threshold = configs_dict['global_options']['ustar_threshold']
@@ -366,6 +343,21 @@ def main(output_trial_results = True, output_plot = True):
                         'uncertainty source to True in configuration file ' \
                         'before proceeding!')
     print '---------------------------------'
+
+    # Sum Fc and Sc if storage is to be included, otherwise if requested, 
+    # remove all Fc where Sc is missing
+    if configs_dict['global_options']['use_storage']:
+        data_dict['NEE_series'] = (data_dict['NEE_series'] + 
+                                   data_dict['Sc'])
+    elif configs_dict['global_options']['unify_flux_storage_cases']:
+        data_dict['NEE_series'][np.isnan(data_dict['Sc'])] = np.nan
+
+    # Convert insolation to PPFD for light response calculations
+    data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6       
+
+    # Check for missing driver data
+    filt.check_missing_data(data_dict, var_list = ['TempC', 'ustar', 
+                                                   'PAR', 'VPD'])
 
     #----------------------------------------
     # Random error calculation and statistics
@@ -437,8 +429,17 @@ def main(output_trial_results = True, output_plot = True):
         # will be retained
         this_dict = cp.deepcopy(years_data_dict[this_year])
         bool_array = this_dict['Fsd'] < 5
-        temp_ustar_array = this_dict['ustar'][bool_array]
-        temp_NEE_array = this_dict['NEE_series'][bool_array]
+        miss_array = filt.subset_arraydict_on_nan(this_dict, 
+                                                  var_list = ['ustar',
+                                                              'PAR',
+                                                              'VPD',
+                                                              'TempC',
+                                                              'NEE_series'],
+                                                  condition = 'any',
+                                                  subset = False)
+        twin_array = np.array([all(rec) for rec in zip(bool_array, miss_array)])
+        temp_ustar_array = this_dict['ustar'][twin_array]
+        temp_NEE_array = this_dict['NEE_series'][twin_array]
         filt_ustar_array = temp_ustar_array[~np.isnan(temp_NEE_array)]
         max_ustar = np.percentile(filt_ustar_array, 
                                   100 - re_configs_dict['minimum_pct_annual'])
@@ -596,7 +597,8 @@ def main(output_trial_results = True, output_plot = True):
 
         # Write summary results for the year to final summary dictionary
         final_summary_dict[this_year] = interm_summary_dict
-        pdb.set_trace()
+
+        # Ouput plots
         if output_plot:
             plot_data({this_year: interm_rslt_dict})
 
