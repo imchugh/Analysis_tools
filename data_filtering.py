@@ -245,3 +245,42 @@ def screen_low_ustar(data_dict, ustar_threshold, noct_threshold):
                         'Please edit your configuration file')
 
     return
+
+def check_missing_data(data_dict, var_list = False):
+    
+    """
+    Finds missing data (and reports total cross-record percentage) in one or more 
+    arrays of data
+    Pass: 1) a data dictionary containing the relevant arrays
+          2) (optional) a variable list specifying the variables to be checked
+             (defaults to all data arrays in the dictionary if var_list is not
+              passed)
+    Returns: none - output is printed to screen.
+    """
+
+    if not var_list: var_list = data_dict.keys()
+    miss_list = []
+    for var in var_list:
+        miss_list.append(subset_arraydict_on_nan(data_dict, 
+                                                 var_list = [var],
+                                                 condition = 'any', 
+                                                 subset = False))
+        any_miss_list = subset_arraydict_on_nan(data_dict, 
+                                                var_list = var_list,
+                                                condition = 'any', 
+                                                subset = False)
+    if not all(any_miss_list):
+        any_miss_array = np.array(any_miss_list)
+        missing_drivers_pct = round(len(any_miss_array[~any_miss_array]) / 
+                                    float(len(any_miss_array)) * 100, 1)
+        print 'Warning: ' + str(missing_drivers_pct) + '% of all available ' \
+              'records are missing data for at least one variable; individual ' \
+              'variable breakdown follows: '
+        for i, var in enumerate(var_list):
+            this_array = np.array(miss_list[i])
+            count = len(this_array[~this_array])
+            if not count == 0:
+                print '    - ' + var + ' is missing ' + str(count) + ' records;' 
+    
+    return
+    
