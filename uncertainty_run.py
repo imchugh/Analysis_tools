@@ -505,8 +505,6 @@ def main(output_trial_results = True, output_plot = True):
         # run model and calculate annual sum
         filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
         try:
-            if this_year == 2012:
-                pdb.set_trace()
             run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
         except Exception, e:
             print ('    - Excluding the year ' + str(this_year) + 
