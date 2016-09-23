@@ -13,6 +13,7 @@ from scipy import stats
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 import matplotlib.gridspec as gridspec
+import warnings
 import pdb
 
 # My modules
@@ -85,6 +86,49 @@ def build_config_file(configs_master_dict):
     return configs_dict                                                         
 #------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+# Check whether ustar and Fsd (both used for filtering of the dataset) contain
+# missing data when NEE data is available - if so, exclude these cases from 
+# analysis
+def check_data_consistency(data_dict):
+    
+    warnings.simplefilter('always')
+    for var in ['Fsd', 'ustar']:
+        
+        flag_index = np.where(~np.isnan(data_dict['NEE_series']) & 
+                              np.isnan(data_dict[var]))
+        count_str = str(len(flag_index[0]))
+        if not len(flag_index[0]) == 0:
+            warnings.warn('There are %s' %count_str + ' instances where NEE ' 
+                          'element contains valid data and %s' %var + ' element ' 
+                          'is not a number - NEE values for these ' 
+                          'instances will be excluded from analysis!')
+        data_dict['NEE_series'][flag_index] = np.nan
+
+#------------------------------------------------------------------------------
+# Check whether all model drivers are complete - if not, warn user (may expand 
+# this to force exception, since results will be nan)
+def check_driver_consistency(data_dict):
+    
+    warnings.simplefilter('always')
+    arr = np.array([])
+    for var in ['Fsd', 'TempC', 'VPD']:
+        
+        flag_index = np.where(np.isnan(data_dict['NEE_series']) & 
+                              np.isnan(data_dict[var]))
+        arr = np.concatenate([arr, flag_index[0]])
+        count_str = str(len(flag_index[0]))                              
+        if not len(flag_index[0]) == 0:
+            warnings.warn('There are %s' %count_str + ' instances where neither ' \
+                          'the NEE nor model driver %s' %var + ' element ' \
+                          'contains valid data - model estimates cannot be ' \
+                          'calculated for these instances!')
+        data_dict['NEE_series'][flag_index] = np.nan        
+    arr = np.unique(arr)
+    if not len(arr) == 0:
+        print 'Total number of instances with missing driver data is ' + str(len(arr))
+#------------------------------------------------------------------------------
+        
 #------------------------------------------------------------------------------
 # Set all sigma delta values to nan where there are no observational data
 def filter_sigma_delta(data_dict):
@@ -285,9 +329,9 @@ def main(output_trial_results = True, output_plot = True):
     reload(re)
     reload(gf)
 
-    #---------------------------
-    # Preparation and formatting
-    #---------------------------
+    #-----------------------------------
+    # General preparation and formatting
+    #-----------------------------------
 
     # Get master config file
     configs_master_dict = io.config_to_dict(io.file_select_dialog())
@@ -328,21 +372,25 @@ def main(output_trial_results = True, output_plot = True):
     NEE_model = configs_dict['uncertainty_options']['NEE_model']
 
     # Print stuff
-    print_dict = {'ustar error': do_ustar_uncertainty,
-                  'random error': do_random_uncertainty,
-                  'model error': do_model_uncertainty}
     print '\nRunning uncertainty analysis for:'
+    error_list = ['ustar', 'random', 'model']
     mode_count = 0
-    for key in print_dict.keys():
-        if print_dict[key]:
+    for i, var in enumerate([do_ustar_uncertainty, do_random_uncertainty, 
+                             do_model_uncertainty]):
+         if var:
             mode_count = mode_count + 1
-            print '- ' + key
+            print '- ' + error_list[i] + ' error'
     if mode_count == 0:
         raise Exception('Processing flags for all uncertainty sources ' \
                         'currently set to False: set at least one ' \
                         'uncertainty source to True in configuration file ' \
                         'before proceeding!')
     print '---------------------------------'
+
+
+    #-----------------
+    # Data preparation
+    #-----------------
 
     # Sum Fc and Sc if storage is to be included, otherwise if requested, 
     # remove all Fc where Sc is missing
@@ -355,9 +403,11 @@ def main(output_trial_results = True, output_plot = True):
     # Convert insolation to PPFD for light response calculations
     data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6       
 
-    # Check for missing driver data
-    filt.check_missing_data(data_dict, var_list = ['TempC', 'ustar', 
-                                                   'PAR', 'VPD'])
+    # Check no NEE values with missing ustar values
+    check_data_consistency(data_dict)
+
+    # Check no drivers missing where NEE is missing
+    check_driver_consistency(data_dict)
 
     #----------------------------------------
     # Random error calculation and statistics
@@ -382,6 +432,7 @@ def main(output_trial_results = True, output_plot = True):
                              stats_dict))
         data_dict['sigma_delta'] = sig_del_array
 
+
     #---------------------
     # Uncertainty analysis
     #---------------------
@@ -396,54 +447,14 @@ def main(output_trial_results = True, output_plot = True):
     
     # Get the t-statistic for the 95% CI
     t_stat = stats.t.ppf(0.975, num_trials)
-        
+    
+    years = years_data_dict.keys()
+    years.sort()
+    
     # Do the uncertainty analysis for each year        
-    for this_year in years_data_dict.keys():
+    for this_year in years:
 
         print 'Running analysis for year ' + str(this_year) + ':'
-
-        # Make an intermediate summary dict
-        interm_summary_dict = {}
-        
-        # Write ustar thresholds for years to local variables
-        if isinstance(configs_dict['global_options']['ustar_threshold'],
-                      dict):
-            ustar_threshold = (configs_dict['global_options']
-                                           ['ustar_threshold']
-                                           [str(this_year)])
-        else:
-            ustar_threshold = configs_dict['global_options']['ustar_threshold']
-        
-        # Write ustar uncertainty for years to local variables
-        if isinstance(configs_dict['global_options']['ustar_uncertainty'],
-                      dict):
-            ustar_uncertainty = (configs_dict['global_options']
-                                             ['ustar_uncertainty']
-                                             [str(this_year)])
-        else:
-            ustar_uncertainty = (configs_dict['global_options']
-                                             ['ustar_uncertainty'])
-
-        # Generate a standard data dictionary; this will be overwritten if
-        # ustar uncertainty is set to True, but the reference value for NEE
-        # will be retained
-        this_dict = cp.deepcopy(years_data_dict[this_year])
-        bool_array = this_dict['Fsd'] < 5
-        miss_array = filt.subset_arraydict_on_nan(this_dict, 
-                                                  var_list = ['ustar',
-                                                              'PAR',
-                                                              'VPD',
-                                                              'TempC',
-                                                              'NEE_series'],
-                                                  condition = 'any',
-                                                  subset = False)
-        twin_array = np.array([all(rec) for rec in zip(bool_array, miss_array)])
-        temp_ustar_array = this_dict['ustar'][twin_array]
-        temp_NEE_array = this_dict['NEE_series'][twin_array]
-        filt_ustar_array = temp_ustar_array[~np.isnan(temp_NEE_array)]
-        max_ustar = np.percentile(filt_ustar_array, 
-                                  100 - re_configs_dict['minimum_pct_annual'])
-        print 'Maximum ustar for year ' + str(this_year) + ' is ' + str(round(max_ustar, 3))                          
 
         # Make an intermediate results dictionary
         interm_rslt_dict = init_interm_rslt_dict(num_trials,
@@ -451,10 +462,51 @@ def main(output_trial_results = True, output_plot = True):
                                                  do_random_uncertainty,
                                                  do_model_uncertainty)
 
+        # Make an intermediate summary dict
+        interm_summary_dict = {}
+        
+        # Write ustar thresholds and uncertainties for years to local variables
+        ustar_list = []
+        for var in ['ustar_threshold', 'ustar_uncertainty']:
+            if isinstance(configs_dict['global_options'][var], dict):
+                ustar_list.append(configs_dict['global_options']
+                                              [var][str(this_year)])
+            else:
+                ustar_list.append(configs_dict['global_options'][var])
+        ustar_threshold = ustar_list[0]    
+        ustar_uncertainty = ustar_list[1]
+            
+        # Generate a standard data dictionary; this will be overwritten if
+        # ustar uncertainty is set to True, but the reference value for NEE
+        # will be retained
+        this_dict = cp.deepcopy(years_data_dict[this_year])
+#        bool_array = np.array([all(rec) for rec in zip(this_dict['Fsd'] < 5, 
+#                                                       ~np.isnan(this_dict['NEE_series']))])
+#        max_ustar = np.percentile(this_dict['ustar'][bool_array],
+#                                  100 - re_configs_dict['minimum_pct_annual'])
+#        bool_array = this_dict['Fsd'] < 5
+#        miss_array = filt.subset_arraydict_on_nan(this_dict, 
+#                                                  var_list = ['ustar',
+#                                                              'PAR',
+#                                                              'VPD',
+#                                                              'TempC',
+#                                                              'NEE_series'],
+#                                                  condition = 'any',
+#                                                  subset = False)
+#        twin_array = np.array([all(rec) for rec in zip(bool_array, miss_array)])
+#        temp_ustar_array = this_dict['ustar'][twin_array]
+#        temp_NEE_array = this_dict['NEE_series'][twin_array]
+#        filt_ustar_array = temp_ustar_array[~np.isnan(temp_NEE_array)]
+#        max_ustar = np.percentile(filt_ustar_array, 
+#                                  100 - re_configs_dict['minimum_pct_annual'])
+#        print 'Maximum ustar for year ' + str(this_year) + ' is ' + str(round(max_ustar, 3))                          
+
         # Screen current dict copy using the best estimate of u_star threshold,
         # run model and calculate annual sum
         filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
         try:
+            if this_year == 2012:
+                pdb.set_trace()
             run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
         except Exception, e:
             print ('    - Excluding the year ' + str(this_year) + 
@@ -471,7 +523,7 @@ def main(output_trial_results = True, output_plot = True):
         #   3) add an empty array to keep NEE error due to ustar 
         if do_ustar_uncertainty:
             ustar_array = np.random.normal(loc = ustar_threshold,
-                                           scale = ustar_uncertainty,
+                                           scale = ustar_uncertainty / 2,
                                            size = num_trials)
             interm_rslt_dict['u_star'][:] = ustar_array
            
@@ -499,7 +551,7 @@ def main(output_trial_results = True, output_plot = True):
             if do_ustar_uncertainty:
                 this_dict = cp.deepcopy(years_data_dict[this_year])
                 ustar_threshold = ustar_array[this_trial]
-                if ustar_threshold > 0 and ustar_threshold < max_ustar:
+                if ustar_threshold > 0: # and ustar_threshold < max_ustar:
                     filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
                     try:
                         run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
