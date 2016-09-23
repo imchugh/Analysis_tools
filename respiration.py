@@ -391,6 +391,7 @@ def main(data_dict, configs_dict):
     # Partition the data into year and step pieces
     years_data_dict = dtf.get_year_window(data_dict,
                                           'date_time')
+
     step_data_dict = dtf.get_moving_window(data_dict, 
                                            'date_time', 
                                            configs_dict['window_size_days'],
