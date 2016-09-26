@@ -48,8 +48,9 @@ def regress_sigma_delta(data_dict, configs_dict):
         ws: 1m s^-1
     """      
     
-    print '\nCalculating random error regression coefficients'
-    print '------------------------------------------------\n'
+    print '\n------------------------------------------------'
+    print 'Calculating random error regression coefficients\n'
+
 
     # Calculate records per day from measurement interval
     recs_per_day = 1440 / configs_dict['measurement_interval']
@@ -99,22 +100,6 @@ def regress_sigma_delta(data_dict, configs_dict):
         pos_dict[var] = diff_dict[var][diff_dict['NEE_mean'] > 0]
     dict_list = [neg_dict, pos_dict]
 
-    # Report stats
-    num_pos = str(len(pos_dict['NEE_diff_abs']))
-    num_pos_per_bin = str(int(float(num_pos) / configs_dict['pos_averaging_bins']))
-    num_neg = str(len(neg_dict['NEE_diff_abs']))
-    num_neg_per_bin = str(int(float(num_neg) / configs_dict['neg_averaging_bins']))
-    print (passed_tuples +' of ' + total_tuples + 
-           ' available tuples passed difference constraints (Fsd < ' +
-           str(configs_dict['radiation_difference_threshold']) + 'Wm^-2, Ta < ' + 
-           str(configs_dict['temperature_difference_threshold']) + 
-           'C, ws < ' + str(configs_dict['windspeed_difference_threshold']) + 
-           'ms^-1):')
-    print ('    - ' + num_neg + ' records for NEE < 0 (' + num_neg_per_bin + 
-           ' records per bin)')
-    print ('    - ' + num_pos + ' records for NEE > 0 (' + num_pos_per_bin + 
-           ' records per bin)') 
-
     # Create arrays to takes results of quantile categorisation
     neg_array = np.empty([configs_dict['neg_averaging_bins'], 2])
     pos_array = np.empty([configs_dict['pos_averaging_bins'], 2])
@@ -144,6 +129,30 @@ def regress_sigma_delta(data_dict, configs_dict):
                                              this_array[:, 1]) 
         stats_dict[cond_list[i]] = {stats_list[stat]: linreg_stats_list[stat] 
                                     for stat in range(5)}
+
+    # Report stats
+    num_pos = str(len(pos_dict['NEE_diff_abs']))
+    num_pos_per_bin = str(int(float(num_pos) / configs_dict['pos_averaging_bins']))
+    num_neg = str(len(neg_dict['NEE_diff_abs']))
+    num_neg_per_bin = str(int(float(num_neg) / configs_dict['neg_averaging_bins']))
+    sub_tuple = (passed_tuples, total_tuples, 
+                 str(configs_dict['radiation_difference_threshold']),
+                 str(configs_dict['temperature_difference_threshold']),
+                 str(configs_dict['windspeed_difference_threshold']))
+    print ('{0} of {1} available tuples passed difference constraints (Fsd <{2}' \
+           'Wm^-2, Ta <{3}C, ws <{4}ms^-1):'.format(*sub_tuple))
+    print 'Statistics for NEE < 0: '
+    print ('    - {0} records ({1} records per bin)'.format(num_neg, 
+                                                            num_neg_per_bin))
+    l = [key + ': ' + str(np.round(stats_dict['neg'][key], 2)) 
+         for key in stats_dict['neg']]
+    print '    - ' + ', '.join(l)
+    print 'Statistics for NEE > 0: '
+    print ('    - {0} records ({1} records per bin)'.format(num_pos, 
+                                                            num_pos_per_bin))    
+    l = [key + ': ' + str(np.round(stats_dict['pos'][key], 2)) 
+         for key in stats_dict['pos']]
+    print '    - ' + ', '.join(l)
 
     # Combine pos and neg arrays
     combined_array = np.concatenate([neg_array, pos_array])
@@ -222,6 +231,9 @@ def regress_sigma_delta(data_dict, configs_dict):
     
     fig.tight_layout()
     plt.close()
+
+    print '\nDone!'
+    print '-------------------------------------------------\n'
 
     return fig, stats_dict, rslt_dict
 
