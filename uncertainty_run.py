@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import norm
 import matplotlib.gridspec as gridspec
 import warnings
+import logging
 import pdb
 
 # My modules
@@ -168,8 +169,15 @@ def run_model(data_dict, NEE_model, re_configs_dict, ps_configs_dict):
     
     if NEE_model == 'LT':    
         
-        re_rslt_dict, re_params_dict = re.main(data_dict, re_configs_dict)[0: 2]
-        ps_rslt_dict = ps.main(data_dict, ps_configs_dict, re_params_dict)[0]
+        try:
+            re_rslt_dict, re_params_dict = re.main(data_dict, 
+                                                   re_configs_dict)[0: 2]
+        except Exception:
+            raise
+        try:
+            ps_rslt_dict = ps.main(data_dict, ps_configs_dict, re_params_dict)[0]    
+        except Exception:
+            raise
         data_dict['NEE_model'] = ps_rslt_dict['GPP'] + ps_rslt_dict['Re']
         data_dict['NEE_filled'] = np.where(np.isnan(data_dict['NEE_series']),
                                            data_dict['NEE_model'],
@@ -328,6 +336,7 @@ def main(output_trial_results = True, output_plot = True):
     reload(filt)
     reload(re)
     reload(gf)
+    reload(dt_fm)
 
     #-----------------------------------
     # General preparation and formatting
@@ -375,7 +384,8 @@ def main(output_trial_results = True, output_plot = True):
                                                               ['ustar_uncertainty'])
 
     # Print stuff
-    print '\nRunning uncertainty analysis for:'
+    print '---------------------------------'
+    print 'Running uncertainty analysis for:'
     error_list = ['ustar', 'random', 'model']
     mode_count = 0
     for i, var in enumerate([do_ustar_uncertainty, do_random_uncertainty, 
@@ -390,6 +400,8 @@ def main(output_trial_results = True, output_plot = True):
                         'before proceeding!')
     print '---------------------------------'
 
+    # Open log file
+    logf = open('/home/imchugh/Documents', 'w')
 
     #-----------------
     # Data preparation
@@ -444,57 +456,153 @@ def main(output_trial_results = True, output_plot = True):
     years_array = np.array([date_.year for date_ in data_dict['date_time']])
     years_list = list(set(years_array))
 
-    # if doing ustar uncertainty, calculate the reference case
-    if do_ustar_uncertainty:
-        ref_dict = cp.deepcopy(data_dict)
-        filt.screen_low_ustar(ref_dict, ustar_threshold, noct_threshold)
-        run_model(ref_dict, NEE_model, re_configs_dict, ps_configs_dict)
-        year_sums_dict = {}
-        for this_year in years_list:
-            ind = years_array == this_year
-            year_sums_dict[this_year] = (ref_dict['NEE_filled'][ind] * 
-                                         measurement_interval * 
-                                         60 * 12 * 10**-6).sum()
+    # Calculate the reference case
+    this_dict = cp.deepcopy(data_dict)
+    filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
+    try:
+        run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
+    except Exception, e:
+        logf.write('Error in model optimisation - error message as '
+                   'follows: ', e)
+        print('Cannot proceed without model estimates... exiting')
+        return
+    year_sums_dict = {}
+    for this_year in years_list:
+        ind = years_array == this_year
+        year_sums_dict[this_year] = (this_dict['NEE_filled'][ind] * 
+                                     measurement_interval * 
+                                     60 * 12 * 10**-6).sum()
 
-    return year_sums_dict
+    # Create a results dictionary
+    final_rslt_dict = {this_year: init_interm_rslt_dict(num_trials,
+                                                        do_ustar_uncertainty,
+                                                        do_random_uncertainty,
+                                                        do_model_uncertainty)
+                       for this_year in years_list}
 
     # Get the t-statistic for the 95% CI
     t_stat = stats.t.ppf(0.975, num_trials)
-    
+
+    print '----------------------------'
+    print 'Starting uncertainty trials:',
+
+    # Do trials
     for this_trial in xrange(num_trials):
 
-        # Make a ustar dictionary then filter the data 
+        # Set first_pass flag to prevent repetitive assignment
+        first_pass = True if this_trial == 0 else False
+
+        # Print progress
+        if not this_trial == num_trials - 1:
+            print str(this_trial + 1),
+        else:
+            print str(this_trial + 1) + ' ... Done!'
+
+        # If doing ustar uncertainty, make a ustar dictionary by randomly 
+        # sampling from the normal distribution and scaling according to
+        # ustar threshold uncertainty
         if do_ustar_uncertainty:
+            z_score = np.random.normal(loc = 0, scale = 1, size = 1)[0]
             if isinstance(ustar_threshold, dict):
                 if not isinstance(ustar_uncertainty, dict):
                     raise Exception('ustar_threshold and ustar_uncertainty ' \
                                     'must be specified as same object type ' \
                                     'in configuration file! Exiting...')
-                this_ustar_dict = {}
-                z_score = np.random.normal(loc = 0, scale = 1, size = 1)
+                this_ustar = {}
                 for key in ustar_threshold.keys():
-                    this_ustar_dict[key] = (ustar_threshold[key] +
-                                            ustar_uncertainty[key] * z_score)
-                    
-        
-        # Write ustar thresholds and uncertainties for years to local variables
-        ustar_list = []
-        for var in ['ustar_threshold', 'ustar_uncertainty']:
-            if isinstance(configs_dict['global_options'][var], dict):
-                ustar_list.append(configs_dict['global_options']
-                                              [var][str(this_year)])
+                    this_ustar[key] = (ustar_threshold[key] +
+                                       ustar_uncertainty[key] / 2 * 
+                                       z_score)
+            elif isinstance(ustar_threshold, int):
+                if not isinstance(ustar_uncertainty, int):
+                    raise Exception('ustar_threshold and ustar_uncertainty ' \
+                                    'must be specified as same object type ' \
+                                    'in configuration file! Exiting...')
+                this_ustar = ustar_threshold + ustar_uncertainty * z_score
             else:
-                ustar_list.append(configs_dict['global_options'][var])
-        ustar_threshold = ustar_list[0]    
-        ustar_uncertainty = ustar_list[1]
+                raise Exception('ustar_threshold variable must be specified ' \
+                                'as type either dict or int in configuration ' \
+                                'file... exiting')
+        
+            # Make a copy of the data dictionary
+            this_dict = cp.deepcopy(data_dict)
             
+            # Screen low ustar then model and gap fill
+            filt.screen_low_ustar(this_dict, this_ustar, noct_threshold)
+            try:
+                run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
+            except Exception, e:
+                logf.write('Model optimisation for trial {0} failed with the '
+                           ' following message: ', e)
+                continue # Do the next trial
 
+            # If doing random uncertainty, screen out any estimates of 
+            # sigma_delta where there are no obs
+            if do_random_uncertainty: filter_sigma_delta(this_dict)
+            
+        # If not doing ustar uncertainty, just assign this_dict to data_dict
+        elif first_pass:
+                this_dict = data_dict
+                if do_random_uncertainty: filter_sigma_delta(this_dict)
+                first_pass = False
+                
+        # Create dataset separated into years
+        years_data_dict = dtf.subset_datayear_from_arraydict(this_dict, 
+                                                             'date_time')
+        
+        # Do calculations for each year
+        for this_year in years_list:
+            
+            if do_ustar_uncertainty:
+                final_rslt_dict[this_year]['u_star'] = this_ustar[str(this_year)]
+                final_rslt_dict[this_year]['ustar_error'][this_trial] = (
+                    year_sums_dict[this_year] - 
+                    (years_data_dict[this_year]['NEE_filled'] * 
+                     measurement_interval * 60 * 12 * 10**-6).sum())
 
-#
-#
-#    # Create dataset separated into years
-#    years_data_dict = dtf.subset_datayear_from_arraydict(data_dict, 
-#                                                          'date_time')   
+            split_dict = separate_night_day(years_data_dict[this_year], noct_threshold)
+
+            # For each of day and night
+            for cond in split_dict.keys():
+
+                # If including ustar uncertainty, write the available n to the 
+                # intermediate results dictionary for day and night; otherwise,
+                # just write it once (since available n won't vary if ustar
+                # doesn't)
+                if do_ustar_uncertainty:
+                    final_rslt_dict[this_year]['obs_avail_' + cond][this_trial] = (
+                        len(split_dict[cond]['NEE_series']
+                                [~np.isnan(split_dict[cond]['NEE_series'])]))
+                else:
+                    if first_pass:
+                        final_rslt_dict[this_year]['obs_avail_' + cond][:] = (
+                            len(split_dict[cond]['NEE_series']
+                                    [~np.isnan(split_dict[cond]['NEE_series'])]))
+                    
+                # Do the random error and write to correct position in 
+                # intermediate results dict
+                if do_random_uncertainty:
+                    sig_del_array = (split_dict[cond]['sigma_delta']
+                                     [~np.isnan(split_dict[cond]['sigma_delta'])])
+                    error_array = rand_err.estimate_random_error(sig_del_array)                
+                    final_rslt_dict[this_year]['random_error_' + cond][this_trial] = (
+                        error_array.sum() * configs_dict['measurement_interval'] 
+                                          * 60 * 12 * 10 ** -6)
+
+                # Do the model error and write to correct position in 
+                # intermediate results dict
+                if do_model_uncertainty:
+                    sub_dict = cp.deepcopy(split_dict[cond])
+                    final_rslt_dict[this_year]['model_error_' + cond][this_trial] = (
+                        mod_err.estimate_model_error(sub_dict, 
+                                                     mod_err_configs_dict))    
+
+    # Output plots
+    if output_plot:
+        plot_data(final_rslt_dict)
+
+    return final_rslt_dict
+            
 #
 #    # Create a results dictionary
 #    final_rslt_dict = {}
@@ -508,8 +616,6 @@ def main(output_trial_results = True, output_plot = True):
 #    
 #    # Do the uncertainty analysis for each year        
 #    for this_year in years:
-#
-#        print 'Running analysis for year ' + str(this_year) + ':'
 #
 #        # Make an intermediate results dictionary
 #        interm_rslt_dict = init_interm_rslt_dict(num_trials,
