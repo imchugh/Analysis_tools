@@ -554,7 +554,8 @@ def main(output_trial_results = True, output_plot = True):
         for this_year in years_list:
             
             if do_ustar_uncertainty:
-                final_rslt_dict[this_year]['u_star'] = this_ustar[str(this_year)]
+                final_rslt_dict[this_year]['u_star'][this_trial] = (
+                    this_ustar[str(this_year)])
                 final_rslt_dict[this_year]['ustar_error'][this_trial] = (
                     year_sums_dict[this_year] - 
                     (years_data_dict[this_year]['NEE_filled'] * 
