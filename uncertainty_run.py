@@ -225,16 +225,24 @@ def plot_data(data_d):
     for this_year in data_d.keys():
     
         this_d = data_d[this_year]    
-    
-        ustar_err = this_d['ustar_error'][~np.isnan(this_d['ustar_error'])]    
+
+        error_list = []        
+        for key in ['ustar_error', 'random_error_day', 'model_error_day']:
+            if key in this_d.keys(): error_list.append(key)
+            
+        if 'ustar_error' in error_list:
+            ustar_err = this_d['ustar_error'][~np.isnan(this_d['ustar_error'])]    
         
-        rand_err = this_d['random_error_day'] + this_d['random_error_night']
-        rand_err = rand_err[~np.isnan(this_d['ustar_error'])]
+        if 'random_error_day' in error_list:
+            rand_err = this_d['random_error_day'] + this_d['random_error_night']
+
+        if 'model_error_day' in error_list:        
+            mod_err = this_d['model_error_day'] + this_d['model_error_night']
         
-        mod_err = this_d['model_error_day'] + this_d['model_error_night']
-        mod_err = mod_err[~np.isnan(this_d['ustar_error'])]
-        
-        total_err = rand_err + mod_err + ustar_err
+        total_err = rand_err.copy() + mod_err.copy() + ustar_err
+
+        rand_err = rand_err + ustar_err.mean()
+        mod_err = mod_err + ustar_err.mean()
     
         labels = ['total', 'model', 'random', 'ustar']
         colors = ['grey', 'magenta', 'cyan', 'blue']
@@ -256,12 +264,13 @@ def plot_data(data_d):
         ax2 = plt.subplot(gs[1])
     
         # Set up the first subplot
-        ax1.set_xlabel('$Uncertainty\/(\mu mol\/CO_2\/m^{-2}s^{-1})$',
+        ax1.set_xlabel('$Uncertainty\/(g\/C\/m^{-2}a^{-1})$',
                       fontsize=18)
         ax1.set_ylabel('$Frequency$', fontsize=18)
         ax1.tick_params(axis = 'y', labelsize = 14)
         ax1.tick_params(axis = 'x', labelsize = 14)
-        ax1.axvline(0, color = 'black', linewidth = 2, linestyle = '--')
+        ax1.axvline(mu_dict['total'], color = 'black', 
+                    linewidth = 2, linestyle = '--')
         ax1.xaxis.set_ticks_position('bottom')
         ax1.yaxis.set_ticks_position('left')
         ax1.spines['right'].set_visible(False)
@@ -401,7 +410,7 @@ def main(output_trial_results = True, output_plot = True):
     print '---------------------------------'
 
     # Open log file
-    logf = open('/home/imchugh/Documents', 'w')
+    logf = open('/home/imchugh/Documents/log.txt', 'w')
 
     #-----------------
     # Data preparation
@@ -457,21 +466,21 @@ def main(output_trial_results = True, output_plot = True):
     years_list = list(set(years_array))
 
     # Calculate the reference case
-    this_dict = cp.deepcopy(data_dict)
-    filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
-    try:
-        run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
-    except Exception, e:
-        logf.write('Error in model optimisation - error message as '
-                   'follows: ', e)
-        print('Cannot proceed without model estimates... exiting')
-        return
-    year_sums_dict = {}
-    for this_year in years_list:
-        ind = years_array == this_year
-        year_sums_dict[this_year] = (this_dict['NEE_filled'][ind] * 
-                                     measurement_interval * 
-                                     60 * 12 * 10**-6).sum()
+#    this_dict = cp.deepcopy(data_dict)
+#    filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
+#    try:
+#        run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
+#    except Exception, e:
+#        logf.write('Error in model optimisation - error message as '
+#                   'follows: ' + e[0])
+#        print('Cannot proceed without model estimates... exiting')
+#        return
+#    year_sums_dict = {}
+#    for this_year in years_list:
+#        ind = years_array == this_year
+#        year_sums_dict[this_year] = (this_dict['NEE_filled'][ind] * 
+#                                     measurement_interval * 
+#                                     60 * 12 * 10**-6).sum()
 
     # Create a results dictionary
     final_rslt_dict = {this_year: init_interm_rslt_dict(num_trials,
@@ -533,7 +542,7 @@ def main(output_trial_results = True, output_plot = True):
                 run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
             except Exception, e:
                 logf.write('Model optimisation for trial {0} failed with the '
-                           ' following message: ', e)
+                           ' following message: ' + e[0] + '\n')
                 continue # Do the next trial
 
             # If doing random uncertainty, screen out any estimates of 
@@ -543,6 +552,7 @@ def main(output_trial_results = True, output_plot = True):
         # If not doing ustar uncertainty, just assign this_dict to data_dict
         elif first_pass:
                 this_dict = data_dict
+                filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
                 if do_random_uncertainty: filter_sigma_delta(this_dict)
                 first_pass = False
                 
@@ -556,10 +566,13 @@ def main(output_trial_results = True, output_plot = True):
             if do_ustar_uncertainty:
                 final_rslt_dict[this_year]['u_star'][this_trial] = (
                     this_ustar[str(this_year)])
-                final_rslt_dict[this_year]['ustar_error'][this_trial] = (
-                    year_sums_dict[this_year] - 
-                    (years_data_dict[this_year]['NEE_filled'] * 
-                     measurement_interval * 60 * 12 * 10**-6).sum())
+                NEE_annual_sum = (years_data_dict[this_year]['NEE_filled'] * 
+                                  measurement_interval * 60 * 12 * 10**-6).sum()
+                final_rslt_dict[this_year]['ustar_error'][this_trial] = NEE_annual_sum
+#                final_rslt_dict[this_year]['ustar_error'][this_trial] = (
+#                    year_sums_dict[this_year] - 
+#                    (years_data_dict[this_year]['NEE_filled'] * 
+#                     measurement_interval * 60 * 12 * 10**-6).sum())
 
             split_dict = separate_night_day(years_data_dict[this_year], noct_threshold)
 
@@ -585,22 +598,35 @@ def main(output_trial_results = True, output_plot = True):
                 if do_random_uncertainty:
                     sig_del_array = (split_dict[cond]['sigma_delta']
                                      [~np.isnan(split_dict[cond]['sigma_delta'])])
-                    error_array = rand_err.estimate_random_error(sig_del_array)                
+                    error_array = rand_err.estimate_random_error(sig_del_array)
+                    random_annual_sum = (error_array.sum() * 
+                                         measurement_interval
+                                         * 60 * 12 * 10 ** -6)
+#                    if do_ustar_uncertainty:
+#                        random_annual_sum = random_annual_sum + NEE_annual_sum
                     final_rslt_dict[this_year]['random_error_' + cond][this_trial] = (
-                        error_array.sum() * configs_dict['measurement_interval'] 
-                                          * 60 * 12 * 10 ** -6)
+                        random_annual_sum)
+#                    final_rslt_dict[this_year]['random_error_' + cond][this_trial] = (
+#                        error_array.sum() * measurement_interval
+#                                          * 60 * 12 * 10 ** -6)
 
                 # Do the model error and write to correct position in 
                 # intermediate results dict
                 if do_model_uncertainty:
                     sub_dict = cp.deepcopy(split_dict[cond])
+                    model_annual_sum = mod_err.estimate_model_error(
+                                           sub_dict, mod_err_configs_dict)
+#                    if do_ustar_uncertainty:
+#                        model_annual_sum = model_annual_sum + NEE_annual_sum
                     final_rslt_dict[this_year]['model_error_' + cond][this_trial] = (
-                        mod_err.estimate_model_error(sub_dict, 
-                                                     mod_err_configs_dict))    
+                        model_annual_sum)
+#                    final_rslt_dict[this_year]['model_error_' + cond][this_trial] = (
+#                        mod_err.estimate_model_error(sub_dict, 
+#                                                     mod_err_configs_dict))    
 
     # Output plots
-    if output_plot:
-        plot_data(final_rslt_dict)
+#    if output_plot:
+#        plot_data(final_rslt_dict)
 
     return final_rslt_dict
             
