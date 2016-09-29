@@ -194,7 +194,8 @@ def calculate_Eo(data_dict,
             
     # Fill gaps 
     if np.all(np.isnan(Eo_annual_data_dict.values())):
-        raise Exception('Could not find any values of Eo for selected year(s)! Exiting...')
+        raise Exception('Could not find any values of Eo for selected year(s)! ' \
+                        'See below for ... stuff here ... Exiting...')
     if np.any(np.isnan(Eo_annual_data_dict.values())):
         Eo_mean = np.array([Eo_annual_data_dict[year] for year in Eo_pass_keys]).mean()    
         for year in Eo_fail_keys:
