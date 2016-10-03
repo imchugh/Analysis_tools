@@ -208,7 +208,7 @@ def slide_IQR_filter(data_array, outlier_value = 2, window_size = 11,
         return
         
 # Remove low ustar values
-def screen_low_ustar(data_dict, ustar_threshold, noct_threshold):
+def screen_low_ustar(data_dict, ustar_threshold, noct_threshold, filter_day = False):
 
     if isinstance(ustar_threshold, dict):
         years_data_dict = dtf.subset_datayear_from_arraydict(data_dict, 'date_time')
@@ -233,13 +233,24 @@ def screen_low_ustar(data_dict, ustar_threshold, noct_threshold):
         for this_year in years_data_dict.keys():
             this_threshold = ustar_threshold[str(this_year)]
             this_NEE = years_data_dict[this_year]['NEE_series']
-            this_NEE[(years_data_dict[this_year]['ustar'] < this_threshold) &
-                     (years_data_dict[this_year]['Fsd'] < noct_threshold)] = np.nan
+            this_ustar = years_data_dict[this_year]['ustar']
+            this_Fsd = years_data_dict[this_year]['Fsd']
+            if filter_day:
+                this_NEE[this_ustar < this_threshold] = np.nan
+            else:
+                this_NEE[(this_ustar < this_threshold) &
+                         (this_Fsd < noct_threshold)] = np.nan
             data_list.append(this_NEE)
         data_dict['NEE_series'] = np.concatenate(data_list)
     elif isinstance(ustar_threshold, (float, int)):
-        data_dict['NEE_series'][(data_dict['ustar'] < ustar_threshold) &
-                                (data_dict['Fsd'] < noct_threshold)] = np.nan
+        this_NEE = data_dict['NEE_series']
+        this_ustar = data_dict['ustar']
+        this_Fsd = data_dict['Fsd']
+        if filter_day:
+            this_NEE[this_ustar < ustar_threshold] = np.nan            
+        else:
+            this_NEE[(this_ustar < ustar_threshold) &
+                     (this_Fsd < noct_threshold)] = np.nan
     else:
         raise TypeError('ustar_threshold object must be dtype float or dict!' \
                         'Please edit your configuration file')
@@ -283,4 +294,11 @@ def check_missing_data(data_dict, var_list = False):
                 print '    - ' + var + ' is missing ' + str(count) + ' records;' 
     
     return
+
+def test(d, filter_day = False):
     
+    if filter_day:
+        d['NEE_series'][d['ustar']<0.42] = np.nan
+    else:
+        d['NEE_series'][(d['ustar']<0.42) & (d['Fsd']<5)] = np.nan        
+    return
