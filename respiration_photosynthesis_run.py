@@ -86,7 +86,7 @@ def build_config_file(configs_master_dict, do_light_response):
     
 #------------------------------------------------------------------------------    
 def main(use_storage = 'from_config', storage_var = 'from_config',
-         ustar_threshold = 'from_config', 
+         ustar_threshold = 'from_config', ustar_filter_day = 'from_config',
          config_file = False, 
          do_light_response = False):
     """
@@ -140,6 +140,14 @@ def main(use_storage = 'from_config', storage_var = 'from_config',
                             'dictionary of numbers (year[int] as key, ' \
                             'threshold [float] as value)! Quitting...')
 
+    # Override default configuration file ustar_threshold if requested by user
+    if not ustar_filter_day == 'from_config':
+        if isinstance(ustar_filter_day, bool):
+            configs_dict['global_options']['ustar_filter_day'] = ustar_filter_day
+        else:
+            raise Exception('ustar_filter_day kwarg must be a boolean if not' \
+                            'set to from_config! Quitting...')
+
     # Sum Fc and Sc if storage is to be included, otherwise if requested, 
     # remove all Fc where Sc is missing
     if configs_dict['global_options']['use_storage']:
@@ -149,11 +157,13 @@ def main(use_storage = 'from_config', storage_var = 'from_config',
 #        data_dict['NEE_series'][np.isnan(data_dict['Sc'])] = np.nan
         data_dict['NEE_series'][np.isnan(data_dict['filter_var'])] = np.nan
 
-    # Remove low ustar data
+    # Remove low ustar data                            
     data_filter.screen_low_ustar(data_dict, 
                                  configs_dict['global_options']['ustar_threshold'],
-                                 configs_dict['global_options']['noct_threshold'])     
-    
+                                 configs_dict['global_options']['noct_threshold'],
+                                 filter_day = configs_dict['global_options']
+                                                          ['ustar_filter_day'])
+
     # Set up respiration configs and add measurement interval and output path
     re_configs_dict = configs_master_dict['respiration_configs']['options']
     re_configs_dict['measurement_interval'] = int(attr['time_step'])
