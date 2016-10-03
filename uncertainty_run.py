@@ -213,126 +213,264 @@ def plot_data(data_d):
     Pass a dictionary containing the following key / value pairs:
     keys: year(int or str) / values: dictionary containing following 
     key / value pairs: 
-    keys: 'ustar_error', 'model_error_day', 'model_error_night', 
+    keys: 'ustar', 'ustar_error', 'model_error_day', 'model_error_night', 
     'random_error_day' and 'random_error_night' as keys / values: equal length 
     numpy arrays (may contain np.nan - will be filtered)
     """
+#    
+#    key_id_list = [isinstance(key, int) for key in data_d.keys()]    
+#    if not all(key_id_list):
+#        raise Exception('Expected integer years as outer dictionary key!')    
     
-    key_id_list = [isinstance(key, int) for key in data_d.keys()]    
-    if not all(key_id_list):
-        raise Exception('Expected integer years as outer dictionary key!')
-    
-    for this_year in data_d.keys():
-    
-        this_d = data_d[this_year]    
+    error_list = list(set([key.split('_')[0] for 
+                           key in data_d.keys() if 'error' in key]))
 
-        error_list = []        
-        for key in ['ustar_error', 'random_error_day', 'model_error_day']:
-            if key in this_d.keys(): error_list.append(key)
+    results_d = {}
+    
+    if 'ustar' in error_list:
+        results_d['ustar'] = data_d['ustar_error']
+    
+    if 'random' in error_list:
+        results_d['random'] = (data_d['random_error_day'] + 
+                               data_d['random_error_night'])
+
+    if 'model' in error_list:
+        results_d['model'] = (data_d['model_error_day'] + 
+                              data_d['model_error_night'])
+
+    if len(error_list) > 1: 
+        results_d['total'] = np.zeros(len(results_d['ustar']))
+        for var in error_list:
+            results_d['total'] = results_d['total'] + results_d[var]        
+        bool_array = ~np.isnan(results_d['total'])
+        error_list.append('total')
+        for var in error_list:
+            results_d[var] = results_d[var][bool_array]
+
+
+#    results_d['random'] = results_d['random'] + results_d['ustar'].mean()
+#    results_d['model'] = results_d['model'] + results_d['ustar'].mean()
+
+    colors_d = {'total': 'grey',
+                'ustar': 'blue',
+                'random': 'cyan',
+                'model': 'magenta'}
+
+    pos_d = {'total': 0.9,
+             'ustar': 0,
+             'random': 0.3,
+             'model': 0.6}
+
+    # Do the stats
+    mu_dict = {}
+    sig_dict = {}
+    for var in error_list:
+        mu_dict[var] = results_d[var].mean()
+        sig_dict[var] = results_d[var].std()
+
+    # Create the plot
+    fig = plt.figure(figsize = (12, 10))
+    fig.patch.set_facecolor('white')
+    gs = gridspec.GridSpec(2, 1, height_ratios=[4,1.5])
+    ax1 = plt.subplot(gs[0])
+    ax2 = plt.subplot(gs[1])
+
+    # Set up the first subplot
+    ax1.set_xlabel('$Uncertainty\/(g\/C\/m^{-2}a^{-1})$',
+                  fontsize=18)
+    ax1.set_ylabel('$Frequency$', fontsize=18)
+    ax1.tick_params(axis = 'y', labelsize = 14)
+    ax1.tick_params(axis = 'x', labelsize = 14)
+    ax1.axvline(mu_dict['total'], color = 'black', 
+                linewidth = 2, linestyle = '--')
+    ax1.xaxis.set_ticks_position('bottom')
+    ax1.yaxis.set_ticks_position('left')
+    ax1.spines['right'].set_visible(False)
+    ax1.spines['top'].set_visible(False)
+    
+    # Plot the histogram
+    for var in error_list:
+        print var
+        if var == 'total':
+            ec = 'none'
+            fc = colors_d[var]
+            htype = 'bar'
+            al = 0.5
+        else:
+            ec = colors_d[var]
+            fc = 'none'
+            htype = 'step'
+            al = 1
+        ax1.hist(results_d[var], 50, facecolor = fc, edgecolor = ec,
+                 orientation = 'vertical', label = var, 
+                 histtype = htype, normed = True, alpha = al)
+    ax1.legend(loc='upper right', frameon = False)
+
+    # Plot the normal distribution
+    xmin, xmax = ax1.get_xlim()
+    x = np.linspace(xmin, xmax, 100)
+    p = stats.norm.pdf(x, mu_dict['total'], sig_dict['total'])
+    ax1.plot(x, p, color = 'black')
+
+    # Set up the second plot
+    ax2.axes.get_yaxis().set_visible(False)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['left'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.xaxis.set_ticks_position('bottom')
+    ax2.set_xticklabels([])                    
+    ax2.set_xlim(ax1.get_xlim())
+    ax2.set_ylim([0, 1])
+    the_buffer = 0.12
+    
+    # Plot the confidence intervals
+    for var in error_list:
+        if var == 'ustar': continue
+        ax2.plot((mu_dict[var] - sig_dict[var] * 2, 
+                  mu_dict[var] + sig_dict[var] * 2), 
+                 (pos_d[var], pos_d[var]), color = colors_d[var], linewidth = 2)
+        ax2.plot(mu_dict[var] - sig_dict[var] * 2, pos_d[var], 
+                 marker = '|', color = colors_d[var], markersize = 10, mew = 2)
+        ax2.plot(mu_dict[var] + sig_dict[var] * 2, pos_d[var], 
+                 marker = '|', color = colors_d[var], markersize = 10,
+                 mew = 2)
+        ax2.plot(mu_dict[var], pos_d[var], 
+                 marker = 'o', color = colors_d[var], markersize = 10,
+                 mec = 'none')
+        ax2.text(mu_dict[var] - sig_dict[var] * 2, pos_d[var] - the_buffer, 
+                 str(round(mu_dict[var] - sig_dict[var] * 2, 1)),
+                 verticalalignment = 'center',
+                 horizontalalignment = 'center',
+                 fontsize = 14)
+        ax2.text(mu_dict[var] + sig_dict[var] * 2, pos_d[var] - the_buffer, 
+                 str(round(mu_dict[var] + sig_dict[var] * 2, 1)),
+                 verticalalignment = 'center',
+                 horizontalalignment = 'center',
+                 fontsize = 14)
+
+    plt.show()
+    
+    return
             
-        if 'ustar_error' in error_list:
-            ustar_err = this_d['ustar_error'][~np.isnan(this_d['ustar_error'])]    
-        
-        if 'random_error_day' in error_list:
-            rand_err = this_d['random_error_day'] + this_d['random_error_night']
+#        if i == 0:
+#            ax1.hist(total_err, 50, facecolor = colors[i], edgecolor = 'none',
+#                     orientation = 'vertical', label = labels[i], normed = True)
+#        else:
+#            ax1.hist(var, 50, facecolor = 'none', edgecolor = colors[i], 
+#                     histtype = 'step', orientation = 'vertical',
+#                     label = labels[i], normed = True)
+#    ax1.legend(loc='upper right', frameon = False)
 
-        if 'model_error_day' in error_list:        
-            mod_err = this_d['model_error_day'] + this_d['model_error_night']
-        
-        total_err = rand_err.copy() + mod_err.copy() + ustar_err
+#    this_d = data_d
+#
+#    error_list = []        
+#    for key in ['ustar_error', 'random_error_day', 'model_error_day']:
+#        if key in this_d.keys(): error_list.append(key)
+#        
+#    if 'ustar_error' in error_list:
+#        ustar_err = this_d['ustar_error']    
+#    
+#    if 'random_error_day' in error_list:
+#        rand_err = this_d['random_error_day'] + this_d['random_error_night']
+#
+#    if 'model_error_day' in error_list:        
+#        mod_err = this_d['model_error_day'] + this_d['model_error_night']
+    
+#    total_err = rand_err.copy() + mod_err.copy() + ustar_err
+#
+#    rand_err = rand_err + ustar_err.mean()
+#    mod_err = mod_err + ustar_err.mean()
+#
 
-        rand_err = rand_err + ustar_err.mean()
-        mod_err = mod_err + ustar_err.mean()
-    
-        labels = ['total', 'model', 'random', 'ustar']
-        colors = ['grey', 'magenta', 'cyan', 'blue']
-        pos = [0.9, 0.6, 0.3, 0]
-    
-        # Do the stats
-        mu_dict = {}
-        sig_dict = {}
-        this_list = [total_err, mod_err, rand_err, ustar_err]
-        for i, this_one in enumerate(this_list):
-            mu_dict[labels[i]] = this_one.mean()
-            sig_dict[labels[i]] = this_one.std()
-                
-        # Create the plot
-        fig = plt.figure(figsize = (12, 10))
-        fig.patch.set_facecolor('white')
-        gs = gridspec.GridSpec(2, 1, height_ratios=[4,1.5])
-        ax1 = plt.subplot(gs[0])
-        ax2 = plt.subplot(gs[1])
-    
-        # Set up the first subplot
-        ax1.set_xlabel('$Uncertainty\/(g\/C\/m^{-2}a^{-1})$',
-                      fontsize=18)
-        ax1.set_ylabel('$Frequency$', fontsize=18)
-        ax1.tick_params(axis = 'y', labelsize = 14)
-        ax1.tick_params(axis = 'x', labelsize = 14)
-        ax1.axvline(mu_dict['total'], color = 'black', 
-                    linewidth = 2, linestyle = '--')
-        ax1.xaxis.set_ticks_position('bottom')
-        ax1.yaxis.set_ticks_position('left')
-        ax1.spines['right'].set_visible(False)
-        ax1.spines['top'].set_visible(False)
-        
-        # Plot the histogram
-        for i, var in enumerate(this_list):
-            if i == 0:
-                ax1.hist(total_err, 50, facecolor = colors[i], edgecolor = 'none',
-                         orientation = 'vertical', label = labels[i], normed = True)
-            else:
-                ax1.hist(var, 50, facecolor = 'none', edgecolor = colors[i], 
-                         histtype = 'step', orientation = 'vertical',
-                         label = labels[i], normed = True)
-        ax1.legend(loc='upper right', frameon = False)
+#    labels = ['total', 'model', 'random', 'ustar']
+#    colors = ['grey', 'magenta', 'cyan', 'blue']
+#    pos = [0.9, 0.6, 0.3, 0]
+#
+#    # Do the stats
+#    mu_dict = {}
+#    sig_dict = {}
+#    this_list = [total_err, mod_err, rand_err, ustar_err]
+#    for i, this_one in enumerate(this_list):
+#        mu_dict[labels[i]] = this_one.mean()
+#        sig_dict[labels[i]] = this_one.std()
+            
+    # Create the plot
+    fig = plt.figure(figsize = (12, 10))
+    fig.patch.set_facecolor('white')
+    gs = gridspec.GridSpec(2, 1, height_ratios=[4,1.5])
+    ax1 = plt.subplot(gs[0])
+    ax2 = plt.subplot(gs[1])
 
-        # Put year in plot
-        xmin, xmax = ax1.get_xlim()
-        ymin, ymax = ax1.get_ylim()
-        ax1.text(xmin + (xmax - xmin) / 10, ymax - (ymax - ymin) / 20, 
-                 str(this_year), fontsize = 20)
+    # Set up the first subplot
+    ax1.set_xlabel('$Uncertainty\/(g\/C\/m^{-2}a^{-1})$',
+                  fontsize=18)
+    ax1.set_ylabel('$Frequency$', fontsize=18)
+    ax1.tick_params(axis = 'y', labelsize = 14)
+    ax1.tick_params(axis = 'x', labelsize = 14)
+    ax1.axvline(mu_dict['total'], color = 'black', 
+                linewidth = 2, linestyle = '--')
+    ax1.xaxis.set_ticks_position('bottom')
+    ax1.yaxis.set_ticks_position('left')
+    ax1.spines['right'].set_visible(False)
+    ax1.spines['top'].set_visible(False)
     
-        # Plot the normal distribution
-        x = np.linspace(xmin, xmax, 100)
-        p = stats.norm.pdf(x, mu_dict['total'], sig_dict['total'])
-        ax1.plot(x, p, color = 'black')
+    # Plot the histogram
+    for i, var in enumerate(this_list):
+        if i == 0:
+            ax1.hist(total_err, 50, facecolor = colors[i], edgecolor = 'none',
+                     orientation = 'vertical', label = labels[i], normed = True)
+        else:
+            ax1.hist(var, 50, facecolor = 'none', edgecolor = colors[i], 
+                     histtype = 'step', orientation = 'vertical',
+                     label = labels[i], normed = True)
+    ax1.legend(loc='upper right', frameon = False)
+
+    # Put year in plot
+    xmin, xmax = ax1.get_xlim()
+    ymin, ymax = ax1.get_ylim()
+    ax1.text(xmin + (xmax - xmin) / 10, ymax - (ymax - ymin) / 20, 
+             str(this_year), fontsize = 20)
+
+    # Plot the normal distribution
+    x = np.linspace(xmin, xmax, 100)
+    p = stats.norm.pdf(x, mu_dict['total'], sig_dict['total'])
+    ax1.plot(x, p, color = 'black')
+
+    # Set up the second plot
+    ax2.axes.get_yaxis().set_visible(False)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['left'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.xaxis.set_ticks_position('bottom')
+    ax2.set_xticklabels([])                    
+    ax2.set_xlim(ax1.get_xlim())
+    ax2.set_ylim([0, 1])
+    the_buffer = 0.12
     
-        # Set up the second plot
-        ax2.axes.get_yaxis().set_visible(False)
-        ax2.spines['top'].set_visible(False)
-        ax2.spines['left'].set_visible(False)
-        ax2.spines['right'].set_visible(False)
-        ax2.xaxis.set_ticks_position('bottom')
-        ax2.set_xticklabels([])                    
-        ax2.set_xlim(ax1.get_xlim())
-        ax2.set_ylim([0, 1])
-        the_buffer = 0.12
-        
-        # Plot the confidence intervals
-        for i, this_one in enumerate(labels[:-1]):
-            ax2.plot((mu_dict[this_one] - sig_dict[this_one] * 2, 
-                      mu_dict[this_one] + sig_dict[this_one] * 2), 
-                     (pos[i], pos[i]), color = colors[i], linewidth = 2)
-            ax2.plot(mu_dict[this_one] - sig_dict[this_one] * 2, pos[i], 
-                     marker = '|', color = colors[i], markersize = 10,
-                     mew = 2)
-            ax2.plot(mu_dict[this_one] + sig_dict[this_one] * 2, pos[i], 
-                     marker = '|', color = colors[i], markersize = 10,
-                     mew = 2)
-            ax2.plot(mu_dict[this_one], pos[i], 
-                     marker = 'o', color = colors[i], markersize = 10,
-                     mec = 'none')
-            ax2.text(mu_dict[this_one] - sig_dict[this_one] * 2, pos[i] - the_buffer, 
-                     str(round(mu_dict[this_one] - sig_dict[this_one] * 2, 1)),
-                     verticalalignment = 'center',
-                     horizontalalignment = 'center',
-                     fontsize = 14)
-            ax2.text(mu_dict[this_one] + sig_dict[this_one] * 2, pos[i] - the_buffer, 
-                     str(round(mu_dict[this_one] + sig_dict[this_one] * 2, 1)),
-                     verticalalignment = 'center',
-                     horizontalalignment = 'center',
-                     fontsize = 14)
+    # Plot the confidence intervals
+    for i, this_one in enumerate(labels[:-1]):
+        ax2.plot((mu_dict[this_one] - sig_dict[this_one] * 2, 
+                  mu_dict[this_one] + sig_dict[this_one] * 2), 
+                 (pos[i], pos[i]), color = colors[i], linewidth = 2)
+        ax2.plot(mu_dict[this_one] - sig_dict[this_one] * 2, pos[i], 
+                 marker = '|', color = colors[i], markersize = 10,
+                 mew = 2)
+        ax2.plot(mu_dict[this_one] + sig_dict[this_one] * 2, pos[i], 
+                 marker = '|', color = colors[i], markersize = 10,
+                 mew = 2)
+        ax2.plot(mu_dict[this_one], pos[i], 
+                 marker = 'o', color = colors[i], markersize = 10,
+                 mec = 'none')
+        ax2.text(mu_dict[this_one] - sig_dict[this_one] * 2, pos[i] - the_buffer, 
+                 str(round(mu_dict[this_one] - sig_dict[this_one] * 2, 1)),
+                 verticalalignment = 'center',
+                 horizontalalignment = 'center',
+                 fontsize = 14)
+        ax2.text(mu_dict[this_one] + sig_dict[this_one] * 2, pos[i] - the_buffer, 
+                 str(round(mu_dict[this_one] + sig_dict[this_one] * 2, 1)),
+                 verticalalignment = 'center',
+                 horizontalalignment = 'center',
+                 fontsize = 14)
     
     return    
 
