@@ -82,9 +82,9 @@ def get_ephem_solar(data_dict, lat, lon, alt, GMT_zone, return_var = 'zenith'):
 
     # Convert to dates if user wants sunrise or sunset times
     if time_bool:
+#        UTC_datetime = np.unique(np.array([this_date.date() for 
+#                                           this_date in UTC_datetime]))
         UTC_datetime = np.unique(np.array([this_date.date() for 
-                                           this_date in UTC_datetime]))
-        my_datetime = np.unique(np.array([this_date.date() for 
                                           this_date in date_time]))
 
     # Get data for each date_time
@@ -107,7 +107,7 @@ def get_ephem_solar(data_dict, lat, lon, alt, GMT_zone, return_var = 'zenith'):
             this_time = dt.time(h, mins, int(s))
             var_list[i] = (dt.datetime.combine(dt.date.today(), this_time) + 
                            dt.timedelta(hours = GMT_zone)).time()
-        return {'date': my_datetime,
+        return {'date': UTC_datetime,
                 return_var: np.array(var_list)}
     else:
         out_array = np.array(var_list)
