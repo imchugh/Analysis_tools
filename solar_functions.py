@@ -78,12 +78,8 @@ def get_ephem_solar(data_dict, lat, lon, alt, GMT_zone, return_var = 'zenith'):
     except:
         UTC_datetime = np.array([UTC_datetime, ])
 
-#    pdb.set_trace()
-
     # Convert to dates if user wants sunrise or sunset times
     if time_bool:
-#        UTC_datetime = np.unique(np.array([this_date.date() for 
-#                                           this_date in UTC_datetime]))
         UTC_datetime = np.unique(np.array([this_date.date() for 
                                           this_date in date_time]))
 

@@ -379,7 +379,7 @@ def main(data_dict, configs_dict):
                                        each day (including whether the value is 
                                        interpolated or calculated)                    
     """
-    
+
     # Create boolean indices for masking daytime and nan values
     night_mask = data_dict['Fsd'] < 5
     nan_mask = filt.subset_arraydict_on_nan(data_dict,

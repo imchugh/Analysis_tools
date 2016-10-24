@@ -5,12 +5,9 @@ Created on Fri Oct  7 16:36:26 2016
 @author: imchugh
 """
 
-import pdb
-import os
 import numpy as np
 import datetime as dt
 from suds.client import *
-import matplotlib.pyplot as plt
 import datetime as dt
 
 def get_MODIS_subset(lat, lon, product, data_band, QC_band, 
