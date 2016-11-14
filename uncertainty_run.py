@@ -546,6 +546,7 @@ def main(output_trial_results = True, output_plot = True):
             filt.screen_low_ustar(this_dict, this_ustar, noct_threshold)
             try:
                 run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
+                pdb.set_trace()
             except Exception, e:
                 logf.write('Model optimisation for trial {0} failed with the '
                            ' following message: ' + e[0] + '\n')

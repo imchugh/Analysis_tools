@@ -13,6 +13,7 @@ import pandas as pd
 import datetime as dt
 import ast
 import csv
+import os
 import pdb
 
 def ask_question_dialog(header, question):
@@ -228,6 +229,40 @@ def config_to_dict(file_in):
     cf.walk(this_funct)
 
     return cf  
+
+def build_algorithm_configs_dict(config_file_location, algorithm):
+
+    """
+    Pass: 1) configuration file location (str; if None will start file open dialog);
+          2) algorithm for which to fetch configurations (str)
+    Returns: configuration file containing three subdicts (files, options, 
+                                                           variables)
+    """
+
+    if config_file_location == None: 
+        config_file_location == file_select_dialog()
+    
+    configs_master_dict = config_to_dict(config_file_location)
+    combined_dict = {}
+    combined_dict['options'] = configs_master_dict['global_configs']['options']
+    combined_dict['options'].update(configs_master_dict[algorithm]['options'])
+    combined_dict['variables'] = configs_master_dict[algorithm]['variables']
+    combined_dict['files'] = {}
+    combined_dict['files']['in_file'] = os.path.join(configs_master_dict
+                                                     ['global_configs']['files']
+                                                     ['input_path'],
+                                                     configs_master_dict
+                                                     ['global_configs']['files']
+                                                     ['input_file'])
+    split_list = algorithm.split('_')
+    if 'configs' in split_list: split_list.remove('configs')
+    folder_name = '_'.join(split_list)
+    combined_dict['files']['out_path'] = os.path.join(configs_master_dict
+                                                      ['global_configs']
+                                                      ['files']['output_path'],
+                                                      folder_name)
+    
+    return combined_dict
     
 def dict_to_csv(data_dict, outfile, keyorder = False):
     """

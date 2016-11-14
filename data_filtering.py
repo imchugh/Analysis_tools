@@ -181,7 +181,6 @@ def slide_IQR_filter(data_array, outlier_value = 1.5, window_size = 11,
     rslt_index_int = int(window_size / 2)
     for i in iter_array:
         this_array = data_array[i: i + window_size]
-        pdb.set_trace()
         lo_qtl = np.percentile(this_array, 25)
         hi_qtl = np.percentile(this_array, 75)
         qtl_range = hi_qtl - lo_qtl
