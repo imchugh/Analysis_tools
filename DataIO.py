@@ -313,6 +313,43 @@ def array_dict_to_csv(data_dict, outfile, keyorder = False):
             writer.writerow(arr[i, :])
             
     return
+
+# Fetch data from configurations
+def get_data(configs_dict, apply_QC_to = None):
+
+    # Get data (screen Fc data to obs only - keep gap-filled drivers etc)
+    data_input_target = configs_dict['files']['input_file']
+   
+    ext = os.path.splitext(data_input_target)[1]
+    if ext == '.nc':
+        Fc_dict = io.OzFluxQCnc_to_data_structure(data_input_target,
+                                                  var_list = [configs_dict['variables']
+                                                                          ['carbon_flux']],
+                                                  QC_accept_codes = [0])
+        Fc_dict.pop('date_time')
+        ancillary_vars = [configs_dict['variables'][var] for var in 
+                          configs_dict['variables'] if not var == 'carbon_flux']
+        ancillary_dict, attr = io.OzFluxQCnc_to_data_structure(
+                                   data_input_target,
+                                   var_list = ancillary_vars,
+                                   return_global_attr = True)
+        data_dict = dict(Fc_dict, **ancillary_dict)
+    elif ext == '.df':
+        data_dict, attr = io.DINGO_df_to_data_structure(data_input_target,
+                              var_list = configs_dict['variables'].values(),
+                              return_global_attr = True)
+
+    # Rename to generic names used by scripts
+    old_names_dict = configs_dict['variables']
+    std_names_dict = dt_fm.standard_names_dictionary()
+    try:
+        new_dict = {std_names_dict[key]: data_dict[old_names_dict[key]] 
+                    for key in old_names_dict.keys()}
+        new_dict['date_time'] = data_dict.pop('date_time')
+    except:
+        raise Exception()
+    
+    return new_dict, attr
         
 def text_dict_to_text_file(write_dict, outfile):        
         
