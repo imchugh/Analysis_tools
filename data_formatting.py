@@ -80,19 +80,26 @@ def rename_data_dict_vars(data_dict, names_dict, pass_through = True):
         
     return new_dict
 
-def standard_names_dictionary():
-    
-    return {'carbon_flux':'NEE_series',
-            'carbon_storage': 'Sc',
-            'temperature': 'TempC',
-            'solar_radiation': 'Fsd',
-            'vapour_pressure_deficit': 'VPD',
-            'friction_velocity': 'ustar',
-            'wind_speed': 'ws',
-            'modelled_carbon_flux': 'NEE_model',
-            'soil_moisture': 'Sws',
-            'generic': 'filter_var'}
+def get_standard_names(convert_dict = None):
 
+    standard_names_dict = {'carbon_flux':'NEE_series',
+                           'carbon_storage': 'Sc',
+                           'temperature': 'TempC',
+                           'solar_radiation': 'Fsd',
+                           'vapour_pressure_deficit': 'VPD',
+                           'friction_velocity': 'ustar',
+                           'wind_speed': 'ws',
+                           'modelled_carbon_flux': 'NEE_model',
+                           'soil_moisture': 'Sws',
+                           'generic': 'filter_var'}
+    
+    if convert_dict == None:
+        return standard_names_dict
+    else:
+        return {convert_dict[key]: standard_names_dict[key] 
+                for key in convert_dict.keys()}
+
+            
 # Get the data and format appropriately
 def get_data(configs_dict):
 

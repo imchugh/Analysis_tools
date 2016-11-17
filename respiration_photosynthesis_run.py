@@ -36,7 +36,7 @@ def get_data(configs_dict):
         Fc_dict = io.OzFluxQCnc_to_data_structure(data_input_target,
                                                   var_list = [configs_dict['variables']
                                                                           ['carbon_flux']],
-                                                  QC_accept_codes = [0])
+                                                  QC_accept_code = 0)
         Fc_dict.pop('date_time')
         ancillary_vars = [configs_dict['variables'][var] for var in 
                           configs_dict['variables'] if not var == 'carbon_flux']
