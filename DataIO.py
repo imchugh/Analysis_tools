@@ -73,24 +73,36 @@ def OzFluxQCnc_add_variable(append_file, data_array, var_attr_dict):
 #------------------------------------------------------------------------------
 def OzFluxQCnc_to_data_structure(file_in, 
                                  var_list = None,
+                                 QC_var_list = None,
+                                 QC_accept_code = 0,
                                  fill_missing_with_nan = True,
                                  output_structure = None,
-                                 QC_accept_codes = [],
                                  return_global_attr = False,
                                  return_QC = False):
 
     """
     Pass the following args: 1) valid file path to .nc file \n
-    Optional kwargs: 1) 'var_list' - list of variable name strings
+    Optional kwargs: 1) 'var_list' - a list of name strings specifying the 
+                        variables to be returned (a string will be accepted in 
+                        place of a list if only a single variable is required);
+                        if omitted, all variables are returned
+                     2) 'QC_var_list' - list of QC variable name strings 
+                        specifying which of the variables in var_list are to be
+                        filtered on the basis of QC flags (a string will be 
+                        accepted if only a single variable is to be filtered); 
+                        if set to False or None, no QC is run; if specified 
+                        variables are not in var_list they are ignored; 
+                        if set to True, all variables in var_list are filtered
+                     4) 'QC_accept_code' - if list contains numbers, finds the
+                         QC_flag corresponding to the desired variables and 
+                         screens out all records where the flag doesn't equal 
+                         the accept code                        
                      2) 'fill_missing_with_nan' - fill any record containing
                          the missing data placeholder [-9999 for OzFluxQC] 
                          with nan
                      3) 'output_structure' - if None returns dict by default, 
                          if 'pandas' then returns pandas DataFrame
-                     4) 'QC_accept_codes' - if list contains numbers, finds the
-                         QC_flag corresponding to the desired variables and 
-                         screens out all records where the flag doesn't equal 
-                         the accept code
+
                      5) 'return_global_attr' - return global attributes as a dict
                      6) 'return_QC' - if variable list is unspecified, returns
                         QC variables as well as primary variables (if var_list
@@ -102,6 +114,7 @@ def OzFluxQCnc_to_data_structure(file_in,
     
     """
 
+    # Function to handle different dims
     def get_var_from_nc(nc_obj, var):
         
         ndims = len(nc_obj.variables[var].shape)
@@ -109,35 +122,77 @@ def OzFluxQCnc_to_data_structure(file_in,
             return nc_obj.variables[var][:, 0, 0]
         elif ndims == 1:
             return nc_obj.variables[var][:]
-        
+    
+    # Create nc object and data dictionary    
     nc_obj=netCDF4.Dataset(file_in)
+    data_dict = {}
+    
+    # Get dates
     dates_array = netCDF4.num2date(nc_obj.variables['time'][:], 
                                    'days since 1800-01-01 00:00:00')
-
-    data_dict = {'date_time': dates_array}
+    data_dict['date_time'] = dates_array
     attr_dict = nc_obj.__dict__
 
-    data_var_list = [var for var in nc_obj.variables.keys() if not 'QCFlag' in var]
-    QC_var_list = [var for var in nc_obj.variables.keys() if 'QCFlag' in var]
-
-    if var_list == None:
-        if return_QC:
-            var_list = data_var_list + QC_var_list
-        else:
-            var_list = data_var_list
+    # Create variable list (all variables if not specified in var_list); 
+    # otherwise check if vars specified are found in file)
+    if var_list == None: 
+        var_list = nc_obj.variables.keys()
     else:
-        if not isinstance(var_list, list): var_list = [var_list]
+        if not isinstance(var_list, list): 
+            if isinstance(var_list, str):
+                var_list = [var_list]
+            else:
+                raise Exception('var_list kwarg must be of type list or string!')
+        miss_var_list = [var for var in var_list if not var in 
+                          nc_obj.variables.keys()]
+        if len(var_list) == 0:
+            raise Exception('None of the variables specified in the variable ' 
+                            'list were found in the target file!')
+        elif len(miss_var_list) != 0:
+            var_list = [var for var in var_list if not var in miss_var_list]
+            print ('The following variables were not found in the target '
+                   'file, and have been skipped: {0}'
+                   .format(', '.join(miss_var_list)))
 
-    # Iterate through vars
+    # Create QC variable list and check: 1) the list is of appropriate format
+    #                                    2) the list contains variables in the 
+    #                                       first list (or a boolean set to True)
+    #                                    3) the variables specified in the list
+    #                                       have a corresponding Qc variable
+    if not QC_var_list == None:
+        if not isinstance(QC_var_list, list):
+            if isinstance(QC_var_list, str):
+                QC_var_list = [QC_var_list]
+            elif isinstance(QC_var_list, bool):
+                if QC_var_list == True:
+                    QC_var_list = [var for var in var_list if not 'QCFlag' in var]
+            else:
+                raise Exception('QC_var_list kwarg must be of type list, '
+                                'string or boolean!')
+        miss_QC_var_list = [var for var in QC_var_list if not var in var_list]
+        if len(miss_QC_var_list) != 0:
+            QC_var_list = [var for var in QC_var_list if not var in miss_QC_var_list]
+            print ('The following variables will not be QC-filtered because '
+                   'they are not in the variable list for import: {0}'
+                   .format(', '.join(miss_QC_var_list)))
+        no_QC_var_list = [var for var in QC_var_list if not var + '_QCFlag' in 
+                          nc_obj.variables.keys()]
+        if not len(no_QC_var_list) == 0:
+            QC_var_list = [var for var in QC_var_list if not var in no_QC_var_list]
+            print ('The following variables will not be QC-filtered because '
+                   'no matching QC variable was found in the target file: {0}'
+                   .format(', '.join(no_QC_var_list)))
+
+    # Check valid value for QC_accept_code
+    if not isinstance(QC_accept_code, int):
+        raise Exception('kwarg QC_accept_code must be an integer')
+            
+    # Iterate through vars            
     for var in var_list:
-
-        if not var in nc_obj.variables.keys():
-            print 'Variable ' + var + ' was not found in specified target file'
-            continue
-
-        # Check dimensions and get data from variable
-        arr = get_var_from_nc(nc_obj, var)
         
+        # Check dimensions and get data from variable
+        arr = get_var_from_nc(nc_obj, var)            
+            
         # Check if returned masked array; if so, fill and replace with nan 
         # (if specified by user)
         if isinstance(arr, np.ma.core.MaskedArray):
@@ -148,27 +203,19 @@ def OzFluxQCnc_to_data_structure(file_in,
                     arr[arr == -9999] = np.nan
         except AttributeError:
             continue
-        
-        # If user has specified flag-dependent data screening, then do (unless
-        # var is a QC var)
-        if QC_accept_codes:
-            if not 'QC' in var:
-                QC_var = var + '_QCFlag'
-                if QC_var in QC_var_list:
-                    QC_arr = get_var_from_nc(nc_obj, QC_var)
-                    new_arr = np.empty(len(arr))
-                    new_arr[:] = np.nan
-                    for code in QC_accept_codes:
-                        new_arr[QC_arr == code] = arr[QC_arr == code]
-                    arr = new_arr
-                else:
-                    print 'Missing QC variable for variable ' + var
-        
-        # Add to dict
-        data_dict[var] = arr
-        
-    nc_obj.close()
 
+        # Do QC if required
+        if not QC_var_list == None:
+            if var in QC_var_list:
+                QC_var = var + '_QCFlag'
+                QC_arr = get_var_from_nc(nc_obj, QC_var)
+                arr[QC_arr != QC_accept_code] = np.nan
+
+        # Add var to dictionary
+        data_dict[var] = arr
+
+    nc_obj.close()
+    
     if output_structure == 'pandas':
         data_structure = pd.DataFrame(data_dict, index = dates_array)
         data_structure.drop('date_time', axis = 1, inplace = True)
@@ -179,6 +226,69 @@ def OzFluxQCnc_to_data_structure(file_in,
         return data_structure, attr_dict
     else:
         return data_structure
+
+#    data_var_list = [var for var in nc_obj.variables.keys() if not 'QCFlag' in var]
+#    QC_var_list = [var for var in nc_obj.variables.keys() if 'QCFlag' in var]
+#
+#    if var_list == None:
+#        if return_QC:
+#            var_list = data_var_list + QC_var_list
+#        else:
+#            var_list = data_var_list
+#    else:
+#        if not isinstance(var_list, list): var_list = [var_list]
+#
+#    # Iterate through vars
+#    for var in var_list:
+#
+#        if not var in nc_obj.variables.keys():
+#            print 'Variable ' + var + ' was not found in specified target file'
+#            continue
+#
+#        # Check dimensions and get data from variable
+#        arr = get_var_from_nc(nc_obj, var)
+#        
+#        # Check if returned masked array; if so, fill and replace with nan 
+#        # (if specified by user)
+#        if isinstance(arr, np.ma.core.MaskedArray):
+#            arr = arr.filled()
+#        try:
+#            if arr.dtype == 'float64':
+#                if fill_missing_with_nan:
+#                    arr[arr == -9999] = np.nan
+#        except AttributeError:
+#            continue
+#        
+#        # If user has specified flag-dependent data screening, then do (unless
+#        # var is a QC var)
+#        if QC_accept_codes:
+#            if not 'QC' in var:
+#                QC_var = var + '_QCFlag'
+#                if QC_var in QC_var_list:
+#                    QC_arr = get_var_from_nc(nc_obj, QC_var)
+#                    new_arr = np.empty(len(arr))
+#                    new_arr[:] = np.nan
+#                    for code in QC_accept_codes:
+#                        new_arr[QC_arr == code] = arr[QC_arr == code]
+#                    arr = new_arr
+#                else:
+#                    print 'Missing QC variable for variable ' + var
+#        
+#        # Add to dict
+#        data_dict[var] = arr
+#        
+#    nc_obj.close()
+#
+#    if output_structure == 'pandas':
+#        data_structure = pd.DataFrame(data_dict, index = dates_array)
+#        data_structure.drop('date_time', axis = 1, inplace = True)
+#    else:
+#        data_structure = data_dict
+#
+#    if return_global_attr:
+#        return data_structure, attr_dict
+#    else:
+#        return data_structure
 
 #------------------------------------------------------------------------------
 def DINGO_df_to_data_structure(file_in, 
@@ -315,7 +425,7 @@ def array_dict_to_csv(data_dict, outfile, keyorder = False):
     return
 
 # Fetch data from configurations
-def get_data(configs_dict, apply_QC_to = None):
+def get_data_ozflux(configs_dict, apply_QC_to = None):
 
     # Get data (screen Fc data to obs only - keep gap-filled drivers etc)
     data_input_target = configs_dict['files']['input_file']
