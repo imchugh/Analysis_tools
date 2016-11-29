@@ -91,6 +91,7 @@ def get_standard_names(convert_dict = None):
                            'wind_speed': 'ws',
                            'modelled_carbon_flux': 'NEE_model',
                            'soil_moisture': 'Sws',
+                           'soil_temperature': 'Ts',
                            'generic': 'filter_var'}
     
     if convert_dict == None:
