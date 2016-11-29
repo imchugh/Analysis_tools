@@ -52,7 +52,7 @@ def get_data(configs_dict):
 
     # Rename to generic names used by scripts
     old_names_dict = configs_dict['variables']
-    std_names_dict = dt_fm.standard_names_dictionary()
+    std_names_dict = dt_fm.get_standard_names()
     try:
         new_dict = {std_names_dict[key]: data_dict[old_names_dict[key]] 
                     for key in old_names_dict.keys()}
@@ -88,7 +88,7 @@ def build_config_file(configs_master_dict, do_light_response):
 def main(use_storage = 'from_config', storage_var = 'from_config',
          ustar_threshold = 'from_config', ustar_filter_day = 'from_config',
          config_file = False, 
-         do_light_response = False):
+         do_light_response = True):
     """
     No positional arguments - prompts for a configuration file
     Kwargs: use_storage - if True then algorithm looks for a variable called 
