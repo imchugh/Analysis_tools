@@ -672,7 +672,7 @@ def main(data_dict, configs_dict, params_out_dict):
                              configs_dict,
                              params_in_dict,
                              params_out_dict)
-    
+
     # Estimate Re and GPP for all data
     rslt_dict = estimate_GPP_Re(data_dict,
                                 params_out_dict,

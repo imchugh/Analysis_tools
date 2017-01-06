@@ -97,8 +97,12 @@ def get_standard_names(convert_dict = None):
     if convert_dict == None:
         return standard_names_dict
     else:
-        return {convert_dict[key]: standard_names_dict[key] 
-                for key in convert_dict.keys()}
+        new_dict = {}
+        for key in standard_names_dict.keys():
+            if key in convert_dict.keys():
+                new_dict[convert_dict[key]] = standard_names_dict[key]
+            
+        return new_dict
 
             
 # Get the data and format appropriately

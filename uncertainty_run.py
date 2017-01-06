@@ -16,6 +16,7 @@ import matplotlib.gridspec as gridspec
 import warnings
 import logging
 import pdb
+import datetime as dt
 
 # My modules
 import DataIO as io
@@ -41,7 +42,7 @@ def get_data(configs_dict):
         Fc_dict = io.OzFluxQCnc_to_data_structure(data_input_target,
                                                   var_list = [configs_dict['variables']
                                                                           ['carbon_flux']],
-                                                  QC_accept_codes = [0])
+                                                  QC_accept_code = 0)
         Fc_dict.pop('date_time')
         ancillary_vars = [configs_dict['variables'][var] for var in 
                           configs_dict['variables'] if not var == 'carbon_flux']
@@ -58,7 +59,7 @@ def get_data(configs_dict):
 
     # Rename to generic names used by scripts
     old_names_dict = configs_dict['variables']
-    std_names_dict = dt_fm.standard_names_dictionary()
+    std_names_dict = dt_fm.get_standard_names()
     map_names_dict = {old_names_dict[key]: std_names_dict[key] 
                       for key in old_names_dict}
     data_dict = dt_fm.rename_data_dict_vars(data_dict, map_names_dict)
@@ -435,6 +436,8 @@ def main(output_trial_results = True, output_plot = True):
     # Open log file
     logf = open('/home/imchugh/Documents/log.txt', 'w')
 
+    
+    
     #-----------------
     # Data preparation
     #-----------------
@@ -462,6 +465,8 @@ def main(output_trial_results = True, output_plot = True):
 
     if do_random_uncertainty:
 
+        NEE_temp = cp.deepcopy(data_dict['NEE_series'])
+        
         # Generate initial model series for Re and GPP then combine
         # (note: low u* data is left in intentionally)
         run_model(data_dict, NEE_model, re_configs_dict, ps_configs_dict)
@@ -478,7 +483,11 @@ def main(output_trial_results = True, output_plot = True):
                             (data_dict[rand_err_configs_dict['propagation_series']], 
                              stats_dict))
         data_dict['sigma_delta'] = sig_del_array
-
+        
+        data_dict['NEE_series'] = NEE_temp
+    
+    filt.screen_low_ustar(data_dict, ustar_threshold, noct_threshold, configs_dict['global_options']['ustar_filter_day'])
+    run_model(data_dict, NEE_model, re_configs_dict, ps_configs_dict)
 
     #---------------------
     # Uncertainty analysis
@@ -543,10 +552,9 @@ def main(output_trial_results = True, output_plot = True):
             this_dict = cp.deepcopy(data_dict)
             
             # Screen low ustar then model and gap fill
-            filt.screen_low_ustar(this_dict, this_ustar, noct_threshold)
+            filt.screen_low_ustar(this_dict, this_ustar, noct_threshold, True)
             try:
                 run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
-                pdb.set_trace()
             except Exception, e:
                 logf.write('Model optimisation for trial {0} failed with the '
                            ' following message: ' + e[0] + '\n')
@@ -561,7 +569,6 @@ def main(output_trial_results = True, output_plot = True):
                 this_dict = data_dict
                 filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
                 if do_random_uncertainty: filter_sigma_delta(this_dict)
-                first_pass = False
                 
         # Create dataset separated into years
         years_data_dict = dtf.subset_datayear_from_arraydict(this_dict, 
@@ -596,6 +603,8 @@ def main(output_trial_results = True, output_plot = True):
                         final_rslt_dict[this_year]['obs_avail_' + cond][:] = (
                             len(split_dict[cond]['NEE_series']
                                     [~np.isnan(split_dict[cond]['NEE_series'])]))
+                    else:
+                        first_pass = False
                     
                 # Do the random error and write to correct position in 
                 # intermediate results dict
