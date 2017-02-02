@@ -8,11 +8,30 @@ Created on Wed Jan  6 12:05:16 2016
 import os
 import numpy as np
 import pdb
+import warnings
 
 # My modules
 import DataIO as io
 import data_filtering as filt
+import logging
 
+def custom_warning(message,
+                   category = UserWarning,
+                   filename = '',
+                   lineno = -1):
+    
+    """
+    Just cleans up the warning output to screen so that none of the code is
+    printed with the warning (i.e. just the string!)
+    """
+    
+    print(message)
+
+def send_warnings_to_log(message, category, filename, lineno, file=None):
+    logging.warning('{0}:{1}: {2}:{3}'.format(filename, lineno, 
+                                              category.__name__, message))
+    return    
+    
 def get_model_NEE_from_OzFluxQCncL6(f):
     """
     Builds a continuous time series (i.e. day and night) from OzFluxQC L6

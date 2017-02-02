@@ -29,6 +29,8 @@ import respiration as re
 import photosynthesis as ps
 import gap_filling as gf
 
+
+
 #------------------------------------------------------------------------------
 # Fetch data from configurations
 def get_data(configs_dict):
@@ -62,6 +64,7 @@ def get_data(configs_dict):
     std_names_dict = dt_fm.get_standard_names()
     map_names_dict = {old_names_dict[key]: std_names_dict[key] 
                       for key in old_names_dict}
+#    pdb.set_trace()
     data_dict = dt_fm.rename_data_dict_vars(data_dict, map_names_dict)
 
         
@@ -95,16 +98,17 @@ def build_config_file(configs_master_dict):
 def check_data_consistency(data_dict):
     
     warnings.simplefilter('always')
+#    warnings.showwarning = dt_fm.custom_warning
     for var in ['Fsd', 'ustar']:
         
         flag_index = np.where(~np.isnan(data_dict['NEE_series']) & 
                               np.isnan(data_dict[var]))
         count_str = str(len(flag_index[0]))
         if not len(flag_index[0]) == 0:
-            warnings.warn('There are %s' %count_str + ' instances where NEE ' 
-                          'element contains valid data and %s' %var + ' element ' 
-                          'is not a number - NEE values for these ' 
-                          'instances will be excluded from analysis!')
+            warnings.warn('There are {0} instances where NEE element contains '
+                          'valid data and {1} element is not a number - NEE '
+                          'values for these instances will be excluded from '
+                          'analysis!'.format(count_str, var))
         data_dict['NEE_series'][flag_index] = np.nan
 
 #------------------------------------------------------------------------------
@@ -113,6 +117,8 @@ def check_data_consistency(data_dict):
 def check_driver_consistency(data_dict):
     
     warnings.simplefilter('always')
+#    warnings.showwarning = dt_fm.custom_warning
+
     arr = np.array([])
     for var in ['Fsd', 'TempC', 'VPD']:
         
@@ -121,10 +127,10 @@ def check_driver_consistency(data_dict):
         arr = np.concatenate([arr, flag_index[0]])
         count_str = str(len(flag_index[0]))                              
         if not len(flag_index[0]) == 0:
-            warnings.warn('There are %s' %count_str + ' instances where neither ' \
-                          'the NEE nor model driver %s' %var + ' element ' \
-                          'contains valid data - model estimates cannot be ' \
-                          'calculated for these instances!')
+            warnings.warn('There are {0} instances where neither the NEE nor '
+                          'model driver {1} element contains valid data - '
+                          'model estimates cannot be calculated for these '
+                          'instances!'.format(count_str, var))
         data_dict['NEE_series'][flag_index] = np.nan        
     arr = np.unique(arr)
     if not len(arr) == 0:
@@ -154,7 +160,7 @@ def init_interm_rslt_dict(num_trials, do_ustar, do_random, do_model):
 
     var_list = ['obs_avail_day', 'obs_avail_night']
     if do_ustar:
-        var_list = var_list + ['u_star', 'ustar_error']
+        var_list = var_list + ['ustar', 'ustar_error']
     if do_random:
         var_list = var_list + ['random_error_day', 'random_error_night']
     if do_model:
@@ -291,7 +297,6 @@ def plot_data(data_d):
     
     # Plot the histogram
     for var in error_list:
-        print var
         if var == 'total':
             ec = 'none'
             fc = colors_d[var]
@@ -355,14 +360,13 @@ def plot_data(data_d):
                      horizontalalignment = 'center',
                      fontsize = 14)
             
+    return fig
 
-    plt.show()
+def main(output_trial_results = True, 
+         output_plot = True):  
     
-    return
-            
-def main(output_trial_results = True, output_plot = True):    
-
     # Update
+    reload(logging)
     reload(rand_err)
     reload(mod_err)
     reload(io)
@@ -370,7 +374,28 @@ def main(output_trial_results = True, output_plot = True):
     reload(re)
     reload(gf)
     reload(dt_fm)
-
+    
+    # Set plotting to off
+    if plt.isinteractive():
+        is_on = True
+        plt.ioff()
+    else:
+        is_on = False
+    
+    #---------------------------------
+    # Logging setup and initialisation
+    #---------------------------------
+    
+    log_dir = os.path.join(os.path.expanduser('~'), 'Uncertainty')
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    log_file = 'log.txt'
+    full_fname = os.path.join(log_dir, log_file)
+    logging.basicConfig(filename = full_fname, level = logging.DEBUG)
+    time_str = dt.datetime.strftime(dt.datetime.now(), '%Y-%m-%d %H:%M:%S')
+    logging.info('\nRunning uncertainty analysis: {}\n'.format(time_str))
+    warnings.showwarning = dt_fm.send_warnings_to_log
+            
     #-----------------------------------
     # General preparation and formatting
     #-----------------------------------
@@ -386,6 +411,7 @@ def main(output_trial_results = True, output_plot = True):
 
     # Build required configuration files for imported scripts (random error,
     # model error, respiration, light response)
+    
     rand_err_configs_dict = configs_master_dict['random_error_configs']['options']
     mod_err_configs_dict = configs_master_dict['model_error_configs']['options']
     re_configs_dict = configs_master_dict['respiration_configs']['options']
@@ -432,11 +458,6 @@ def main(output_trial_results = True, output_plot = True):
                         'uncertainty source to True in configuration file ' \
                         'before proceeding!')
     print '---------------------------------'
-
-    # Open log file
-    logf = open('/home/imchugh/Documents/log.txt', 'w')
-
-    
     
     #-----------------
     # Data preparation
@@ -453,7 +474,7 @@ def main(output_trial_results = True, output_plot = True):
     # Convert insolation to PPFD for light response calculations
     data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6       
 
-    # Check no NEE values with missing ustar values
+    # Check no NEE values with missing ustar or Fsd values
     check_data_consistency(data_dict)
 
     # Check no drivers missing where NEE is missing
@@ -483,7 +504,6 @@ def main(output_trial_results = True, output_plot = True):
                             (data_dict[rand_err_configs_dict['propagation_series']], 
                              stats_dict))
         data_dict['sigma_delta'] = sig_del_array
-        
         data_dict['NEE_series'] = NEE_temp
     
     filt.screen_low_ustar(data_dict, ustar_threshold, noct_threshold, configs_dict['global_options']['ustar_filter_day'])
@@ -509,16 +529,30 @@ def main(output_trial_results = True, output_plot = True):
 
     print '----------------------------'
     print 'Starting uncertainty trials:',
-
+    
+    # If there are > 100 trials, create arrays for percentiles
+    if num_trials > 100:
+        percentile_array = np.linspace(0, 95, 20)
+        num_array = (np.round(percentile_array / 100 
+                              * num_trials)).astype(int)
+    
     # Do trials
     for this_trial in xrange(num_trials):
 
+        logging.info('\nRunning trial #: {0}\n'.format(str(this_trial)))
+        
         # Set first_pass flag to prevent repetitive assignment
         first_pass = True if this_trial == 0 else False
 
         # Print progress
         if not this_trial == num_trials - 1:
-            print str(this_trial + 1),
+            if num_trials <= 100:
+                print str(this_trial + 1) + ',',
+            else:
+                if this_trial in num_array:
+                    this_pctl = int(percentile_array[np.where(num_array == 
+                                                              this_trial)])
+                    print str(this_pctl) + '%,',
         else:
             print str(this_trial + 1) + ' ... Done!'
 
@@ -552,13 +586,19 @@ def main(output_trial_results = True, output_plot = True):
             this_dict = cp.deepcopy(data_dict)
             
             # Screen low ustar then model and gap fill
-            filt.screen_low_ustar(this_dict, this_ustar, noct_threshold, True)
+            a = len(this_dict['NEE_series'][(this_dict['Fsd'] < 5) & (~np.isnan(this_dict['NEE_series']))])
+            filt.screen_low_ustar(this_dict, this_ustar, noct_threshold, configs_dict['global_options']['ustar_filter_day'])
+            b = len(this_dict['NEE_series'][(this_dict['Fsd'] < 5) & (~np.isnan(this_dict['NEE_series']))])
+            print 'Before filtering, there are {0} valid nocturnal values, afterwards there are {1}'.format(str(a), str(b))
             try:
                 run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
+                fail_flag = False
             except Exception, e:
-                logf.write('Model optimisation for trial {0} failed with the '
-                           ' following message: ' + e[0] + '\n')
-                continue # Do the next trial
+                warnings.warn('Model optimisation for trial {0} failed with '
+                              'the following message: {1}\n'.format(str(this_trial), 
+                                                                    e[0]))
+                fail_flag = True
+#                continue # Do the next trial
 
             # If doing random uncertainty, screen out any estimates of 
             # sigma_delta where there are no obs
@@ -578,11 +618,12 @@ def main(output_trial_results = True, output_plot = True):
         for this_year in years_list:
             
             if do_ustar_uncertainty:
-                final_rslt_dict[this_year]['u_star'][this_trial] = (
-                    this_ustar[str(this_year)])
-                NEE_annual_sum = (years_data_dict[this_year]['NEE_filled'] * 
-                                  measurement_interval * 60 * 12 * 10**-6).sum()
-                final_rslt_dict[this_year]['ustar_error'][this_trial] = NEE_annual_sum
+                if not fail_flag:
+                    final_rslt_dict[this_year]['ustar'][this_trial] = (
+                        this_ustar[str(this_year)])
+                    NEE_annual_sum = (years_data_dict[this_year]['NEE_filled'] * 
+                                      measurement_interval * 60 * 12 * 10**-6).sum()
+                    final_rslt_dict[this_year]['ustar_error'][this_trial] = NEE_annual_sum
 
             # Split the dictionary into day and night and calculate the uncertainty for each
             split_dict = separate_night_day(years_data_dict[this_year], noct_threshold)
@@ -606,33 +647,42 @@ def main(output_trial_results = True, output_plot = True):
                     else:
                         first_pass = False
                     
-                # Do the random error and write to correct position in 
-                # intermediate results dict
-                if do_random_uncertainty:
-                    sig_del_array = (split_dict[cond]['sigma_delta']
-                                     [~np.isnan(split_dict[cond]['sigma_delta'])])
-                    error_array = rand_err.estimate_random_error(sig_del_array)
-                    random_annual_sum = (error_array.sum() * 
-                                         measurement_interval
-                                         * 60 * 12 * 10 ** -6)
-                    final_rslt_dict[this_year]['random_error_' + cond][this_trial] = (
-                        random_annual_sum)
-
-                # Do the model error and write to correct position in 
-                # intermediate results dict
-                if do_model_uncertainty:
-                    sub_dict = cp.deepcopy(split_dict[cond])
-                    model_annual_sum = mod_err.estimate_model_error(
-                                           sub_dict, mod_err_configs_dict)
-                    final_rslt_dict[this_year]['model_error_' + cond][this_trial] = (
-                        model_annual_sum)
-
+                if not fail_flag:
+                            
+                    # Do the random error and write to correct position in 
+                    # intermediate results dict
+                    if do_random_uncertainty:
+                        sig_del_array = (split_dict[cond]['sigma_delta']
+                                         [~np.isnan(split_dict[cond]['sigma_delta'])])
+                        error_array = rand_err.estimate_random_error(sig_del_array)
+                        random_annual_sum = (error_array.sum() * 
+                                             measurement_interval
+                                             * 60 * 12 * 10 ** -6)
+                        final_rslt_dict[this_year]['random_error_' + cond][this_trial] = (
+                            random_annual_sum)
+        
+                    # Do the model error and write to correct position in 
+                    # intermediate results dict
+                    if do_model_uncertainty:
+                        sub_dict = cp.deepcopy(split_dict[cond])
+                        model_annual_sum = mod_err.estimate_model_error(
+                                               sub_dict, mod_err_configs_dict)
+                        final_rslt_dict[this_year]['model_error_' + cond][this_trial] = (
+                            model_annual_sum)
+                    
     # Output plots
     if output_plot:
+        plot_dict = {}
         for year in final_rslt_dict.keys():
             try:
-                plot_data(final_rslt_dict[year])
+                plot_dict[year] = plot_data(final_rslt_dict[year])
             except:
                 continue
 
-    return final_rslt_dict
+    if is_on:
+        plt.ion()                    
+    
+    if output_plot:
+        return final_rslt_dict, plot_dict
+    else:
+        return final_rslt_dict

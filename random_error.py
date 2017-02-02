@@ -250,12 +250,24 @@ def estimate_sigma_delta(NEE_array, stats_dict):
     """    
 
     # Calculate the estimated sigma_delta for each datum
-    return np.where(NEE_array > 0, 
-                    NEE_array * stats_dict['pos']['slope'] 
-                              + stats_dict['pos']['intcpt'],
-                    NEE_array * stats_dict['neg']['slope'] 
-                              + stats_dict['neg']['intcpt'])
+    sig_del_array = np.where(NEE_array > 0, 
+                             NEE_array * stats_dict['pos']['slope'] 
+                             + stats_dict['pos']['intcpt'],
+                             NEE_array * stats_dict['neg']['slope'] 
+                             + stats_dict['neg']['intcpt'])
 
+    # Check whether any sigma_delta values are < 0
+    if np.any(sig_del_array < 0):
+        n_below = len(sig_del_array[sig_del_array < 0])
+        print ('Warning: approximately {0} estimates of sigma_delta have value ' 
+               'less than 0 - setting to mean of all other values'
+               .format(str(n_below)))
+        sig_del_array = np.where(sig_del_array > 0, 
+                                 sig_del_array, 
+                                 sig_del_array[sig_del_array > 0].mean())
+
+    return sig_del_array    
+        
 #-----------------------------------------------------------------------------#
 def estimate_random_error(sig_del_array):
     """
