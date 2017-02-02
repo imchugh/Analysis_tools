@@ -334,8 +334,11 @@ def config_to_dict(file_in):
             except:
                 pass
 
+    if not os.path.exists(file_in):
+        raise IOError('Specified file not found... aborting')
+            
     cf = ConfigObj(file_in)
-    
+
     cf.walk(this_funct)
 
     return cf  
