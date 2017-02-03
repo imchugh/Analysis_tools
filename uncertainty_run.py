@@ -34,41 +34,27 @@ import gap_filling as gf
 #------------------------------------------------------------------------------
 # Fetch data from configurations
 def get_data(configs_dict):
+    
+    data_file = os.path.join(configs_dict['files']['input_path'],
+                             configs_dict['files']['input_file'])
+    var_list = configs_dict['variables'].values()
+    data_dict, attr = io.OzFluxQCnc_to_data_structure(data_file, 
+                                                      var_list = var_list, 
+                                                      QC_var_list = ['Fc'], 
+                                                      return_global_attr = True)
+    configs_dict['global_options']['measurement_interval'] = int(attr['time_step'])
 
-    # Get data (screen Fc data to obs only - keep gap-filled drivers etc)
-    data_input_target = os.path.join(configs_dict['files']['input_path'],
-                                     configs_dict['files']['input_file'])
+    names_dict = dt_fm.get_standard_names(convert_dict = configs_dict['variables'])
+    data_dict = dt_fm.rename_data_dict_vars(data_dict, names_dict)
 
-    ext = os.path.splitext(data_input_target)[1]
-    if ext == '.nc':
-        Fc_dict = io.OzFluxQCnc_to_data_structure(data_input_target,
-                                                  var_list = [configs_dict['variables']
-                                                                          ['carbon_flux']],
-                                                  QC_accept_code = 0)
-        Fc_dict.pop('date_time')
-        ancillary_vars = [configs_dict['variables'][var] for var in 
-                          configs_dict['variables'] if not var == 'carbon_flux']
-        ancillary_dict, attr = io.OzFluxQCnc_to_data_structure(
-                                   data_input_target,
-                                   var_list = ancillary_vars,
-                                   return_global_attr = True)
-        data_dict = dict(Fc_dict, **ancillary_dict)
+    if configs_dict['global_options']['use_storage']:
+        data_dict['NEE_series'] = data_dict['NEE_series'] + data_dict['Sc']
+    elif configs_dict['options']['unify_flux_storage_cases']:
+        data_dict['NEE_series'][np.isnan(data_dict['Sc'])] = np.nan 
 
-    elif ext == '.df':
-        data_dict, attr = io.DINGO_df_to_data_structure(data_input_target,
-                              var_list = configs_dict['variables'].values(),
-                              return_global_attr = True)
-
-    # Rename to generic names used by scripts
-    old_names_dict = configs_dict['variables']
-    std_names_dict = dt_fm.get_standard_names()
-    map_names_dict = {old_names_dict[key]: std_names_dict[key] 
-                      for key in old_names_dict}
-#    pdb.set_trace()
-    data_dict = dt_fm.rename_data_dict_vars(data_dict, map_names_dict)
-
+    data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6       
         
-    return data_dict, attr
+    return data_dict    
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -362,6 +348,9 @@ def plot_data(data_d):
             
     return fig
 
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------    
 def main(output_trial_results = True, 
          output_plot = True):  
     
@@ -375,7 +364,7 @@ def main(output_trial_results = True,
     reload(gf)
     reload(dt_fm)
     
-    # Set plotting to off
+    # Set plotting to off in case running from iPython with interactive plotting
     if plt.isinteractive():
         is_on = True
         plt.ioff()
@@ -405,22 +394,22 @@ def main(output_trial_results = True,
 
     # Build custom configuration file for this script
     configs_dict = build_config_file(configs_master_dict)
-
-    # Get the data
-    data_dict, attr = get_data(configs_dict)
-
+    
+    # Get data and sum the storage term with the flux term if requested
+    data_dict = get_data(configs_dict)
+    
     # Build required configuration files for imported scripts (random error,
     # model error, respiration, light response)
-    
     rand_err_configs_dict = configs_master_dict['random_error_configs']['options']
     mod_err_configs_dict = configs_master_dict['model_error_configs']['options']
     re_configs_dict = configs_master_dict['respiration_configs']['options']
     ps_configs_dict = configs_master_dict['photosynthesis_configs']['options']
 
     # Save the time step information into the individual configuration files
-    for d in [configs_dict, rand_err_configs_dict, mod_err_configs_dict, 
+    for d in [rand_err_configs_dict, mod_err_configs_dict, 
               re_configs_dict, ps_configs_dict]: 
-        d['measurement_interval'] = int(attr['time_step'])
+        d['measurement_interval'] = (configs_dict['global_options']
+                                                 ['measurement_interval'])
     
     # For respiration and light response, turn off the output option for 
     # window fits of the functions, even if requested in the configuration file
@@ -429,7 +418,7 @@ def main(output_trial_results = True,
         re_configs_dict['output_fit_plots'] = False 
     if ps_configs_dict['output_fit_plots']:
         ps_configs_dict['output_fit_plots'] = False 
-    
+        
     # Write universal config items to local variables
     noct_threshold = configs_dict['global_options']['noct_threshold']
     ustar_threshold = configs_dict['global_options']['ustar_threshold']
@@ -438,7 +427,7 @@ def main(output_trial_results = True,
     do_random_uncertainty = configs_dict['uncertainty_options']['do_random_uncertainty']
     do_model_uncertainty = configs_dict['uncertainty_options']['do_model_uncertainty']
     NEE_model = configs_dict['uncertainty_options']['NEE_model']
-    measurement_interval = configs_dict['measurement_interval']
+    measurement_interval = configs_dict['global_options']['measurement_interval']
     if do_ustar_uncertainty: ustar_uncertainty = (configs_dict['global_options']
                                                               ['ustar_uncertainty'])
 
@@ -453,26 +442,15 @@ def main(output_trial_results = True,
             mode_count = mode_count + 1
             print '- ' + error_list[i] + ' error'
     if mode_count == 0:
-        raise Exception('Processing flags for all uncertainty sources ' \
-                        'currently set to False: set at least one ' \
-                        'uncertainty source to True in configuration file ' \
+        raise Exception('Processing flags for all uncertainty sources '
+                        'currently set to False: set at least one '
+                        'uncertainty source to True in configuration file '
                         'before proceeding!')
     print '---------------------------------'
     
     #-----------------
     # Data preparation
     #-----------------
-
-    # Sum Fc and Sc if storage is to be included, otherwise if requested, 
-    # remove all Fc where Sc is missing
-    if configs_dict['global_options']['use_storage']:
-        data_dict['NEE_series'] = (data_dict['NEE_series'] + 
-                                   data_dict['Sc'])
-    elif configs_dict['global_options']['unify_flux_storage_cases']:
-        data_dict['NEE_series'][np.isnan(data_dict['Sc'])] = np.nan
-
-    # Convert insolation to PPFD for light response calculations
-    data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6       
 
     # Check no NEE values with missing ustar or Fsd values
     check_data_consistency(data_dict)
@@ -505,8 +483,10 @@ def main(output_trial_results = True,
                              stats_dict))
         data_dict['sigma_delta'] = sig_del_array
         data_dict['NEE_series'] = NEE_temp
-    
-    filt.screen_low_ustar(data_dict, ustar_threshold, noct_threshold, configs_dict['global_options']['ustar_filter_day'])
+
+    # Screen data and run model
+    filt.screen_low_ustar(data_dict, ustar_threshold, noct_threshold, 
+                          configs_dict['global_options']['ustar_filter_day'])
     run_model(data_dict, NEE_model, re_configs_dict, ps_configs_dict)
 
     #---------------------
@@ -581,108 +561,110 @@ def main(output_trial_results = True,
                 raise Exception('ustar_threshold variable must be specified ' \
                                 'as type either dict or int in configuration ' \
                                 'file... exiting')
-        
-            # Make a copy of the data dictionary
-            this_dict = cp.deepcopy(data_dict)
-            
-            # Screen low ustar then model and gap fill
-            a = len(this_dict['NEE_series'][(this_dict['Fsd'] < 5) & (~np.isnan(this_dict['NEE_series']))])
-            filt.screen_low_ustar(this_dict, this_ustar, noct_threshold, configs_dict['global_options']['ustar_filter_day'])
-            b = len(this_dict['NEE_series'][(this_dict['Fsd'] < 5) & (~np.isnan(this_dict['NEE_series']))])
-            print 'Before filtering, there are {0} valid nocturnal values, afterwards there are {1}'.format(str(a), str(b))
-            try:
-                run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
-                fail_flag = False
-            except Exception, e:
-                warnings.warn('Model optimisation for trial {0} failed with '
-                              'the following message: {1}\n'.format(str(this_trial), 
-                                                                    e[0]))
-                fail_flag = True
-#                continue # Do the next trial
 
-            # If doing random uncertainty, screen out any estimates of 
-            # sigma_delta where there are no obs
-            if do_random_uncertainty: filter_sigma_delta(this_dict)
-            
-        # If not doing ustar uncertainty, just assign this_dict to data_dict
-        elif first_pass:
-                this_dict = data_dict
-                filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
-                if do_random_uncertainty: filter_sigma_delta(this_dict)
+    return this_ustar            
                 
-        # Create dataset separated into years
-        years_data_dict = dtf.subset_datayear_from_arraydict(this_dict, 
-                                                             'date_time')
-        
-        # Do calculations for each year
-        for this_year in years_list:
-            
-            if do_ustar_uncertainty:
-                if not fail_flag:
-                    final_rslt_dict[this_year]['ustar'][this_trial] = (
-                        this_ustar[str(this_year)])
-                    NEE_annual_sum = (years_data_dict[this_year]['NEE_filled'] * 
-                                      measurement_interval * 60 * 12 * 10**-6).sum()
-                    final_rslt_dict[this_year]['ustar_error'][this_trial] = NEE_annual_sum
-
-            # Split the dictionary into day and night and calculate the uncertainty for each
-            split_dict = separate_night_day(years_data_dict[this_year], noct_threshold)
-
-            # For each of day and night
-            for cond in split_dict.keys():
-
-                # If including ustar uncertainty, write the available n to the 
-                # intermediate results dictionary for day and night; otherwise,
-                # just write it once (since available n won't vary if ustar
-                # doesn't)
-                if do_ustar_uncertainty:
-                    final_rslt_dict[this_year]['obs_avail_' + cond][this_trial] = (
-                        len(split_dict[cond]['NEE_series']
-                                [~np.isnan(split_dict[cond]['NEE_series'])]))
-                else:
-                    if first_pass:
-                        final_rslt_dict[this_year]['obs_avail_' + cond][:] = (
-                            len(split_dict[cond]['NEE_series']
-                                    [~np.isnan(split_dict[cond]['NEE_series'])]))
-                    else:
-                        first_pass = False
-                    
-                if not fail_flag:
-                            
-                    # Do the random error and write to correct position in 
-                    # intermediate results dict
-                    if do_random_uncertainty:
-                        sig_del_array = (split_dict[cond]['sigma_delta']
-                                         [~np.isnan(split_dict[cond]['sigma_delta'])])
-                        error_array = rand_err.estimate_random_error(sig_del_array)
-                        random_annual_sum = (error_array.sum() * 
-                                             measurement_interval
-                                             * 60 * 12 * 10 ** -6)
-                        final_rslt_dict[this_year]['random_error_' + cond][this_trial] = (
-                            random_annual_sum)
-        
-                    # Do the model error and write to correct position in 
-                    # intermediate results dict
-                    if do_model_uncertainty:
-                        sub_dict = cp.deepcopy(split_dict[cond])
-                        model_annual_sum = mod_err.estimate_model_error(
-                                               sub_dict, mod_err_configs_dict)
-                        final_rslt_dict[this_year]['model_error_' + cond][this_trial] = (
-                            model_annual_sum)
-                    
-    # Output plots
-    if output_plot:
-        plot_dict = {}
-        for year in final_rslt_dict.keys():
-            try:
-                plot_dict[year] = plot_data(final_rslt_dict[year])
-            except:
-                continue
-
-    if is_on:
-        plt.ion()                    
-    
-    if output_plot:
-        return final_rslt_dict, plot_dict
-    else:
-        return final_rslt_dict
+#            # Make a copy of the data dictionary
+#            this_dict = cp.deepcopy(data_dict)
+#            
+#            # Screen low ustar then model and gap fill
+#            a = len(this_dict['NEE_series'][(this_dict['Fsd'] < 5) & (~np.isnan(this_dict['NEE_series']))])
+#            filt.screen_low_ustar(this_dict, this_ustar, noct_threshold, configs_dict['global_options']['ustar_filter_day'])
+#            b = len(this_dict['NEE_series'][(this_dict['Fsd'] < 5) & (~np.isnan(this_dict['NEE_series']))])
+#            print 'Before filtering, there are {0} valid nocturnal values, afterwards there are {1}'.format(str(a), str(b))
+#            try:
+#                run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
+#                fail_flag = False
+#            except Exception, e:
+#                warnings.warn('Model optimisation for trial {0} failed with '
+#                              'the following message: {1}\n'.format(str(this_trial), 
+#                                                                    e[0]))
+#                fail_flag = True
+##                continue # Do the next trial
+#
+#            # If doing random uncertainty, screen out any estimates of 
+#            # sigma_delta where there are no obs
+#            if do_random_uncertainty: filter_sigma_delta(this_dict)
+#            
+#        # If not doing ustar uncertainty, just assign this_dict to data_dict
+#        elif first_pass:
+#                this_dict = data_dict
+#                filt.screen_low_ustar(this_dict, ustar_threshold, noct_threshold)
+#                if do_random_uncertainty: filter_sigma_delta(this_dict)
+#                
+#        # Create dataset separated into years
+#        years_data_dict = dtf.subset_datayear_from_arraydict(this_dict, 
+#                                                             'date_time')
+#        
+#        # Do calculations for each year
+#        for this_year in years_list:
+#            
+#            if do_ustar_uncertainty:
+#                if not fail_flag:
+#                    final_rslt_dict[this_year]['ustar'][this_trial] = (
+#                        this_ustar[str(this_year)])
+#                    NEE_annual_sum = (years_data_dict[this_year]['NEE_filled'] * 
+#                                      measurement_interval * 60 * 12 * 10**-6).sum()
+#                    final_rslt_dict[this_year]['ustar_error'][this_trial] = NEE_annual_sum
+#
+#            # Split the dictionary into day and night and calculate the uncertainty for each
+#            split_dict = separate_night_day(years_data_dict[this_year], noct_threshold)
+#
+#            # For each of day and night
+#            for cond in split_dict.keys():
+#
+#                # If including ustar uncertainty, write the available n to the 
+#                # intermediate results dictionary for day and night; otherwise,
+#                # just write it once (since available n won't vary if ustar
+#                # doesn't)
+#                if do_ustar_uncertainty:
+#                    final_rslt_dict[this_year]['obs_avail_' + cond][this_trial] = (
+#                        len(split_dict[cond]['NEE_series']
+#                                [~np.isnan(split_dict[cond]['NEE_series'])]))
+#                else:
+#                    if first_pass:
+#                        final_rslt_dict[this_year]['obs_avail_' + cond][:] = (
+#                            len(split_dict[cond]['NEE_series']
+#                                    [~np.isnan(split_dict[cond]['NEE_series'])]))
+#                    else:
+#                        first_pass = False
+#                    
+#                if not fail_flag:
+#                            
+#                    # Do the random error and write to correct position in 
+#                    # intermediate results dict
+#                    if do_random_uncertainty:
+#                        sig_del_array = (split_dict[cond]['sigma_delta']
+#                                         [~np.isnan(split_dict[cond]['sigma_delta'])])
+#                        error_array = rand_err.estimate_random_error(sig_del_array)
+#                        random_annual_sum = (error_array.sum() * 
+#                                             measurement_interval
+#                                             * 60 * 12 * 10 ** -6)
+#                        final_rslt_dict[this_year]['random_error_' + cond][this_trial] = (
+#                            random_annual_sum)
+#        
+#                    # Do the model error and write to correct position in 
+#                    # intermediate results dict
+#                    if do_model_uncertainty:
+#                        sub_dict = cp.deepcopy(split_dict[cond])
+#                        model_annual_sum = mod_err.estimate_model_error(
+#                                               sub_dict, mod_err_configs_dict)
+#                        final_rslt_dict[this_year]['model_error_' + cond][this_trial] = (
+#                            model_annual_sum)
+#                    
+#    # Output plots
+#    if output_plot:
+#        plot_dict = {}
+#        for year in final_rslt_dict.keys():
+#            try:
+#                plot_dict[year] = plot_data(final_rslt_dict[year])
+#            except:
+#                continue
+#
+#    if is_on:
+#        plt.ion()                    
+#    
+#    if output_plot:
+#        return final_rslt_dict, plot_dict
+#    else:
+#        return final_rslt_dict
