@@ -29,34 +29,6 @@ import respiration as re
 import photosynthesis as ps
 import gap_filling as gf
 
-
-
-#------------------------------------------------------------------------------
-# Fetch data from configurations
-def get_data(configs_dict):
-    
-    data_file = os.path.join(configs_dict['files']['input_path'],
-                             configs_dict['files']['input_file'])
-    var_list = configs_dict['variables'].values()
-    data_dict, attr = io.OzFluxQCnc_to_data_structure(data_file, 
-                                                      var_list = var_list, 
-                                                      QC_var_list = ['Fc'], 
-                                                      return_global_attr = True)
-    configs_dict['global_options']['measurement_interval'] = int(attr['time_step'])
-
-    names_dict = dt_fm.get_standard_names(convert_dict = configs_dict['variables'])
-    data_dict = dt_fm.rename_data_dict_vars(data_dict, names_dict)
-
-    if configs_dict['global_options']['use_storage']:
-        data_dict['NEE_series'] = data_dict['NEE_series'] + data_dict['Sc']
-    elif configs_dict['options']['unify_flux_storage_cases']:
-        data_dict['NEE_series'][np.isnan(data_dict['Sc'])] = np.nan 
-
-    data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6       
-        
-    return data_dict    
-#------------------------------------------------------------------------------
-
 #------------------------------------------------------------------------------
 # Rebuild the master configuration file for passing to respiration and light 
 # response (if requested) functions
@@ -103,7 +75,6 @@ def check_data_consistency(data_dict):
 def check_driver_consistency(data_dict):
     
     warnings.simplefilter('always')
-#    warnings.showwarning = dt_fm.custom_warning
 
     arr = np.array([])
     for var in ['Fsd', 'TempC', 'VPD']:
@@ -127,17 +98,61 @@ def check_driver_consistency(data_dict):
 # Set all sigma delta values to nan where there are no observational data
 def filter_sigma_delta(data_dict):
     data_dict['sigma_delta'][np.isnan(data_dict['NEE_series'])] = np.nan
+#------------------------------------------------------------------------------
+
 #------------------------------------------------------------------------------    
+# Generate a random estimate of ustar threshold constrained by the mean and 
+# confidsence interval for u* threshold derived from CPD
+def generate_random_ustar_threshold(ustar_threshold, ustar_uncertainty):
+    
+    z_score = np.random.normal(loc = 0, scale = 1, size = 1)[0]
+    if isinstance(ustar_threshold, dict):
+        if not isinstance(ustar_uncertainty, dict):
+            raise Exception('ustar_threshold and ustar_uncertainty ' \
+                            'must be specified as same object type ' \
+                            'in configuration file! Exiting...')
+        this_ustar = {}
+        for key in ustar_threshold.keys():
+            this_ustar[key] = (ustar_threshold[key] +
+                               ustar_uncertainty[key] / 2 * 
+                               z_score)
+    elif isinstance(ustar_threshold, int):
+        if not isinstance(ustar_uncertainty, int):
+            raise Exception('ustar_threshold and ustar_uncertainty ' \
+                            'must be specified as same object type ' \
+                            'in configuration file! Exiting...')
+        this_ustar = ustar_threshold + ustar_uncertainty * z_score
+    else:
+        raise Exception('ustar_threshold variable must be specified ' \
+                        'as type either dict or int in configuration ' \
+                        'file... exiting')
+    return this_ustar
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# Split into day and night
-def separate_night_day(data_dict, noct_threshold):
-    subset_dict = {}
-    subset_dict['day'] = filt.subset_arraydict_on_threshold(
-                             data_dict, 'Fsd', noct_threshold, '>', drop = True)
-    subset_dict['night'] = filt.subset_arraydict_on_threshold(
-                               data_dict, 'Fsd', noct_threshold, '<', drop = True)
-    return subset_dict
+# Fetch data from configurations
+def get_data(configs_dict):
+    
+    data_file = os.path.join(configs_dict['files']['input_path'],
+                             configs_dict['files']['input_file'])
+    var_list = configs_dict['variables'].values()
+    data_dict, attr = io.OzFluxQCnc_to_data_structure(data_file, 
+                                                      var_list = var_list, 
+                                                      QC_var_list = ['Fc'], 
+                                                      return_global_attr = True)
+    configs_dict['global_options']['measurement_interval'] = int(attr['time_step'])
+
+    names_dict = dt_fm.get_standard_names(convert_dict = configs_dict['variables'])
+    data_dict = dt_fm.rename_data_dict_vars(data_dict, names_dict)
+
+    if configs_dict['global_options']['use_storage']:
+        data_dict['NEE_series'] = data_dict['NEE_series'] + data_dict['Sc']
+    elif configs_dict['options']['unify_flux_storage_cases']:
+        data_dict['NEE_series'][np.isnan(data_dict['Sc'])] = np.nan 
+
+    data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6       
+        
+    return data_dict    
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -155,49 +170,6 @@ def init_interm_rslt_dict(num_trials, do_ustar, do_random, do_model):
     nan_array = np.zeros(num_trials)
     nan_array[:] = np.nan
     return {var: cp.copy(nan_array) for var in var_list} 
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def run_model(data_dict, NEE_model, re_configs_dict, ps_configs_dict):
-    
-    if NEE_model == 'LT':    
-        
-        try:
-            re_rslt_dict, re_params_dict = re.main(data_dict, 
-                                                   re_configs_dict)[0: 2]
-        except Exception:
-            raise
-        try:
-            ps_rslt_dict = ps.main(data_dict, ps_configs_dict, re_params_dict)[0]    
-        except Exception:
-            raise
-        data_dict['NEE_model'] = ps_rslt_dict['GPP'] + ps_rslt_dict['Re']
-        data_dict['NEE_filled'] = np.where(np.isnan(data_dict['NEE_series']),
-                                           data_dict['NEE_model'],
-                                           data_dict['NEE_series'])
-                                           
-    elif NEE_model == 'ANN':
-        
-        len_int = len(data_dict['NEE_series'])
-        input_array = np.empty([len_int, 4])
-        for i, var in enumerate(['TempC', 'Sws', 'Fsd', 'VPD']):
-            input_array[:, i] = data_dict[var]
-        target_array = np.empty([len_int, 1])
-        target_array[:, 0] = data_dict['NEE_series']
-        
-        data_dict['NEE_model'] = gf.train_ANN(input_array, target_array, 
-                                              100, 
-                                              [4, 24, 16, 1])[:, 0]
-        data_dict['NEE_filled'] = np.where(np.isnan(data_dict['NEE_series']),
-                                           data_dict['NEE_model'],
-                                           data_dict['NEE_series'])                                                     
-
-    else:
-        
-        raise Exception('\'' + NEE_model + '\' is not a valid model type! ' \
-                        'Valid choices are \'ANN\' or \'LT\'')
-                                           
-    return    
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -347,7 +319,60 @@ def plot_data(data_d):
                      fontsize = 14)
             
     return fig
+#------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+def run_model(data_dict, NEE_model, re_configs_dict, ps_configs_dict):
+    
+    if NEE_model == 'LT':    
+        
+        try:
+            re_rslt_dict, re_params_dict = re.main(data_dict, 
+                                                   re_configs_dict)[0: 2]
+        except Exception:
+            raise
+        try:
+            ps_rslt_dict = ps.main(data_dict, ps_configs_dict, re_params_dict)[0]    
+        except Exception:
+            raise
+        data_dict['NEE_model'] = ps_rslt_dict['GPP'] + ps_rslt_dict['Re']
+        data_dict['NEE_filled'] = np.where(np.isnan(data_dict['NEE_series']),
+                                           data_dict['NEE_model'],
+                                           data_dict['NEE_series'])
+                                           
+    elif NEE_model == 'ANN':
+        
+        len_int = len(data_dict['NEE_series'])
+        input_array = np.empty([len_int, 4])
+        for i, var in enumerate(['TempC', 'Sws', 'Fsd', 'VPD']):
+            input_array[:, i] = data_dict[var]
+        target_array = np.empty([len_int, 1])
+        target_array[:, 0] = data_dict['NEE_series']
+        
+        data_dict['NEE_model'] = gf.train_ANN(input_array, target_array, 
+                                              100, 
+                                              [4, 24, 16, 1])[:, 0]
+        data_dict['NEE_filled'] = np.where(np.isnan(data_dict['NEE_series']),
+                                           data_dict['NEE_model'],
+                                           data_dict['NEE_series'])                                                     
+
+    else:
+        
+        raise Exception('\'' + NEE_model + '\' is not a valid model type! ' \
+                        'Valid choices are \'ANN\' or \'LT\'')
+                                           
+    return    
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+# Split into day and night
+def separate_night_day(data_dict, noct_threshold):
+    subset_dict = {}
+    subset_dict['day'] = filt.subset_arraydict_on_threshold(
+                             data_dict, 'Fsd', noct_threshold, '>', drop = True)
+    subset_dict['night'] = filt.subset_arraydict_on_threshold(
+                               data_dict, 'Fsd', noct_threshold, '<', drop = True)
+    return subset_dict
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------    
@@ -507,6 +532,7 @@ def main(output_trial_results = True,
     # Get the t-statistic for the 95% CI
     t_stat = stats.t.ppf(0.975, num_trials)
 
+    # Print stuff
     print '----------------------------'
     print 'Starting uncertainty trials:',
     
@@ -540,48 +566,30 @@ def main(output_trial_results = True,
         # sampling from the normal distribution and scaling according to
         # ustar threshold uncertainty
         if do_ustar_uncertainty:
-            z_score = np.random.normal(loc = 0, scale = 1, size = 1)[0]
-            if isinstance(ustar_threshold, dict):
-                if not isinstance(ustar_uncertainty, dict):
-                    raise Exception('ustar_threshold and ustar_uncertainty ' \
-                                    'must be specified as same object type ' \
-                                    'in configuration file! Exiting...')
-                this_ustar = {}
-                for key in ustar_threshold.keys():
-                    this_ustar[key] = (ustar_threshold[key] +
-                                       ustar_uncertainty[key] / 2 * 
-                                       z_score)
-            elif isinstance(ustar_threshold, int):
-                if not isinstance(ustar_uncertainty, int):
-                    raise Exception('ustar_threshold and ustar_uncertainty ' \
-                                    'must be specified as same object type ' \
-                                    'in configuration file! Exiting...')
-                this_ustar = ustar_threshold + ustar_uncertainty * z_score
-            else:
-                raise Exception('ustar_threshold variable must be specified ' \
-                                'as type either dict or int in configuration ' \
-                                'file... exiting')
-
-    return this_ustar            
-                
-#            # Make a copy of the data dictionary
-#            this_dict = cp.deepcopy(data_dict)
-#            
-#            # Screen low ustar then model and gap fill
-#            a = len(this_dict['NEE_series'][(this_dict['Fsd'] < 5) & (~np.isnan(this_dict['NEE_series']))])
-#            filt.screen_low_ustar(this_dict, this_ustar, noct_threshold, configs_dict['global_options']['ustar_filter_day'])
-#            b = len(this_dict['NEE_series'][(this_dict['Fsd'] < 5) & (~np.isnan(this_dict['NEE_series']))])
-#            print 'Before filtering, there are {0} valid nocturnal values, afterwards there are {1}'.format(str(a), str(b))
-#            try:
-#                run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
-#                fail_flag = False
-#            except Exception, e:
-#                warnings.warn('Model optimisation for trial {0} failed with '
-#                              'the following message: {1}\n'.format(str(this_trial), 
-#                                                                    e[0]))
-#                fail_flag = True
-##                continue # Do the next trial
-#
+            this_ustar = generate_random_ustar_threshold(ustar_threshold,
+                                                         ustar_uncertainty)
+              
+            # Make a copy of the data dictionary
+            this_dict = cp.deepcopy(data_dict)
+            
+            # Screen low ustar then model and gap fill
+            a = len(this_dict['NEE_series'][(this_dict['Fsd'] < 5) & (~np.isnan(this_dict['NEE_series']))])
+            filt.screen_low_ustar(this_dict, this_ustar, noct_threshold, configs_dict['global_options']['ustar_filter_day'])
+            b = len(this_dict['NEE_series'][(this_dict['Fsd'] < 5) & (~np.isnan(this_dict['NEE_series']))])
+            print 'Before filtering, there are {0} valid nocturnal values, afterwards there are {1}'.format(str(a), str(b))
+            if a == b:
+                pdb.set_trace()
+            try:
+                run_model(this_dict, NEE_model, re_configs_dict, ps_configs_dict)
+                fail_flag = False
+            except Exception, e:
+                warnings.warn('Model optimisation for trial {0} failed with '
+                              'the following message: {1}\n'.format(str(this_trial), 
+                                                                    e[0]))
+                fail_flag = True
+                continue # Do the next trial
+    
+    return
 #            # If doing random uncertainty, screen out any estimates of 
 #            # sigma_delta where there are no obs
 #            if do_random_uncertainty: filter_sigma_delta(this_dict)
