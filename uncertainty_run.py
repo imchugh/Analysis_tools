@@ -93,6 +93,24 @@ def check_driver_consistency(data_dict):
     if not len(arr) == 0:
         print 'Total number of instances with missing driver data is ' + str(len(arr))
 #------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def check_path(path, generate = False):
+    if not os.path.exists(path):
+        if generate:
+            try: 
+                os.makedirs(path)
+            except:
+                warnings.warn('The specified path is incompatible with your OS!')
+                new_path = os.path.join(os.path.expanduser('~'), 'Uncertainty')
+                if not os.path.exists(new_path):
+                    os.makedirs(new_path)
+    else:
+        raise IOError('Path specified for ustar statistics csv file is invalid')
+
+    return
+    
+#------------------------------------------------------------------------------    
         
 #------------------------------------------------------------------------------
 # Set all sigma delta values to nan where there are no observational data
@@ -133,9 +151,9 @@ def generate_random_ustar_threshold(ustar_threshold, ustar_uncertainty):
 # Fetch data from configurations
 def get_data(configs_dict):
     
-    data_file = os.path.join(configs_dict['files']['input_path'],
-                             configs_dict['files']['input_file'])
+    data_file = os.path.join(configs_dict['files']['input_file'])
     var_list = configs_dict['variables'].values()
+
     data_dict, attr = io.OzFluxQCnc_to_data_structure(data_file, 
                                                       var_list = var_list, 
                                                       QC_var_list = ['Fc'], 
@@ -153,6 +171,15 @@ def get_data(configs_dict):
     data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6       
         
     return data_dict    
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_ustar_data(path):
+    
+    check_path(path)
+    struct_array = np.genfromtxt(path, delimiter = ',', names = True)
+    ustar_dict = {}
+    
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -182,10 +209,6 @@ def plot_data(data_d):
     'random_error_day' and 'random_error_night' as keys / values: equal length 
     numpy arrays (may contain np.nan - will be filtered)
     """
-#    
-#    key_id_list = [isinstance(key, int) for key in data_d.keys()]    
-#    if not all(key_id_list):
-#        raise Exception('Expected integer years as outer dictionary key!')    
     
     error_list = list(set([key.split('_')[0] for 
                            key in data_d.keys() if 'error' in key]))
@@ -376,8 +399,8 @@ def separate_night_day(data_dict, noct_threshold):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------    
-def main(output_trial_results = True, 
-         output_plot = True):  
+def main(input_file = False, ustar_file = False, 
+         num_trials = False, output_directory = False, output_plot = True):  
     
     # Update
     reload(logging)
@@ -395,21 +418,8 @@ def main(output_trial_results = True,
         plt.ioff()
     else:
         is_on = False
-    
-    #---------------------------------
-    # Logging setup and initialisation
-    #---------------------------------
-    
-    log_dir = os.path.join(os.path.expanduser('~'), 'Uncertainty')
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-    log_file = 'log.txt'
-    full_fname = os.path.join(log_dir, log_file)
-    logging.basicConfig(filename = full_fname, level = logging.DEBUG)
-    time_str = dt.datetime.strftime(dt.datetime.now(), '%Y-%m-%d %H:%M:%S')
-    logging.info('\nRunning uncertainty analysis: {}\n'.format(time_str))
-    warnings.showwarning = dt_fm.send_warnings_to_log
-            
+
+                
     #-----------------------------------
     # General preparation and formatting
     #-----------------------------------
@@ -419,10 +429,7 @@ def main(output_trial_results = True,
 
     # Build custom configuration file for this script
     configs_dict = build_config_file(configs_master_dict)
-    
-    # Get data and sum the storage term with the flux term if requested
-    data_dict = get_data(configs_dict)
-    
+
     # Build required configuration files for imported scripts (random error,
     # model error, respiration, light response)
     rand_err_configs_dict = configs_master_dict['random_error_configs']['options']
@@ -430,34 +437,82 @@ def main(output_trial_results = True,
     re_configs_dict = configs_master_dict['respiration_configs']['options']
     ps_configs_dict = configs_master_dict['photosynthesis_configs']['options']
 
-    # Save the time step information into the individual configuration files
-    for d in [rand_err_configs_dict, mod_err_configs_dict, 
-              re_configs_dict, ps_configs_dict]: 
-        d['measurement_interval'] = (configs_dict['global_options']
-                                                 ['measurement_interval'])
+        
+    #----------------------------------------------------------------------
+    # Assign configuration items (or function call kwarg override) to local
+    # namespace
+    #----------------------------------------------------------------------
     
-    # For respiration and light response, turn off the output option for 
-    # window fits of the functions, even if requested in the configuration file
-    # - they are WAY too computationally expensive!!!
+    # Config file configurations
+    noct_threshold = configs_dict['global_options']['noct_threshold']
+    ustar_threshold = configs_dict['global_options']['ustar_threshold']
+    ustar_filter_day = configs_dict['global_options']['ustar_filter_day']
+
+    do_ustar_uncertainty = (configs_dict['uncertainty_options']
+                                        ['do_ustar_uncertainty'])
+    do_random_uncertainty = (configs_dict['uncertainty_options']
+                                         ['do_random_uncertainty'])
+    do_model_uncertainty = (configs_dict['uncertainty_options']
+                                        ['do_model_uncertainty'])
+    NEE_model = configs_dict['uncertainty_options']['NEE_model']
+    if do_ustar_uncertainty: ustar_uncertainty = (configs_dict['global_options']
+                                                              ['ustar_uncertainty'])
+
+    # User overrides
+    if input_file:
+        configs_dict['files']['input_file'] = input_file
+    if not output_directory:
+        output_directory = configs_dict['files']['output_path']
+    check_path(output_directory, generate = True)
+    if not num_trials:
+        num_trials = configs_dict['uncertainty_options']['num_trials']
+
+    # Internal override (turn off respiration and light response plot functions)
     if re_configs_dict['output_fit_plots']:
         re_configs_dict['output_fit_plots'] = False 
     if ps_configs_dict['output_fit_plots']:
         ps_configs_dict['output_fit_plots'] = False 
-        
-    # Write universal config items to local variables
-    noct_threshold = configs_dict['global_options']['noct_threshold']
-    ustar_threshold = configs_dict['global_options']['ustar_threshold']
-    ustar_filter_day = configs_dict['global_options']['ustar_filter_day']
-    num_trials = configs_dict['uncertainty_options']['num_trials']
-    do_ustar_uncertainty = configs_dict['uncertainty_options']['do_ustar_uncertainty']
-    do_random_uncertainty = configs_dict['uncertainty_options']['do_random_uncertainty']
-    do_model_uncertainty = configs_dict['uncertainty_options']['do_model_uncertainty']
-    NEE_model = configs_dict['uncertainty_options']['NEE_model']
-    measurement_interval = configs_dict['global_options']['measurement_interval']
-    if do_ustar_uncertainty: ustar_uncertainty = (configs_dict['global_options']
-                                                              ['ustar_uncertainty'])
 
-    # Print stuff
+        
+    #---------------------------------
+    # Logging setup and initialisation
+    #---------------------------------
+    
+    log_file = 'log.txt'
+    full_fname = os.path.join(output_directory, log_file)
+    logging.basicConfig(filename = full_fname, level = logging.DEBUG)
+    time_str = dt.datetime.strftime(dt.datetime.now(), '%Y-%m-%d %H:%M:%S')
+    logging.info('\nRunning uncertainty analysis: {}\n'.format(time_str))
+    warnings.showwarning = dt_fm.send_warnings_to_log        
+        
+    #-------------------------------    
+    # Data retrieval and preparation
+    #-------------------------------
+
+    # Get data    
+    data_dict = get_data(configs_dict)
+
+    # Check no NEE values with missing ustar or Fsd values
+    check_data_consistency(data_dict)
+
+    # Check no drivers missing where NEE is missing
+    check_driver_consistency(data_dict)
+    
+    # Save the time step information into the individual configuration files
+    measurement_interval = (configs_dict['global_options']
+                                        ['measurement_interval'])
+    for d in [rand_err_configs_dict, mod_err_configs_dict, 
+              re_configs_dict, ps_configs_dict]: 
+        d['measurement_interval'] = measurement_interval
+
+        
+
+
+    
+    #-----------------------------------------
+    # Print info and configuration error check
+    #-----------------------------------------
+    
     print '---------------------------------'
     print 'Running uncertainty analysis for:'
     error_list = ['ustar', 'random', 'model']
@@ -474,15 +529,6 @@ def main(output_trial_results = True,
                         'before proceeding!')
     print '---------------------------------'
     
-    #-----------------
-    # Data preparation
-    #-----------------
-
-    # Check no NEE values with missing ustar or Fsd values
-    check_data_consistency(data_dict)
-
-    # Check no drivers missing where NEE is missing
-    check_driver_consistency(data_dict)
 
     #----------------------------------------
     # Random error calculation and statistics
