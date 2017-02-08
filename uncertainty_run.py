@@ -106,6 +106,7 @@ def check_path(path, generate = False):
                 if not os.path.exists(new_path):
                     os.makedirs(new_path)
     else:
+        pdb.set_trace()
         raise IOError('Path specified for ustar statistics csv file is invalid')
 
     return
@@ -174,11 +175,43 @@ def get_data(configs_dict):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def get_ustar_data(path):
+def get_ustar_data(path, years_list):
     
+    pdb.set_trace()
     check_path(path)
     struct_array = np.genfromtxt(path, delimiter = ',', names = True)
-    ustar_dict = {}
+    year_array = struct_array['Year']
+    ustar_mean_array = struct_array['ustar_mean']
+    ustar_sig_array = struct_array['ustar_sig']
+    
+    ustar_dict = {'ustar_threshold': {},
+                  'ustar_uncertainty': {}}
+                  
+    crossref_years_list = []              
+    for i in xrange(len(year_array)):
+        this_year = int(year_array[i])
+        crossref_years_list.append(this_year)
+        if this_year in years_list:
+            ustar_dict['ustar_threshold'][this_year] = ustar_mean_array[i]
+            ustar_dict['ustar_uncertainty'][this_year] = ustar_sig_array[i]
+            
+    missing_years_list = [item for item in years_list if not item in crossref_years_list]
+    
+    if missing_years_list == years_list:
+        raise Exception('None of the years in the data file were found in the '
+                        'ustar_threshold file - defaulting to configuration file '
+                        'values!')
+    elif len(missing_years_list) != 0:
+        missing_years_string = ', '.join([str(item) for 
+                                          item in missing_years_list])
+        print ('Year(s) {0} present in data file but not found in the '
+               'ustar_threshold file - calculating mean of all available years '
+               'to fill missing year(s)!'.format(missing_years_string))
+        mean_ustar = ustar_mean_array.mean()
+        mean_sig = ustar_sig_array.mean()
+        for this_year in missing_years_list:
+            ustar_dict['ustar_threshold'][this_year] = mean_ustar
+            ustar_dict['ustar_uncertainty'][this_year] = mean_sig
     
 #------------------------------------------------------------------------------
 
@@ -399,7 +432,7 @@ def separate_night_day(data_dict, noct_threshold):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------    
-def main(input_file = False, ustar_file = False, 
+def main(input_data_file = False, input_ustar_file = False, 
          num_trials = False, output_directory = False, output_plot = True):  
     
     # Update
@@ -459,8 +492,8 @@ def main(input_file = False, ustar_file = False,
                                                               ['ustar_uncertainty'])
 
     # User overrides
-    if input_file:
-        configs_dict['files']['input_file'] = input_file
+    if input_data_file:
+        configs_dict['files']['input_file'] = input_data_file
     if not output_directory:
         output_directory = configs_dict['files']['output_path']
     check_path(output_directory, generate = True)
@@ -484,6 +517,7 @@ def main(input_file = False, ustar_file = False,
     time_str = dt.datetime.strftime(dt.datetime.now(), '%Y-%m-%d %H:%M:%S')
     logging.info('\nRunning uncertainty analysis: {}\n'.format(time_str))
     warnings.showwarning = dt_fm.send_warnings_to_log        
+
         
     #-------------------------------    
     # Data retrieval and preparation
@@ -492,26 +526,31 @@ def main(input_file = False, ustar_file = False,
     # Get data    
     data_dict = get_data(configs_dict)
 
-    # Check no NEE values with missing ustar or Fsd values
-    check_data_consistency(data_dict)
-
-    # Check no drivers missing where NEE is missing
-    check_driver_consistency(data_dict)
-    
     # Save the time step information into the individual configuration files
     measurement_interval = (configs_dict['global_options']
                                         ['measurement_interval'])
     for d in [rand_err_configs_dict, mod_err_configs_dict, 
               re_configs_dict, ps_configs_dict]: 
-        d['measurement_interval'] = measurement_interval
-
-        
-
-
+        d['measurement_interval'] = measurement_interval    
     
-    #-----------------------------------------
-    # Print info and configuration error check
-    #-----------------------------------------
+    # Check no NEE values with missing ustar or Fsd values
+    check_data_consistency(data_dict)
+
+    # Check no drivers missing where NEE is missing
+    check_driver_consistency(data_dict)
+
+    # Get ustar data
+    if input_ustar_file:
+        years_list = list(set([this_date.year for 
+                               this_date in data_dict['date_time']]))
+        print input_ustar_file
+        ustar_dict = get_ustar_data(input_ustar_file, years_list)
+        pdb.set_trace()
+    
+    
+    #---------------------------------------------
+    # Print info and check for configuration error
+    #---------------------------------------------
     
     print '---------------------------------'
     print 'Running uncertainty analysis for:'
