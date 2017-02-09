@@ -105,9 +105,8 @@ def check_path(path, generate = False):
                 new_path = os.path.join(os.path.expanduser('~'), 'Uncertainty')
                 if not os.path.exists(new_path):
                     os.makedirs(new_path)
-    else:
-        pdb.set_trace()
-        raise IOError('Path specified for ustar statistics csv file is invalid')
+        else:
+            raise IOError('Path {0} is invalid'.format(path))
 
     return
     
@@ -177,8 +176,10 @@ def get_data(configs_dict):
 #------------------------------------------------------------------------------
 def get_ustar_data(path, years_list):
     
-    pdb.set_trace()
-    check_path(path)
+    try:
+        check_path(path)
+    except:
+        raise IOError('Invalid path to ustar_threshold file')
     struct_array = np.genfromtxt(path, delimiter = ',', names = True)
     year_array = struct_array['Year']
     ustar_mean_array = struct_array['ustar_mean']
@@ -192,8 +193,8 @@ def get_ustar_data(path, years_list):
         this_year = int(year_array[i])
         crossref_years_list.append(this_year)
         if this_year in years_list:
-            ustar_dict['ustar_threshold'][this_year] = ustar_mean_array[i]
-            ustar_dict['ustar_uncertainty'][this_year] = ustar_sig_array[i]
+            ustar_dict['ustar_threshold'][str(this_year)] = ustar_mean_array[i]
+            ustar_dict['ustar_uncertainty'][str(this_year)] = ustar_sig_array[i]
             
     missing_years_list = [item for item in years_list if not item in crossref_years_list]
     
@@ -210,8 +211,10 @@ def get_ustar_data(path, years_list):
         mean_ustar = ustar_mean_array.mean()
         mean_sig = ustar_sig_array.mean()
         for this_year in missing_years_list:
-            ustar_dict['ustar_threshold'][this_year] = mean_ustar
-            ustar_dict['ustar_uncertainty'][this_year] = mean_sig
+            ustar_dict['ustar_threshold'][str(this_year)] = mean_ustar
+            ustar_dict['ustar_uncertainty'][str(this_year)] = mean_sig
+            
+    return ustar_dict
     
 #------------------------------------------------------------------------------
 
@@ -432,8 +435,11 @@ def separate_night_day(data_dict, noct_threshold):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------    
-def main(input_data_file = False, input_ustar_file = False, 
-         num_trials = False, output_directory = False, output_plot = True):  
+def main(input_data_file = False, 
+         input_ustar_file = False, 
+         num_trials = False, 
+         output_directory = False, 
+         output_plot = True):  
     
     # Update
     reload(logging)
@@ -470,32 +476,18 @@ def main(input_data_file = False, input_ustar_file = False,
     re_configs_dict = configs_master_dict['respiration_configs']['options']
     ps_configs_dict = configs_master_dict['photosynthesis_configs']['options']
 
-        
-    #----------------------------------------------------------------------
-    # Assign configuration items (or function call kwarg override) to local
-    # namespace
-    #----------------------------------------------------------------------
+          
+    #--------------------------------------------------------------------
+    # Write user overrides to configuration file OR to local namespace as 
+    # appropriate, and force internal override to switch off plotting in
+    # external functions
+    #--------------------------------------------------------------------
     
-    # Config file configurations
-    noct_threshold = configs_dict['global_options']['noct_threshold']
-    ustar_threshold = configs_dict['global_options']['ustar_threshold']
-    ustar_filter_day = configs_dict['global_options']['ustar_filter_day']
-
-    do_ustar_uncertainty = (configs_dict['uncertainty_options']
-                                        ['do_ustar_uncertainty'])
-    do_random_uncertainty = (configs_dict['uncertainty_options']
-                                         ['do_random_uncertainty'])
-    do_model_uncertainty = (configs_dict['uncertainty_options']
-                                        ['do_model_uncertainty'])
-    NEE_model = configs_dict['uncertainty_options']['NEE_model']
-    if do_ustar_uncertainty: ustar_uncertainty = (configs_dict['global_options']
-                                                              ['ustar_uncertainty'])
-
     # User overrides
     if input_data_file:
         configs_dict['files']['input_file'] = input_data_file
     if not output_directory:
-        output_directory = configs_dict['files']['output_path']
+        output_directory = configs_dict['files']['output_path']  
     check_path(output_directory, generate = True)
     if not num_trials:
         num_trials = configs_dict['uncertainty_options']['num_trials']
@@ -543,10 +535,34 @@ def main(input_data_file = False, input_ustar_file = False,
     if input_ustar_file:
         years_list = list(set([this_date.year for 
                                this_date in data_dict['date_time']]))
-        print input_ustar_file
-        ustar_dict = get_ustar_data(input_ustar_file, years_list)
-        pdb.set_trace()
+        try:
+            ustar_dict = get_ustar_data(input_ustar_file, years_list)
+            ustar_threshold = ustar_dict['ustar_threshold']
+            ustar_uncertainty = ustar_dict['ustar_uncertainty']
+        except IOError, e:
+            print('Retrieval of ustar_threshold file failed with the '
+                  'following message: {0}. Using defaults provided '
+                  'in configuration file...'.format(e))
+    else:
+        ustar_threshold = configs_dict['global_options']['ustar_threshold']    
+        if do_ustar_uncertainty: ustar_uncertainty = (
+            configs_dict['global_options']['ustar_uncertainty'])
+
+
+    #----------------------------------------------
+    # Assign configuration items to local namespace
+    #----------------------------------------------
     
+    noct_threshold = configs_dict['global_options']['noct_threshold']
+    ustar_filter_day = configs_dict['global_options']['ustar_filter_day']
+    do_ustar_uncertainty = (configs_dict['uncertainty_options']
+                                        ['do_ustar_uncertainty'])
+    do_random_uncertainty = (configs_dict['uncertainty_options']
+                                         ['do_random_uncertainty'])
+    do_model_uncertainty = (configs_dict['uncertainty_options']
+                                        ['do_model_uncertainty'])
+    NEE_model = configs_dict['uncertainty_options']['NEE_model']
+            
     
     #---------------------------------------------
     # Print info and check for configuration error
