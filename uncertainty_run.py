@@ -154,12 +154,20 @@ def get_data(configs_dict):
     data_file = os.path.join(configs_dict['files']['input_file'])
     var_list = configs_dict['variables'].values()
 
-    data_dict, attr = io.OzFluxQCnc_to_data_structure(data_file, 
-                                                      var_list = var_list, 
-                                                      QC_var_list = ['Fc'], 
-                                                      return_global_attr = True)
-    configs_dict['global_options']['measurement_interval'] = int(attr['time_step'])
+    file_ext = os.path.splitext(data_file)
 
+    if file_ext[1] == '.nc':    
+        data_dict, attr = io.OzFluxQCnc_to_data_structure(data_file, 
+                                                          var_list = var_list, 
+                                                          QC_var_list = ['Fc'], 
+                                                          return_global_attr = True)
+    elif file_ext[1] == '.df':
+        data_dict, attr = io.DINGO_df_to_data_structure(data_file,
+                                                        var_list = var_list,
+                                                        return_global_attr = True)
+
+    configs_dict['global_options']['measurement_interval'] = int(attr['time_step'])
+        
     names_dict = dt_fm.get_standard_names(convert_dict = configs_dict['variables'])
     data_dict = dt_fm.rename_data_dict_vars(data_dict, names_dict)
 
