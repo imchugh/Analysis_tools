@@ -256,7 +256,7 @@ def plot_data(data_d):
     
     error_list = list(set([key.split('_')[0] for 
                            key in data_d.keys() if 'error' in key]))
-
+    
     results_d = {}
     
     if 'ustar' in error_list:
@@ -265,29 +265,31 @@ def plot_data(data_d):
     if 'random' in error_list:
         results_d['random'] = (data_d['random_error_day'] + 
                                data_d['random_error_night'])
-
+        
     if 'model' in error_list:
         results_d['model'] = (data_d['model_error_day'] + 
                               data_d['model_error_night'])
-
-    if len(error_list) > 1: 
-        results_d['total'] = np.zeros(len(results_d['ustar']))
+    
+    if len(error_list) == 0:
+        raise KeyError('Passed dictionary contained no error data')    
+    elif len(error_list) > 1: 
+        results_d['total'] = np.zeros(len(results_d[error_list[0]]))
         for var in error_list:
             results_d['total'] = results_d['total'] + results_d[var]        
         bool_array = ~np.isnan(results_d['total'])
         error_list.append('total')
         for var in error_list:
             results_d[var] = results_d[var][bool_array]
-
-
-    results_d['random'] = results_d['random'] + results_d['total'].mean()
-    results_d['model'] = results_d['model'] + results_d['total'].mean()
-
+        for var in error_list:
+            if not var in ['total', 'ustar']:
+                results_d[var] = results_d[var] + results_d['total'].mean()                        
+                
     colors_d = {'total': 'grey',
                 'ustar': 'blue',
                 'random': 'cyan',
                 'model': 'magenta'}
 
+    # Set positions
     pos_d = {'total': 0.9,
              'ustar': 0,
              'random': 0.3,
@@ -313,8 +315,12 @@ def plot_data(data_d):
     ax1.set_ylabel('$Frequency$', fontsize=18)
     ax1.tick_params(axis = 'y', labelsize = 14)
     ax1.tick_params(axis = 'x', labelsize = 14)
-    ax1.axvline(mu_dict['total'], color = 'black', 
-                linewidth = 2, linestyle = '--')
+    if 'total' in error_list:
+        ax1.axvline(mu_dict['total'], color = 'black', 
+                    linewidth = 2, linestyle = '--')
+    else:
+        ax1.axvline(mu_dict[error_list[0]], color = 'black', 
+                    linewidth = 2, linestyle = '--')
     ax1.xaxis.set_ticks_position('bottom')
     ax1.yaxis.set_ticks_position('left')
     ax1.spines['right'].set_visible(False)
@@ -338,10 +344,11 @@ def plot_data(data_d):
     ax1.legend(loc='upper right', frameon = False)
 
     # Plot the normal distribution
-    xmin, xmax = ax1.get_xlim()
-    x = np.linspace(xmin, xmax, 100)
-    p = stats.norm.pdf(x, mu_dict['total'], sig_dict['total'])
-    ax1.plot(x, p, color = 'black')
+    if 'total' in error_list:
+        xmin, xmax = ax1.get_xlim()
+        x = np.linspace(xmin, xmax, 100)
+        p = stats.norm.pdf(x, mu_dict['total'], sig_dict['total'])
+        ax1.plot(x, p, color = 'black')
 
     # Set up the second plot
     ax2.axes.get_yaxis().set_visible(False)
