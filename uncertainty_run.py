@@ -450,7 +450,8 @@ def separate_night_day(data_dict, noct_threshold):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------    
-def main(input_data_file = False, 
+def main(input_config_file = False,
+         input_data_file = False, 
          input_ustar_file = False, 
          num_trials = False, 
          output_directory = False, 
@@ -478,8 +479,11 @@ def main(input_data_file = False,
     # General preparation and formatting
     #-----------------------------------
 
-    # Get master config file
-    configs_master_dict = io.config_to_dict(io.file_select_dialog())
+    # Get master config file (if not supplied)
+    if input_config_file:
+        configs_master_dict = input_config_file
+    else:
+        configs_master_dict = io.config_to_dict(io.file_select_dialog())
 
     # Build custom configuration file for this script
     configs_dict = build_config_file(configs_master_dict)
@@ -695,7 +699,6 @@ def main(input_data_file = False,
                               'the following message: {1}\n'.format(str(this_trial), 
                                                                     e[0]))
                 fail_flag = True
-#                continue # Do the next trial
     
             # If doing random uncertainty, screen out any estimates of 
             # sigma_delta where there are no obs
