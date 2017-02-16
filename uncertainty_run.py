@@ -173,7 +173,7 @@ def get_data(configs_dict):
 
     if configs_dict['global_options']['use_storage']:
         data_dict['NEE_series'] = data_dict['NEE_series'] + data_dict['Sc']
-    elif configs_dict['options']['unify_flux_storage_cases']:
+    elif configs_dict['global_options']['unify_flux_storage_cases']:
         data_dict['NEE_series'][np.isnan(data_dict['Sc'])] = np.nan 
 
     data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6       
@@ -481,7 +481,7 @@ def main(input_config_file = False,
 
     # Get master config file (if not supplied)
     if input_config_file:
-        configs_master_dict = input_config_file
+        configs_master_dict = io.config_to_dict(input_config_file)
     else:
         configs_master_dict = io.config_to_dict(io.file_select_dialog())
 
