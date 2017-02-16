@@ -15,7 +15,7 @@ class MyClass(object):
         self.T = x
         self.ER = y
     
-    def get_respiration(self, temp, rb, Eo):
+    def get_respiration(self, temp, rb, Eo, theta_1 = None, theta_2 = None):
         respiration = rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02)))
         return respiration
 
@@ -23,10 +23,10 @@ class MyClass(object):
         try:
             if Eo == None:
                 params, cov = curve_fit(self.get_respiration, self.T, self.ER, 
-                                        p0 = [100, 1])
+                                        p0 = [1, 100])
             else:
-                params, cov = curve_fit(lambda x, b: 
-                                        self.get_respiration(x, b, Eo), 
+                params, cov = curve_fit(lambda x, a: 
+                                        self.get_respiration(x, a, Eo), 
                                         self.T, self.ER, 
                                         p0 = [1])
             error_state = 0
@@ -69,11 +69,15 @@ class MyClass(object):
         
 Eo = 200
 rb = 2.5
+theta_1 = 3
+theta_2 = 30
 
 # Make some fake data
 temp = np.linspace(0, 30, 100)
+vwc = np.linspace(0.5, 0.1, 100)
+vwc_func = 1 / (1 + np.exp(theta_1 - theta_2 * vwc))
 est_resp = (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02))) +
-            np.random.randn(100))
+            np.random.randn(100)) #* vwc_func
 
 # Instantiate class
 mc = MyClass(temp, est_resp)
