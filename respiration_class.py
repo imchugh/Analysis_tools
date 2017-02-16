@@ -45,7 +45,7 @@ class MyClass(object):
          
         x = self.T
         y1 = self.ER
-        y2 = self.get_respiration(self.x, results_dict['parameters'][0], 
+        y2 = self.get_respiration(self.T, results_dict['parameters'][0], 
                                   results_dict['parameters'][1])
         
         # Plot
@@ -58,7 +58,7 @@ class MyClass(object):
                  label = 'NEE_est')
         ax.set_title(title_str)
         ax.set_xlabel('$Temperature\/(^oC)$', fontsize = 18)
-        ax.set_ylabel('$NEE\/(\mu mol C\/m^{-2} s^{-1}$)', fontsize = 18)
+        ax.set_ylabel('$NEE\/(\mu mol C\/m^{-2}\/s^{-1}$)', fontsize = 18)
         ax.axhline(y = 0, color = 'black')
         ax.xaxis.set_ticks_position('bottom')
         ax.yaxis.set_ticks_position('left')
@@ -79,7 +79,7 @@ est_resp = (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02))) +
 mc = MyClass(temp, est_resp)
 
 # Get the results dictionary
-d = mc.get_fit(Eo = 200)
+d = mc.get_fit()
 
 # Get a respiration series based on parameters
 #a = mc.get_respiration(temp, d['parameters'][0], d['parameters'][1])
