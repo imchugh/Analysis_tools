@@ -12,18 +12,23 @@ import matplotlib.pyplot as plt
 class MyClass(object):
 
     def __init__(self, x, y):
-        self.x = x
-        self.y = y
-
+        self.T = x
+        self.ER = y
     
     def get_respiration(self, temp, rb, Eo):
         respiration = rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02)))
         return respiration
 
-    def get_params(self):
+    def get_fit(self, Eo = None):
         try:
-            params, cov = curve_fit(self.get_respiration, self.x, self.y, 
-                                    p0 = [100, 1])
+            if Eo == None:
+                params, cov = curve_fit(self.get_respiration, self.T, self.ER, 
+                                        p0 = [100, 1])
+            else:
+                params, cov = curve_fit(lambda x, b: 
+                                        self.get_respiration(x, b, Eo), 
+                                        self.T, self.ER, 
+                                        p0 = [1])
             error_state = 0
         except RuntimeError:
             params = [np.nan, np.nan],
@@ -36,11 +41,12 @@ class MyClass(object):
 
     def plot_respiration(self, title_str):
         
-        params = self.get_params()
+        results_dict = self.get_fit()
          
-        x = self.x
-        y1 = self.y
-        y2 = self.get_respiration(self.x, params[0], params[1])
+        x = self.T
+        y1 = self.ER
+        y2 = self.get_respiration(self.x, results_dict['parameters'][0], 
+                                  results_dict['parameters'][1])
         
         # Plot
         fig = plt.figure(figsize = (12,8))
@@ -64,13 +70,16 @@ class MyClass(object):
 Eo = 200
 rb = 2.5
 
+# Make some fake data
 temp = np.linspace(0, 30, 100)
-
 est_resp = (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02))) +
             np.random.randn(100))
 
+# Instantiate class
 mc = MyClass(temp, est_resp)
 
-d = mc.get_params()
+# Get the results dictionary
+d = mc.get_fit(Eo = 200)
 
-a = mc.get_respiration(temp, d['parameters'][0], d['parameters'][1])
+# Get a respiration series based on parameters
+#a = mc.get_respiration(temp, d['parameters'][0], d['parameters'][1])
