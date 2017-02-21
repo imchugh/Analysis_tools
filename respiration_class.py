@@ -15,9 +15,14 @@ class MyClass(object):
         self.T = x
         self.ER = y
     
-    def get_respiration(self, temp, rb, Eo, theta_1 = None, theta_2 = None):
-        respiration = rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02)))
-        return respiration
+    def get_respiration(self, temp, rb, Eo, 
+                              theta_1 = None, theta_2 = None):
+        return rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02)))
+#        if not sws == None:
+#            sw_response = 1 / (1 + np.exp(theta_1 - theta_2 * sws))
+#            return T_response * sw_response
+#        else:
+#            return T_response
 
     def get_fit(self, Eo = None):
         try:
@@ -31,7 +36,7 @@ class MyClass(object):
                                         p0 = [1])
             error_state = 0
         except RuntimeError:
-            params = [np.nan, np.nan],
+            params = [np.nan, np.nan],t 
             cov = None
             error_state = 1
         results_d = {'parameters': params,
