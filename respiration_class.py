@@ -11,18 +11,17 @@ import matplotlib.pyplot as plt
 
 class MyClass(object):
 
-    def __init__(self, x, y):
-        self.T = x
-        self.ER = y
+    def __init__(self, T, ER, sws = None):
+        self.T = T
+        self.ER = ER
+        self.sws = sws
     
-    def get_respiration(self, temp, rb, Eo, 
-                              theta_1 = None, theta_2 = None):
+    def get_respiration(self, temp, rb, Eo):
         return rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02)))
-        if not sws == None:
-            sw_response = 1 / (1 + np.exp(theta_1 - theta_2 * sws))
-            return T_response * sw_response
-        else:
-            return T_response
+
+    def get_respiration_sm(self, temp, sws, rb, Eo, theta_1, theta_2):
+        return (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02))) * 
+                (1 / (1 + np.exp(theta_1 - theta_2 * sws))))
 
     def get_fit(self, Eo = None):
         try:
@@ -36,7 +35,7 @@ class MyClass(object):
                                         p0 = [1])
             error_state = 0
         except RuntimeError:
-            params = [np.nan, np.nan],t 
+            params = [np.nan, np.nan]
             cov = None
             error_state = 1
         results_d = {'parameters': params,
