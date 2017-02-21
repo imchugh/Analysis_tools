@@ -18,11 +18,11 @@ class MyClass(object):
     def get_respiration(self, temp, rb, Eo, 
                               theta_1 = None, theta_2 = None):
         return rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02)))
-#        if not sws == None:
-#            sw_response = 1 / (1 + np.exp(theta_1 - theta_2 * sws))
-#            return T_response * sw_response
-#        else:
-#            return T_response
+        if not sws == None:
+            sw_response = 1 / (1 + np.exp(theta_1 - theta_2 * sws))
+            return T_response * sw_response
+        else:
+            return T_response
 
     def get_fit(self, Eo = None):
         try:
