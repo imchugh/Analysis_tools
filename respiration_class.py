@@ -6,6 +6,8 @@ Created on Wed Jan 18 08:21:07 2017
 @author: ian
 """
 import numpy as np
+import sys
+import inspect
 from scipy. optimize import curve_fit
 import matplotlib.pyplot as plt
 
@@ -15,37 +17,57 @@ class MyClass(object):
         self.T = T
         self.ER = ER
         self.sws = sws
+        
+        if sws == None:
+            self.drivers = T
+        else:
+            self.drivers = np.column_stack([T, sws])            
     
     def get_respiration(self, temp, rb, Eo):
         return rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02)))
 
-    def get_respiration_sm(self, temp, sws, rb, Eo, theta_1, theta_2):
-        return (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02))) * 
-                (1 / (1 + np.exp(theta_1 - theta_2 * sws))))
+    def get_respiration_sm(self, drivers, rb, Eo, theta_1, theta_2):
+        return (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (drivers[:, 0] + 46.02))) 
+                * (1 / (1 + np.exp(theta_1 - theta_2 * drivers[:, 1]))))
 
-    def get_fit(self, Eo = None, theta_1 = None, theta_2 = None):
+    def get_fit(self, rb = None, Eo = None, theta_1 = None, theta_2 = None):
+        
+        fit_params = (rb, Eo, theta_1, theta_2)
         
         p0_list = [1, 100, 1, 10]
+        p0_sub_list = [p0_list[i] for i, d in enumerate(fit_params) 
+                       if d == None]
+        param_list = ['a', 'b', 'c', 'd']
+        param_sub_list = [param_list[i] for i, d in enumerate(fit_params) 
+                          if d != None]
         
-        if not theta_1 == None and theta_2 == None:
-            if self.sws == None:
+        nan_list = [np.nan] * len(p0_list)
+        
+        bin_ID = int(''.join(['0' if param == None else '1' for param in 
+                     (theta_2, theta_1, Eo)]), 2)
+        
+        if self.sws == None:
+            
+            if not theta_1 == None and theta_2 == None:
                 raise RuntimeError('Series sws must be passed to class '
                                    'instance if theta parameters are passed '
                                    'to fitting function... exiting!')
-        try:
-            if Eo == None:
-                params, cov = curve_fit(self.get_respiration, self.T, self.ER, 
-                                        p0 = [1, 100])
-            else:
-                params, cov = curve_fit(lambda x, a: 
-                                        self.get_respiration(x, a, Eo), 
-                                        self.T, self.ER, 
-                                        p0 = [1])
-            error_state = 0
-        except RuntimeError:
-            params = [np.nan, np.nan]
-            cov = None
-            error_state = 1
+            try:
+                if bin_ID == 0:
+                    params, cov = curve_fit(self.get_respiration, self.drivers, 
+                                            self.ER, 
+                                            p0 = [1, 100])
+                elif bin_ID == 1:
+                    params, cov = curve_fit(lambda x, a: 
+                                            self.get_respiration(x, a, Eo), 
+                                            self.drivers, self.ER, 
+                                            p0 = [1])
+                error_state = 0
+            except RuntimeError:
+                params = [np.nan, np.nan]
+                cov = None
+                error_state = 1
+                
         results_d = {'parameters': params,
                      'covariance_matrix': cov,
                      'error_state': error_state}
