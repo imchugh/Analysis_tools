@@ -23,7 +23,15 @@ class MyClass(object):
         return (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02))) * 
                 (1 / (1 + np.exp(theta_1 - theta_2 * sws))))
 
-    def get_fit(self, Eo = None):
+    def get_fit(self, Eo = None, theta_1 = None, theta_2 = None):
+        
+        p0_list = [1, 100, 1, 10]
+        
+        if not theta_1 == None and theta_2 == None:
+            if self.sws == None:
+                raise RuntimeError('Series sws must be passed to class '
+                                   'instance if theta parameters are passed '
+                                   'to fitting function... exiting!')
         try:
             if Eo == None:
                 params, cov = curve_fit(self.get_respiration, self.T, self.ER, 
