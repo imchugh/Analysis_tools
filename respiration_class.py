@@ -54,8 +54,9 @@ class MyClass(object):
                                    'to fitting function... exiting!')
             try:
                 if bin_ID == 0:
-                    params, cov = curve_fit(self.get_respiration, self.drivers, 
-                                            self.ER, 
+                    params, cov = curve_fit(lambda x, a, b:
+                                            self.get_respiration(x, a, b), 
+                                            self.drivers, self.ER, 
                                             p0 = [1, 100])
                 elif bin_ID == 1:
                     params, cov = curve_fit(lambda x, a: 
