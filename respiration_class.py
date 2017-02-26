@@ -7,6 +7,7 @@ Created on Wed Jan 18 08:21:07 2017
 """
 import numpy as np
 import sys
+import pdb
 import inspect
 from scipy. optimize import curve_fit
 import matplotlib.pyplot as plt
@@ -19,30 +20,41 @@ class MyClass(object):
         self.sws = sws
         
         if sws == None:
-            self.drivers = T
+            self.drivers = np.reshape(T, [len(T), 1])
         else:
             self.drivers = np.column_stack([T, sws])            
     
-    def get_respiration(self, temp, rb, Eo):
-        return rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02)))
+#    def get_respiration(self, temp, rb, Eo):
+#        return rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02)))
 
-    def get_respiration_sm(self, drivers, rb, Eo, theta_1, theta_2):
-        return (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (drivers[:, 0] + 46.02))) 
-                * (1 / (1 + np.exp(theta_1 - theta_2 * drivers[:, 1]))))
+    def get_respiration(self, drivers, rb, Eo, theta_1 = None, theta_2 = None):
+        T_response = rb  * np.exp(Eo * (1 / (10 + 46.02) - 
+                                        1 / (drivers[:, 0] + 46.02)))
+        if drivers.shape[1] == 1:
+            return T_response
+        else:
+            return T_response * (1 / (1 + np.exp(theta_1 - theta_2 *
+                                                 drivers[:, 1])))
 
     def get_fit(self, rb = None, Eo = None, theta_1 = None, theta_2 = None):
 
-        # Set the         
+        # Create a binary word from parameter arguments and generate a base-10
+        # ID
         if self.sws == None:
             fit_params = (Eo, rb) 
         else:
             if not theta_1 == None and theta_2 == None:
-                raise RuntimeError('Series sws must be passed to class '
-                                   'instance if theta parameters are passed '
-                                   'to fitting function... exiting!')
+                raise RuntimeError('Theta parameters can only be passed to '
+                                   'fitting function of a class instance '
+                                   'containing Series sws... exiting!')
             fit_params = (theta_2, theta_1, Eo, rb)
-        bin_ID = int(''.join(['0' if param == None else '1' for param in 
-                     fit_params]), 2)
+        bin_word = ['0' if param == None else '1' for param in fit_params]
+        bin_ID = int(''.join(bin_word), 2)
+        print bin_word
+     
+        p0_vals = [bool(int(i)) for i in bin_word]
+        print p0_vals
+        
         print bin_ID
             
 #        fit_params = (rb, Eo, theta_1, theta_2)
@@ -57,25 +69,22 @@ class MyClass(object):
 #        nan_list = [np.nan] * len(p0_list)
 #       
 
-        
-        if self.sws == None:
-            
-            try:
-                if bin_ID == 0:
-                    params, cov = curve_fit(lambda x, a, b:
-                                            self.get_respiration(x, a, b), 
-                                            self.drivers, self.ER, 
-                                            p0 = [1, 100])
-                elif bin_ID == 2:
-                    params, cov = curve_fit(lambda x, a: 
-                                            self.get_respiration(x, a, Eo), 
-                                            self.drivers, self.ER, 
-                                            p0 = [1])
-                error_state = 0
-            except RuntimeError:
-                params = [np.nan, np.nan]
-                cov = None
-                error_state = 1
+        try:
+            if bin_ID == 0:
+                params, cov = curve_fit(lambda x, a, b:
+                                        self.get_respiration(x, a, b), 
+                                        self.drivers, self.ER, 
+                                        p0 = [1, 100])
+            elif bin_ID == 2:
+                params, cov = curve_fit(lambda x, a: 
+                                        self.get_respiration(x, a, Eo), 
+                                        self.drivers, self.ER, 
+                                        p0 = [1])
+            error_state = 0
+        except RuntimeError:
+            params = [np.nan, np.nan]
+            cov = None
+            error_state = 1
         
         results_d = {'parameters': params,
                      'covariance_matrix': cov,
