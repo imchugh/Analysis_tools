@@ -31,34 +31,42 @@ class MyClass(object):
                 * (1 / (1 + np.exp(theta_1 - theta_2 * drivers[:, 1]))))
 
     def get_fit(self, rb = None, Eo = None, theta_1 = None, theta_2 = None):
-        
-        fit_params = (rb, Eo, theta_1, theta_2)
-        
-        p0_list = [1, 100, 1, 10]
-        p0_sub_list = [p0_list[i] for i, d in enumerate(fit_params) 
-                       if d == None]
-        param_list = ['a', 'b', 'c', 'd']
-        param_sub_list = [param_list[i] for i, d in enumerate(fit_params) 
-                          if d != None]
-        
-        nan_list = [np.nan] * len(p0_list)
-        
-        bin_ID = int(''.join(['0' if param == None else '1' for param in 
-                     (theta_2, theta_1, Eo)]), 2)
-        
+
+        # Set the         
         if self.sws == None:
-            
+            fit_params = (Eo, rb) 
+        else:
             if not theta_1 == None and theta_2 == None:
                 raise RuntimeError('Series sws must be passed to class '
                                    'instance if theta parameters are passed '
                                    'to fitting function... exiting!')
+            fit_params = (theta_2, theta_1, Eo, rb)
+        bin_ID = int(''.join(['0' if param == None else '1' for param in 
+                     fit_params]), 2)
+        print bin_ID
+            
+#        fit_params = (rb, Eo, theta_1, theta_2)
+#        
+#        p0_list = [1, 100, 1, 10]
+#        p0_sub_list = [p0_list[i] for i, d in enumerate(fit_params) 
+#                       if d == None]
+#        param_list = ['a', 'b', 'c', 'd']
+#        param_sub_list = [param_list[i] for i, d in enumerate(fit_params) 
+#                          if d != None]
+#        
+#        nan_list = [np.nan] * len(p0_list)
+#       
+
+        
+        if self.sws == None:
+            
             try:
                 if bin_ID == 0:
                     params, cov = curve_fit(lambda x, a, b:
                                             self.get_respiration(x, a, b), 
                                             self.drivers, self.ER, 
                                             p0 = [1, 100])
-                elif bin_ID == 1:
+                elif bin_ID == 2:
                     params, cov = curve_fit(lambda x, a: 
                                             self.get_respiration(x, a, Eo), 
                                             self.drivers, self.ER, 
@@ -68,7 +76,7 @@ class MyClass(object):
                 params = [np.nan, np.nan]
                 cov = None
                 error_state = 1
-                
+        
         results_d = {'parameters': params,
                      'covariance_matrix': cov,
                      'error_state': error_state}
