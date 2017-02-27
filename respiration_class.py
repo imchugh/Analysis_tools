@@ -38,48 +38,38 @@ class MyClass(object):
 
     def get_fit(self, rb = None, Eo = None, theta_1 = None, theta_2 = None):
 
-        # Create a binary word from parameter arguments and generate a base-10
-        # ID
+#       Create a binary word from parameter arguments and generate a base-10
+#       ID and specify a set of starting values for the parameters to be 
+#       fitted
+        init_est_array = np.array([1, 100, 1, 10])
+        param_list = [rb, Eo, theta_1, theta_2]
         if self.sws == None:
-            fit_params = (Eo, rb) 
+            init_est_array = init_est_array[:-2]
+            param_list = param_list[:-2]
         else:
             if not theta_1 == None and theta_2 == None:
                 raise RuntimeError('Theta parameters can only be passed to '
                                    'fitting function of a class instance '
                                    'containing Series sws... exiting!')
-            fit_params = (theta_2, theta_1, Eo, rb)
-        bin_word = ['0' if param == None else '1' for param in fit_params]
-        bin_ID = int(''.join(bin_word), 2)
-        print bin_word
-     
-        p0_vals = [bool(int(i)) for i in bin_word]
-        print p0_vals
+
+#        bin_word = ''.join(['0' if param == None else '1' 
+#                            for param in param_list])
+#        bin_ID = int(bin_word, 2)
         
-        print bin_ID
-            
-#        fit_params = (rb, Eo, theta_1, theta_2)
-#        
-#        p0_list = [1, 100, 1, 10]
-#        p0_sub_list = [p0_list[i] for i, d in enumerate(fit_params) 
-#                       if d == None]
-#        param_list = ['a', 'b', 'c', 'd']
-#        param_sub_list = [param_list[i] for i, d in enumerate(fit_params) 
-#                          if d != None]
-#        
-#        nan_list = [np.nan] * len(p0_list)
-#       
+        bool_array = np.array([i == None for i in param_list])
+        p0_list = init_est_array[bool_array]
 
         try:
-            if bin_ID == 0:
+            if Eo == None:
                 params, cov = curve_fit(lambda x, a, b:
                                         self.get_respiration(x, a, b), 
                                         self.drivers, self.ER, 
-                                        p0 = [1, 100])
-            elif bin_ID == 2:
+                                        p0 = p0_list)
+            else:
                 params, cov = curve_fit(lambda x, a: 
                                         self.get_respiration(x, a, Eo), 
                                         self.drivers, self.ER, 
-                                        p0 = [1])
+                                        p0 = p0_list)
             error_state = 0
         except RuntimeError:
             params = [np.nan, np.nan]
