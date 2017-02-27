@@ -24,9 +24,6 @@ class MyClass(object):
         else:
             self.drivers = np.column_stack([T, sws])            
     
-#    def get_respiration(self, temp, rb, Eo):
-#        return rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02)))
-
     def get_respiration(self, drivers, rb, Eo, theta_1 = None, theta_2 = None):
         T_response = rb  * np.exp(Eo * (1 / (10 + 46.02) - 
                                         1 / (drivers[:, 0] + 46.02)))
@@ -35,9 +32,8 @@ class MyClass(object):
         else:
             return T_response * (1 / (1 + np.exp(theta_1 - theta_2 *
                                                  drivers[:, 1])))
-
     def get_fit(self, rb = None, Eo = None, theta_1 = None, theta_2 = None):
-
+        
 #       Create a binary word from parameter arguments and generate a base-10
 #       ID and specify a set of starting values for the parameters to be 
 #       fitted
@@ -51,10 +47,6 @@ class MyClass(object):
                 raise RuntimeError('Theta parameters can only be passed to '
                                    'fitting function of a class instance '
                                    'containing Series sws... exiting!')
-
-#        bin_word = ''.join(['0' if param == None else '1' 
-#                            for param in param_list])
-#        bin_ID = int(bin_word, 2)
         
         bool_array = np.array([i == None for i in param_list])
         p0_list = init_est_array[bool_array]
