@@ -45,14 +45,14 @@ class MyClass(object):
         return rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (drivers[:, 0] + 46.02)))
 
     
-    def make_model(**kwargs):
+    def make_model(self, **kwargs):
         params=set(('rb','Eo')).difference(kwargs.keys())
         exec self.funcstr.format(p=','.join(params)) in kwargs
         return kwargs['get_respiration']
 
     def get_fit(self, rb = None, Eo = None, theta_1 = None, theta_2 = None):
         
-        func = make_model()
+#        func = make_model()
         
 #       Create a binary word from parameter arguments and generate a base-10
 #       ID and specify a set of starting values for the parameters to be 
