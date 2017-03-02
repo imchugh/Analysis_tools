@@ -67,17 +67,13 @@ class MyClass(object):
         bool_array = np.array([i == None for i in param_list])
         p0_list = init_est_array[bool_array]
 
+        if Eo == None:
+            func = lambda x, a, b: self.get_respiration(x, a, b)
+        else:
+            func = lambda x, a: self.get_respiration(x, a, Eo)
+
         try:
-            if Eo == None:
-                params, cov = curve_fit(lambda x, a, b:
-                                        self.get_respiration(x, a, b), 
-                                        self.drivers, self.ER, 
-                                        p0 = p0_list)
-            else:
-                params, cov = curve_fit(lambda x, a: 
-                                        self.get_respiration(x, a, Eo), 
-                                        self.drivers, self.ER, 
-                                        p0 = p0_list)
+            params, cov = curve_fit(func, self.drivers, self.ER, p0 = p0_list)
             error_state = 0
         except RuntimeError:
             params = [np.nan, np.nan]
