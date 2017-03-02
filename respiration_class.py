@@ -41,10 +41,10 @@ class MyClass(object):
 #    def get_respiration(self, drivers, rb, Eo):
 #        return rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (drivers[:, 0] + 46.02)))
    
-    def make_model(self, **kwargs):
-        params=set(('rb','Eo')).difference(kwargs.keys())
-        exec self.funcstr.format(p=','.join(params)) in kwargs
-        return kwargs['get_respiration']
+#    def make_model(self, **kwargs):
+#        params=set(('rb','Eo')).difference(kwargs.keys())
+#        exec self.funcstr.format(p=','.join(params)) in kwargs
+#        return kwargs['get_respiration']
 
     def get_fit(self, rb = None, Eo = None, theta_1 = None, theta_2 = None):
         
