@@ -6,9 +6,7 @@ Created on Wed Jan 18 08:21:07 2017
 @author: ian
 """
 import numpy as np
-import sys
 import pdb
-import inspect
 from scipy. optimize import curve_fit
 import matplotlib.pyplot as plt
 
@@ -23,32 +21,17 @@ class MyClass(object):
             self.drivers = np.reshape(T, [len(T), 1])
         else:
             self.drivers = np.column_stack([T, sws])            
-    
-        self.funcstr = '''def get_respiration(self, drivers, {p}):
-            import numpy
-            return rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (drivers[:, 0] + 46.02)))'''
-
-    
-    def get_respiration(self, drivers, rb, Eo, theta_1 = None, theta_2 = None):
-        T_response = rb  * np.exp(Eo * (1 / (10 + 46.02) - 
+       
+    def get_respiration(self, drivers, *params):
+        T_response = params[0]  * np.exp(params[1] * (1 / (10 + 46.02) - 
                                         1 / (drivers[:, 0] + 46.02)))
         if drivers.shape[1] == 1:
             return T_response
         else:
-            return T_response * (1 / (1 + np.exp(theta_1 - theta_2 *
+            return T_response * (1 / (1 + np.exp(params[2] - params[3] *
                                                  drivers[:, 1])))
 
-#    def get_respiration(self, drivers, rb, Eo):
-#        return rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (drivers[:, 0] + 46.02)))
-   
-#    def make_model(self, **kwargs):
-#        params=set(('rb','Eo')).difference(kwargs.keys())
-#        exec self.funcstr.format(p=','.join(params)) in kwargs
-#        return kwargs['get_respiration']
-
     def get_fit(self, rb = None, Eo = None, theta_1 = None, theta_2 = None):
-        
-#        func = make_model()
         
 #       Create a binary word from parameter arguments and generate a base-10
 #       ID and specify a set of starting values for the parameters to be 
@@ -83,6 +66,7 @@ class MyClass(object):
         results_d = {'parameters': params,
                      'covariance_matrix': cov,
                      'error_state': error_state}
+        
         return results_d
 
     def plot_respiration(self, title_str):
