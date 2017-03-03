@@ -24,7 +24,7 @@ class MyClass(object):
        
     def get_respiration(self, drivers, *params):
         T_response = params[0]  * np.exp(params[1] * (1 / (10 + 46.02) - 
-                                        1 / (drivers[:, 0] + 46.02)))
+                                         1 / (drivers[:, 0] + 46.02)))
         if drivers.shape[1] == 1:
             return T_response
         else:
@@ -114,6 +114,3 @@ mc = MyClass(temp, est_resp)
 
 # Get the results dictionary
 d = mc.get_fit()
-
-# Get a respiration series based on parameters
-#a = mc.get_respiration(temp, d['parameters'][0], d['parameters'][1])
