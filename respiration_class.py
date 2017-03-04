@@ -36,24 +36,30 @@ class MyClass(object):
 #       Create a binary word from parameter arguments and generate a base-10
 #       ID and specify a set of starting values for the parameters to be 
 #       fitted
-        init_est_array = np.array([1, 100, 1, 10])
-        param_list = [rb, Eo, theta_1, theta_2]
-        if self.sws == None:
-            init_est_array = init_est_array[:-2]
-            param_list = param_list[:-2]
-        else:
-            if not theta_1 == None and theta_2 == None:
-                raise RuntimeError('Theta parameters can only be passed to '
-                                   'fitting function of a class instance '
-                                   'containing Series sws... exiting!')
-        
-        bool_array = np.array([i == None for i in param_list])
-        p0_list = init_est_array[bool_array]
 
-        if Eo == None:
-            func = lambda x, a, b: self.get_respiration(x, a, b)
-        else:
-            func = lambda x, a: self.get_respiration(x, a, Eo)
+        index = -2 if self.sws == None else None
+        passed_list = ['rb', 'Eo', 'theta_1', 'theta_2'][:index]
+        fitted_list = ['a', 'b', 'c', 'd'][:index]
+        init_est_list = [1, 100, 1, 10][:index]
+        boolean_list = [i == None for i in [rb, Eo, theta_1, theta_2]][:index]
+        
+        sub_fitted_str = ','.join([fitted_list[i] for i, d 
+                                   in enumerate(boolean_list) if d])
+        all_str = ','.join([fitted_list[i] if d else passed_list[i] for i, d  
+                            in enumerate(boolean_list)])
+        func_str = ('lambda x, {0}, self = self: self.get_respiration(x, {1})'
+                    .format(sub_fitted_str, all_str))
+
+        p0_list = [init_est_list[i] for i, d in enumerate(boolean_list) if d]
+
+#                
+#        else:
+#            if not theta_1 == None and theta_2 == None:
+#                raise RuntimeError('Theta parameters can only be passed to '
+#                                   'fitting function of a class instance '
+#                                   'containing Series sws... exiting!')
+        
+        func = eval(func_str)
 
         try:
             params, cov = curve_fit(func, self.drivers, self.ER, p0 = p0_list)
