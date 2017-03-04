@@ -33,16 +33,26 @@ class MyClass(object):
 
     def get_fit(self, rb = None, Eo = None, theta_1 = None, theta_2 = None):
         
-#       Create a binary word from parameter arguments and generate a base-10
-#       ID and specify a set of starting values for the parameters to be 
-#       fitted
+        # Check if sws is a valid attribute of class instance - if None, set
+        # truncating index accordingly; if theta parameters have been passed,
+        # warn the user and then ignore
+        if self.sws == None:
+            index = -2
+            if not theta_1 == None and theta_2 == None:
+                print ('Theta parameters can only be passed to '
+                       'fitting function of a class instance '
+                       'containing Series sws... ignoring theta parameters!')
+        else:
+            index = None
 
-        index = -2 if self.sws == None else None
+        # Set up lists for string construction to be passed into function 
+        # string for evaluation
         passed_list = ['rb', 'Eo', 'theta_1', 'theta_2'][:index]
         fitted_list = ['a', 'b', 'c', 'd'][:index]
         init_est_list = [1, 100, 1, 10][:index]
         boolean_list = [i == None for i in [rb, Eo, theta_1, theta_2]][:index]
         
+        # Make strings including function string
         sub_fitted_str = ','.join([fitted_list[i] for i, d 
                                    in enumerate(boolean_list) if d])
         all_str = ','.join([fitted_list[i] if d else passed_list[i] for i, d  
@@ -50,17 +60,13 @@ class MyClass(object):
         func_str = ('lambda x, {0}, self = self: self.get_respiration(x, {1})'
                     .format(sub_fitted_str, all_str))
 
+        # Make list of prior estimates for curve_fit
         p0_list = [init_est_list[i] for i, d in enumerate(boolean_list) if d]
 
-#                
-#        else:
-#            if not theta_1 == None and theta_2 == None:
-#                raise RuntimeError('Theta parameters can only be passed to '
-#                                   'fitting function of a class instance '
-#                                   'containing Series sws... exiting!')
-        
+        # Make function by evaluating string        
         func = eval(func_str)
 
+        # Now fit
         try:
             params, cov = curve_fit(func, self.drivers, self.ER, p0 = p0_list)
             error_state = 0
