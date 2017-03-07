@@ -129,12 +129,18 @@ temp = np.linspace(0, 30, 100)
 vwc = np.linspace(0.5, 0.1, 100)
 vwc_func = 1 / (1 + np.exp(theta_1 - theta_2 * vwc))
 est_resp = (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02))) +
-            np.random.randn(100)) #* vwc_func
+            np.random.randn(100))
 
-# Instantiate class
-mc = ER(temp, est_resp)
+est_resp_H2O = (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02))) +
+                np.random.randn(100)) * vwc_func            
+            
+# Instantiate class without soil moisture
+this_ER = ER(temp, est_resp)
 
 # Get the results dictionary
-params_dict = mc.get_fit()
+params_dict = this_ER.get_fit()
 
+# Instantiate class with soil moisture
+wt_ER = ER(temp, vwc, est_resp_H2O)
 
+this_dict = wt_ER.get_fit()
