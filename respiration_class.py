@@ -121,7 +121,7 @@ class ER(object):
         
 Eo = 200
 rb = 2.5
-theta_1 = 3
+theta_1 = 3 
 theta_2 = 30
 
 # Make some fake data
@@ -141,6 +141,6 @@ this_ER = ER(temp, est_resp)
 params_dict = this_ER.get_fit()
 
 # Instantiate class with soil moisture
-wt_ER = ER(temp, vwc, est_resp_H2O)
+wt_ER = ER(temp, est_resp_H2O, vwc)
 
 this_dict = wt_ER.get_fit()
