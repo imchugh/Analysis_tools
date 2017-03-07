@@ -90,7 +90,6 @@ class ER(object):
         
     def plot_respiration(self, title_str):
         
-        results_dict = self.get_fit()
         if not self.sws == None:
             
             print 'Watch this space! Going to make a 3D contour plot!'
