@@ -10,7 +10,7 @@ import pdb
 from scipy. optimize import curve_fit
 import matplotlib.pyplot as plt
 
-class MyClass(object):
+class ER(object):
 
     def __init__(self, T, ER, sws = None):
         self.T = T
@@ -22,7 +22,7 @@ class MyClass(object):
         else:
             self.drivers = np.column_stack([T, sws])            
        
-    def get_respiration(self, drivers, *params):
+    def get_ER(self, drivers, *params):
         T_response = params[0]  * np.exp(params[1] * (1 / (10 + 46.02) - 
                                          1 / (drivers[:, 0] + 46.02)))
         if drivers.shape[1] == 1:
@@ -57,13 +57,14 @@ class MyClass(object):
                                    in enumerate(boolean_list) if d])
         all_str = ','.join([fitted_list[i] if d else passed_list[i] for i, d  
                             in enumerate(boolean_list)])
-        func_str = ('lambda x, {0}, self = self: self.get_respiration(x, {1})'
+        func_str = ('lambda x, {0}, self = self: self.get_ER(x, {1})'
                     .format(sub_fitted_str, all_str))
 
         # Make list of prior estimates for curve_fit
         p0_list = [init_est_list[i] for i, d in enumerate(boolean_list) if d]
 
-        # Make function by evaluating string        
+        # Make function by evaluating string (find another way before this goes
+        # public!!!)      
         func = eval(func_str)
 
         # Now fit
@@ -81,14 +82,23 @@ class MyClass(object):
         
         return results_d
 
+    def get_series(self):
+        
+        results_dict = self.get_fit()
+        return self.get_ER(self.drivers, results_dict['parameters'][0], 
+                                             results_dict['parameters'][1])
+        
     def plot_respiration(self, title_str):
         
         results_dict = self.get_fit()
-         
-        x = self.T
+        if not self.sws == None:
+            
+            print 'Watch this space! Going to make a 3D contour plot!'
+            return
+        
+        x = self.drivers[:, 0]
         y1 = self.ER
-        y2 = self.get_respiration(self.T, results_dict['parameters'][0], 
-                                  results_dict['parameters'][1])
+        y2 = self.get_series()
         
         # Plot
         fig = plt.figure(figsize = (12,8))
@@ -122,7 +132,9 @@ est_resp = (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02))) +
             np.random.randn(100)) #* vwc_func
 
 # Instantiate class
-mc = MyClass(temp, est_resp)
+mc = ER(temp, est_resp)
 
 # Get the results dictionary
-d = mc.get_fit()
+params_dict = mc.get_fit()
+
+
