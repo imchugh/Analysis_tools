@@ -72,7 +72,7 @@ class ER(object):
             params, cov = curve_fit(func, self.drivers, self.ER, p0 = p0_list)
             error_state = 0
         except RuntimeError:
-            params = [np.nan, np.nan]
+            params = [np.nan] * len(sub_fitted_str)
             cov = None
             error_state = 1
         
