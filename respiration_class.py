@@ -17,7 +17,7 @@ class ER(object):
         self.ER = ER
         self.sws = sws
         
-        if sws == None:
+        if sws is None:
             self.drivers = np.reshape(T, [len(T), 1])
         else:
             self.drivers = np.column_stack([T, sws])            
@@ -36,7 +36,7 @@ class ER(object):
         # Check if sws is a valid attribute of class instance - if None, set
         # truncating index accordingly; if theta parameters have been passed,
         # warn the user and then ignore
-        if self.sws == None:
+        if self.sws is None:
             index = -2
             if not theta_1 == None and theta_2 == None:
                 print ('Theta parameters can only be passed to '
@@ -118,6 +118,7 @@ class ER(object):
         
         return fig
         
+# Set parameters    
 Eo = 200
 rb = 2.5
 theta_1 = 3 
@@ -142,4 +143,30 @@ params_dict = this_ER.get_fit()
 # Instantiate class with soil moisture
 wt_ER = ER(temp, est_resp_H2O, vwc)
 
-this_dict = wt_ER.get_fit()
+this_dict = wt_ER.get_fit(theta_1 = 3)
+
+
+#------------------------------------------------------------------------------
+#fig = plt.figure()
+#ax = fig.gca(projection='3d')
+#
+## Make data.
+#x = temp
+#y = vwc
+#X, Y = np.meshgrid(x, y)
+#Z = (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (X + 46.02))) +
+#     np.random.randn(100)) * 1 / (1 + np.exp(theta_1 - theta_2 * Y))  
+#
+## Plot the surface.
+#surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm,
+#                       linewidth=0, antialiased=False)
+#
+## Customize the z axis.
+##ax.set_zlim(-1.01, 1.01)
+##ax.zaxis.set_major_locator(LinearLocator(10))
+##ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
+#
+## Add a color bar which maps values to colors.
+#fig.colorbar(surf, shrink=0.5, aspect=5)
+#
+#plt.show()
