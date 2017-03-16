@@ -221,7 +221,7 @@ def screen_low_ustar(data_dict, ustar_threshold, noct_threshold, filter_day = Fa
                             'your configuration file so that years specified ' \
                             'for ustar threshold match those available in ' \
                             'data file; alternatively, specify a single ' \
-                            'value (float or int) for ustar. Exiting...')
+                            'value (float) for ustar threshold. Exiting...')
         extra_list = [year for year in threshold_keys 
                       if not year in years_data_dict.keys()]
         if not len(extra_list) == 0:

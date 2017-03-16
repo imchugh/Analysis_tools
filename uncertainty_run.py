@@ -177,7 +177,7 @@ def get_data(configs_dict):
         data_dict['NEE_series'][np.isnan(data_dict['Sc'])] = np.nan 
 
     data_dict['PAR'] = data_dict['Fsd'] * 0.46 * 4.6       
-        
+
     return data_dict    
 #------------------------------------------------------------------------------
 
@@ -564,8 +564,7 @@ def main(input_config_file = False,
                   'in configuration file...'.format(e))
     else:
         ustar_threshold = configs_dict['global_options']['ustar_threshold']    
-        if do_ustar_uncertainty: ustar_uncertainty = (
-            configs_dict['global_options']['ustar_uncertainty'])
+        ustar_uncertainty = (configs_dict['global_options']['ustar_uncertainty'])
 
 
     #----------------------------------------------
