@@ -6,9 +6,11 @@ Created on Tue Mar 21 09:52:14 2017
 @author: ian
 """
 
+import numpy as np
 import pandas as pd
 import copy as cp
 import pdb
+import matplotlib.pyplot as plt
 
 default_press = 101.325
 site_alt = None
@@ -62,7 +64,7 @@ def sort_names(name_list, return_levels = True):
     else:
         return sorted_name_list
     
-
+#------------------------------------------------------------------------------
 
 path_to_file = '/home/ian/Documents/profile.csv'
 default_press = 101.325
@@ -105,13 +107,13 @@ else:
 
 # Create list of layer depths and layer names
 levels_list = CO2_levels_list
-zero_levels_list = cp.copy(T_levels_list)
+zero_levels_list = cp.copy(CO2_levels_list)
 zero_levels_list.insert(0, 0)
 layer_depths_list = [zero_levels_list[i] - zero_levels_list[i - 1] 
                      for i in range(1, len(zero_levels_list))]
-layer_names_list = ['CO2_{0}-{1}m'.format(str(zero_levels_list[i - 1]),
-                                          str(zero_levels_list[i])) 
-                    for i in range(1, len(zero_levels_list))]
+CO2_layer_names_list = ['CO2_{0}-{1}m'.format(str(zero_levels_list[i - 1]),
+                                              str(zero_levels_list[i])) 
+                        for i in range(1, len(zero_levels_list))]
 
 # Calculate the layer averages (mean of upper and lower boundary);
 # lowest layer is just the value observed at the lowest boundary)
@@ -119,14 +121,31 @@ layers_df = pd.DataFrame(index = df.index)
 for i in range(len(levels_list)):
     if i == 0:
         level_name = CO2_names_list[i]
-        layer_name = layer_names_list[i]
+        layer_name = CO2_layer_names_list[i]
         layers_df[layer_name] = df[level_name]
     else:
         upper_level_name = CO2_names_list[i]
         lower_level_name = CO2_names_list[i - 1]
-        layer_name = layer_names_list[i]
+        layer_name = CO2_layer_names_list[i]
         layers_df[layer_name] = (df[upper_level_name] + 
                                  df[lower_level_name]) / 2
+
+
+fig, ax = plt.subplots(1, 1, figsize = (12, 8))
+fig.patch.set_facecolor('white')
+colour_idx = np.linspace(0, 1, len(CO2_layer_names_list))
+ax.tick_params(axis = 'x', labelsize = 14)
+ax.tick_params(axis = 'y', labelsize = 14)
+ax.set_xlabel('$Date$', fontsize = 18)
+ax.set_ylabel('$CO2\/\/[ppm]$', fontsize = 18)
+ax.xaxis.set_ticks_position('bottom')
+ax.yaxis.set_ticks_position('left')
+ax.spines['right'].set_visible(False)
+ax.spines['top'].set_visible(False)
+for i, var in enumerate(CO2_layer_names_list):
+    color = plt.cm.cool(colour_idx[i])
+    plt.plot(layers_df.index, layers_df[var], label = var, color = color)
+plt.legend(loc='upper left', frameon = False)
 
 
 
