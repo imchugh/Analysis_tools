@@ -63,7 +63,9 @@ def sort_names(name_list, return_levels = True):
         return sorted_name_list, sorted_levels_list
     else:
         return sorted_name_list
-    
+
+def get_layers():
+    pass
 #------------------------------------------------------------------------------
 
 path_to_file = '/home/ian/Documents/profile.csv'
@@ -72,8 +74,6 @@ use_Ta_var = None
 
 this_df = pd.read_csv(path_to_file)
 df = downsample_data(this_df, smooth_window = 10)
-
-
 
 if not 'press' in df.columns:
     if not site_alt is None:
