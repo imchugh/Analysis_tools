@@ -18,14 +18,15 @@ class storage(object):
         
         self.target_file = target_file
         self.df = self.get_data()
-        self.CO2_level_names, self.CO2_levels = self.get_level_names(CO2_str)
+        self.level_names, self.levels = self.get_levels(CO2_str)
         self.T_channels = [var for var in self.df.columns if Ta_str in var]
-#        self.levels = [int(this_label.split('_')[1][:-1]) for 
-#                       this_label in self.CO2_channels]
+        self.layer_names, self.layers = self.get_layers(CO2_str)
 
     def get_data(self):
     
-        return pd.read_csv(self.target_file)
+        df = pd.read_csv(self.target_file)
+        df.index = pd.to_datetime(df.Datetime)
+        return df
 
     def downsample_data(self, output_freq = 30, smooth_window = 0):
     
@@ -43,9 +44,6 @@ class storage(object):
         output_freq_string = '{0}T'.format(str(output_freq))
 
         local_df = cp.copy(self.df)
-
-        local_df.index = pd.to_datetime(local_df.Datetime)
-        local_df.drop('Datetime', axis = 1, inplace = True)
         
         if not smooth_window == 0:
             current_freq = pd.infer_freq(local_df.index)
@@ -57,7 +55,24 @@ class storage(object):
         else:
             return local_df.resample(output_freq_string).pad()
 
-    def get_level_names(self, search_str, return_levels = True):
+    def get_layer_means(self, var = 'CO2'):
+        
+        layers_df = pd.DataFrame(index = self.df.index)
+        for i in range(len(self.levels)):   
+            if i == 0:
+                level_name = self.level_names[i]
+                layer_name = self.layer_names[i]
+                layers_df[layer_name] = self.df[level_name]
+            else:
+                upper_level_name = self.level_names[i]
+                lower_level_name = self.level_names[i - 1]
+                layer_name = self.layer_names[i]
+                layers_df[layer_name] = (self.df[upper_level_name] + 
+                                         self.df[lower_level_name]) / 2
+        
+        return layers_df
+
+    def get_levels(self, search_str, return_levels = True):
 
         name_list = [var for var in self.df.columns if search_str in var]        
         
@@ -78,41 +93,68 @@ class storage(object):
         else:
             return sorted_name_list
 
-def calculate_CO2_storage(df, site_alt = None):
-    
-    CO2_layer_names_list = get_names(df)
-    Tair_layer_names_list = get_names(df, var = 'Tair')
-    if not len(Tair_layer_names_list) == len(CO2_layer_names_list):
-        Tair_layer_names_list = Tair_layer_names_list * len(CO2_layer_names_list)
-    lookup_dict = dict(zip(CO2_layer_names_list, Tair_layer_names_list))
-    
-    storage_names = ['Sc{0}'.format(this_var.split('CO2')[1]) 
-                     for this_var in CO2_layer_names_list]
-    
-    storage_depths = get_layer_depths_from_layer_names(CO2_layer_names_list)
-    
-    storage_df = pd.DataFrame(index = df.index)
-    
-    if not 'ps' in df.columns:
-        df['ps'] = get_standard_press(site_alt)
-    
-    for i, var in enumerate(CO2_layer_names_list):
+    def get_layers(self, layer_str, return_layers = True):
         
-        molar_density = (df['ps'] * 10**3 / 
-                         (8.3143 * (273.15 + df[Tair_layer_names_list[i]])))
+        zero_levels_list = cp.copy(self.levels)
+        zero_levels_list.insert(0, 0)
         
-        molar_density_CO2 = molar_density * df[var] * 10**-6
-                                              
-        layer_moles_CO2 = molar_density_CO2 * storage_depths[i]
+        names_list = []
+        depths_list = []
+        for i in range(1, len(zero_levels_list)):
+            depths_list.append(zero_levels_list[i] - zero_levels_list[i - 1])
+            names_list.append('{0}_{1}-{2}m'.format(layer_str,
+                                                    str(zero_levels_list[i - 1]),
+                                                    str(zero_levels_list[i])))
+        if return_layers:
+            return names_list, depths_list
+        else:
+            return names_list
+    
+    def calculate_CO2_storage(self):
 
-        delta_layer_moles_CO2 = (layer_moles_CO2 - layer_moles_CO2.shift()) * 10**6                                              
-        delta_layer_moles_CO2_per_sec = delta_layer_moles_CO2 / 1800                                      
-        storage_df[storage_names[i]] = delta_layer_moles_CO2_per_sec
-        
-    storage_df['Sc_total'] = storage_df[storage_names].sum(axis = 1)
-        
-   
-    return storage_df
+        test = self.downsample_data()
+#        get_layer_means(var = 'CO2')
+        return test
+
+def foo():
+    
+    print 'Hello world!'
+
+#    def calculate_CO2_storage(df, site_alt = None):
+#        
+#        CO2_layer_names_list = get_names(df)
+#        Tair_layer_names_list = get_names(df, var = 'Tair')
+#        if not len(Tair_layer_names_list) == len(CO2_layer_names_list):
+#            Tair_layer_names_list = Tair_layer_names_list * len(CO2_layer_names_list)
+#        lookup_dict = dict(zip(CO2_layer_names_list, Tair_layer_names_list))
+#        
+#        storage_names = ['Sc{0}'.format(this_var.split('CO2')[1]) 
+#                         for this_var in CO2_layer_names_list]
+#        
+#        storage_depths = get_layer_depths_from_layer_names(CO2_layer_names_list)
+#        
+#        storage_df = pd.DataFrame(index = df.index)
+#        
+#        if not 'ps' in df.columns:
+#            df['ps'] = get_standard_press(site_alt)
+#        
+#        for i, var in enumerate(CO2_layer_names_list):
+#            
+#            molar_density = (df['ps'] * 10**3 / 
+#                             (8.3143 * (273.15 + df[Tair_layer_names_list[i]])))
+#            
+#            molar_density_CO2 = molar_density * df[var] * 10**-6
+#                                                  
+#            layer_moles_CO2 = molar_density_CO2 * storage_depths[i]
+#    
+#            delta_layer_moles_CO2 = (layer_moles_CO2 - layer_moles_CO2.shift()) * 10**6                                              
+#            delta_layer_moles_CO2_per_sec = delta_layer_moles_CO2 / 1800                                      
+#            storage_df[storage_names[i]] = delta_layer_moles_CO2_per_sec
+#            
+#        storage_df['Sc_total'] = storage_df[storage_names].sum(axis = 1)
+#            
+#       
+#        return storage_df
 
 def get_standard_press(elevation):
     
@@ -142,26 +184,26 @@ def get_layer_depths_from_levels(levels_list):
     return [zero_levels_list[i] - zero_levels_list[i - 1] 
             for i in range(1, len(zero_levels_list))]
     
-def get_layer_means(df, var = 'CO2'):
-    
-    level_names_list = get_names(df, var = var)    
-    level_names_list, levels_list = sort_level_names(level_names_list)
-    layer_names_list = get_layer_names(levels_list, var = var)
-    
-    layers_df = pd.DataFrame(index = df.index)
-    for i in range(len(levels_list)):   
-        if i == 0:
-            level_name = level_names_list[i]
-            layer_name = layer_names_list[i]
-            layers_df[layer_name] = df[level_name]
-        else:
-            upper_level_name = level_names_list[i]
-            lower_level_name = level_names_list[i - 1]
-            layer_name = layer_names_list[i]
-            layers_df[layer_name] = (df[upper_level_name] + 
-                                     df[lower_level_name]) / 2
-    
-    return layers_df
+#def get_layer_means(df, var = 'CO2'):
+#    
+#    level_names_list = get_names(df, var = var)    
+#    level_names_list, levels_list = sort_level_names(level_names_list)
+#    layer_names_list = get_layer_names(levels_list, var = var)
+#    
+#    layers_df = pd.DataFrame(index = df.index)
+#    for i in range(len(levels_list)):   
+#        if i == 0:
+#            level_name = level_names_list[i]
+#            layer_name = layer_names_list[i]
+#            layers_df[layer_name] = df[level_name]
+#        else:
+#            upper_level_name = level_names_list[i]
+#            lower_level_name = level_names_list[i - 1]
+#            layer_name = layer_names_list[i]
+#            layers_df[layer_name] = (df[upper_level_name] + 
+#                                     df[lower_level_name]) / 2
+#    
+#    return layers_df
 
 #------------------------------------------------------------------------------
 
