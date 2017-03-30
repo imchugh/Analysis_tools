@@ -12,29 +12,42 @@ import copy as cp
 import pdb
 import matplotlib.pyplot as plt
 
-def downsample_data(df, output_freq = 30, smooth_window = 0):
+class storage(object):
+    
+    def __init__(self, target_file):
+        
+        self.target_file = target_file
+        self.df = self.get_data()
+        self.CO2_channels = [var for var in self.df.columns if 'CO2' in var]
+        self.T_channels = [var for var in self.df.columns if 'Tair' in var]
 
-    """
-    This function downsamples profile data to the requested output frequency
-    (generally 30 minutes);
-    - args: 'df' (pandas sdataframe with datetime index)
-    - kwargs: 'output_freq' (int, minutes) - the output interval required
-              'smooth_window' (int, minutes) - applies a centered running 
-              average over the requested interval
-    """
+    def get_data(self):
     
-    df.index = pd.to_datetime(df.Datetime)
-    df.drop('Datetime', axis = 1, inplace = True)
+        return pd.read_csv(self.target_file)
+
+    def downsample_data(self, output_freq = 30, smooth_window = 0):
     
-    if not smooth_window == 0:
-        current_freq = pd.infer_freq(df.index)
-        upsample_df = df.resample('1T').interpolate()
-        smooth_df = upsample_df.rolling(window = smooth_window, 
-                                        center = True).mean()
-        df = smooth_df.resample(current_freq).pad()
-        return df.resample('30T').pad()
-    else:
-        return df.resample('30T').pad()
+        """
+        This function downsamples profile data to the requested output frequency
+        (generally 30 minutes);
+        - args: 'df' (pandas sdataframe with datetime index)
+        - kwargs: 'output_freq' (int, minutes) - the output interval required
+                  'smooth_window' (int, minutes) - applies a centered running 
+                  average over the requested interval
+        """
+        pdb.set_trace()
+        self.df.index = pd.to_datetime(df.Datetime)
+        self.df.drop('Datetime', axis = 1, inplace = True)
+        
+        if not smooth_window == 0:
+            current_freq = pd.infer_freq(self.df.index)
+            upsample_df = self.df.resample('1T').interpolate()
+            smooth_df = upsample_df.rolling(window = smooth_window, 
+                                            center = True).mean()
+            downsample_df = smooth_df.resample(current_freq).pad()
+            return downsample_df.resample('30T').pad()
+        else:
+            return downsample_df.resample('30T').pad()
 
 def calculate_CO2_storage(df, site_alt = None):
     
@@ -203,21 +216,21 @@ diurnal_df = test.groupby([lambda x: x.hour, lambda y: y.minute]).mean()
 diurnal_df.index = np.arange(48) / 2.0
 
 
-fig, ax = plt.subplots(1, 1, figsize = (12, 8))
-fig.patch.set_facecolor('white')
-colour_idx = np.linspace(0, 1, len(CO2_layer_names_list))
-ax.tick_params(axis = 'x', labelsize = 14)
-ax.tick_params(axis = 'y', labelsize = 14)
-ax.set_xlabel('$Date$', fontsize = 18)
-ax.set_ylabel('$CO2\/\/[ppm]$', fontsize = 18)
-ax.xaxis.set_ticks_position('bottom')
-ax.yaxis.set_ticks_position('left')
-ax.spines['right'].set_visible(False)
-ax.spines['top'].set_visible(False)
-for i, var in enumerate(CO2_layer_names_list):
-    color = plt.cm.cool(colour_idx[i])
-    plt.plot(layers_df.index, layers_df[var], label = var, color = color)
-plt.legend(loc='upper left', frameon = False)
+#fig, ax = plt.subplots(1, 1, figsize = (12, 8))
+#fig.patch.set_facecolor('white')
+#colour_idx = np.linspace(0, 1, len(CO2_layer_names_list))
+#ax.tick_params(axis = 'x', labelsize = 14)
+#ax.tick_params(axis = 'y', labelsize = 14)
+#ax.set_xlabel('$Date$', fontsize = 18)
+#ax.set_ylabel('$CO2\/\/[ppm]$', fontsize = 18)
+#ax.xaxis.set_ticks_position('bottom')
+#ax.yaxis.set_ticks_position('left')
+#ax.spines['right'].set_visible(False)
+#ax.spines['top'].set_visible(False)
+#for i, var in enumerate(CO2_layer_names_list):
+#    color = plt.cm.cool(colour_idx[i])
+#    plt.plot(layers_df.index, layers_df[var], label = var, color = color)
+#plt.legend(loc='upper left', frameon = False)
 
 #fig, ax = plt.subplots(1, 1, figsize = (12, 8))
 #fig.patch.set_facecolor('white')
