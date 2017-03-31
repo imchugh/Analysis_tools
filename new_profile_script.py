@@ -126,22 +126,41 @@ def get_formatted_data():
     df.index = pd.to_datetime(df.Datetime)
     return df
 
+def make_layers_df(df, profile_obj):
+    
+    layers_df = get_layer_means(df,  
+                                profile_obj.CO2_level_names, 
+                                profile_obj.CO2_levels,
+                                profile_obj.CO2_layer_names)
+
+    if profile_obj.use_Tair == None:
+        layers_df = layers_df.join(get_layer_means(df,
+                                                   profile_obj.Tair_level_names, 
+                                                   profile_obj.Tair_levels,
+                                                   profile_obj.Tair_layer_names))
+    else:
+        layers_df[profile_obj.use_Tair] = df[profile_obj.use_Tair]
+        
+    layers_df['ps'] = df['ps']
+    
+    return layers_df
+
 def get_layer_means(df, level_names, levels, layer_names):
     
-    layers_df = pd.DataFrame(index = df.index)
+    mean_df = pd.DataFrame(index = df.index)
     for i in range(len(levels)):   
         if i == 0:
             level_name = level_names[i]
             layer_name = layer_names[i]
-            layers_df[layer_name] = df[level_name]
+            mean_df[layer_name] = df[level_name]
         else:
             upper_level_name = level_names[i]
             lower_level_name = level_names[i - 1]
             layer_name = layer_names[i]
-            layers_df[layer_name] = (df[upper_level_name] + 
+            mean_df[layer_name] = (df[upper_level_name] + 
                                      df[lower_level_name]) / 2
     
-    return layers_df
+    return mean_df
 
 def check_ps(df, site_alt):
     if not 'ps' in df.columns:
@@ -182,20 +201,7 @@ def main(site_alt = None, use_Tair = None):
 
     check_ps(downsample_df, site_alt = 100)
     
-    layers_df = get_layer_means(downsample_df,  
-                                profile_obj.CO2_level_names, 
-                                profile_obj.CO2_levels,
-                                profile_obj.CO2_layer_names)
-
-    if profile_obj.use_Tair == None:
-        layers_df = layers_df.join(get_layer_means(downsample_df,
-                                                   profile_obj.Tair_level_names, 
-                                                   profile_obj.Tair_levels,
-                                                   profile_obj.Tair_layer_names))
-    else:
-        layers_df[profile_obj.use_Tair] = downsample_df[profile_obj.use_Tair]
-        
-    layers_df['ps'] = downsample_df['ps']
+    layers_df = make_layers_df(downsample_df, profile_obj)
         
     storage_df = calculate_CO2_storage(layers_df, 
                                        profile_obj.CO2_layer_names,
