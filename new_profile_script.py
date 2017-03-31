@@ -166,22 +166,19 @@ def check_ps(df, site_alt):
     if not 'ps' in df.columns:
         df['ps'] = 101.3
 
-def calculate_CO2_storage(df, 
-                          CO2_layer_names_list,
-                          Tair_layer_names_list,
-                          layer_depths_list):
+def calculate_CO2_storage(df, profile_obj):
     
     storage_names_list = ['Sc{0}'.format(var.split('CO2')[1]) for var in 
-                          CO2_layer_names_list]
+                          profile_obj.CO2_layer_names]
     
     storage_df = pd.DataFrame(index = df.index)
 
-    for i, var in enumerate(CO2_layer_names_list):
+    for i, var in enumerate(profile_obj.CO2_layer_names):
         
         molar_density = (df['ps'] * 10**3 / 
-                         (8.3143 * (273.15 + df[Tair_layer_names_list[i]])))     
+                         (8.3143 * (273.15 + df[profile_obj.Tair_layer_names[i]])))     
         molar_density_CO2 = molar_density * df[var] * 10**-6                                           
-        layer_moles_CO2 = molar_density_CO2 * layer_depths_list[i]
+        layer_moles_CO2 = molar_density_CO2 * profile_obj.CO2_layers[i]
         delta_layer_moles_CO2 = ((layer_moles_CO2 - layer_moles_CO2.shift()) 
                                  * 10**6)                                              
         delta_layer_moles_CO2_per_sec = delta_layer_moles_CO2 / 1800                                      
@@ -191,7 +188,57 @@ def calculate_CO2_storage(df,
         
     return storage_df
 
-def main(site_alt = None, use_Tair = None):
+def all_plot(df):
+    
+    vars_list = list(df.columns)
+    vars_list.remove('Sc_total')
+    strip_vars_list = [var.split('_')[1] for var in vars_list]
+    fig, ax = plt.subplots(1, 1, figsize = (12, 8))
+    fig.patch.set_facecolor('white')
+    colour_idx = np.linspace(0, 1, len(vars_list))
+    ax.tick_params(axis = 'x', labelsize = 14)
+    ax.tick_params(axis = 'y', labelsize = 14)
+    ax.set_xlabel('$Date$', fontsize = 18)
+    ax.set_ylabel('$CO2\/\/[ppm]$', fontsize = 18)
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('left')
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    for i, var in enumerate(vars_list):
+        color = plt.cm.cool(colour_idx[i])
+        plt.plot(df.index, df[var], label = strip_vars_list[i], color = color)
+    plt.plot(df.index, df.Sc_total, label = 'Total', color = 'grey')
+    plt.legend(loc='lower left', frameon = False, ncol = 2)    
+
+def diurnal_plot(df):
+    
+    diurnal_df = df.groupby([lambda x: x.hour, lambda y: y.minute]).mean()
+    diurnal_df.index = np.arange(48) / 2.0
+        
+    vars_list = list(df.columns)
+    vars_list.remove('Sc_total')
+    strip_vars_list = [var.split('_')[1] for var in vars_list]
+    fig, ax = plt.subplots(1, 1, figsize = (12, 8))
+    fig.patch.set_facecolor('white')
+    colour_idx = np.linspace(0, 1, len(vars_list))
+    ax.tick_params(axis = 'x', labelsize = 14)
+    ax.tick_params(axis = 'y', labelsize = 14)
+    ax.set_xlabel('$Date$', fontsize = 18)
+    ax.set_ylabel('$CO2\/\/[ppm]$', fontsize = 18)
+    ax.xaxis.set_ticks_position('bottom')
+    ax.yaxis.set_ticks_position('left')
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    for i, var in enumerate(vars_list):
+        color = plt.cm.cool(colour_idx[i])
+        plt.plot(diurnal_df.index, diurnal_df[var], 
+                 label = strip_vars_list[i], color = color)
+    plt.plot(diurnal_df.index, diurnal_df.Sc_total, 
+             label = 'Total', color = 'grey')
+    plt.legend(loc='lower left', frameon = False, ncol = 2)    
+    
+def main(site_alt = None, use_Tair = None, 
+         plot_all = False, plot_diurnal = True):
     
     raw_df = get_formatted_data()
     
@@ -203,57 +250,11 @@ def main(site_alt = None, use_Tair = None):
     
     layers_df = make_layers_df(downsample_df, profile_obj)
         
-    storage_df = calculate_CO2_storage(layers_df, 
-                                       profile_obj.CO2_layer_names,
-                                       profile_obj.Tair_layer_names,
-                                       profile_obj.CO2_layers)
+    storage_df = calculate_CO2_storage(layers_df, profile_obj)
+    
+    if plot_all:
+        all_plot(storage_df)
+    if plot_diurnal:
+        diurnal_plot(storage_df)
     
     return storage_df
-
-
-
-def get_standard_press(elevation):
-    
-    return 101.3
-
-    
-
-#------------------------------------------------------------------------------
-
-
-#
-#diurnal_df = test.groupby([lambda x: x.hour, lambda y: y.minute]).mean()
-#diurnal_df.index = np.arange(48) / 2.0
-
-
-#fig, ax = plt.subplots(1, 1, figsize = (12, 8))
-#fig.patch.set_facecolor('white')
-#colour_idx = np.linspace(0, 1, len(CO2_layer_names_list))
-#ax.tick_params(axis = 'x', labelsize = 14)
-#ax.tick_params(axis = 'y', labelsize = 14)
-#ax.set_xlabel('$Date$', fontsize = 18)
-#ax.set_ylabel('$CO2\/\/[ppm]$', fontsize = 18)
-#ax.xaxis.set_ticks_position('bottom')
-#ax.yaxis.set_ticks_position('left')
-#ax.spines['right'].set_visible(False)
-#ax.spines['top'].set_visible(False)
-#for i, var in enumerate(CO2_layer_names_list):
-#    color = plt.cm.cool(colour_idx[i])
-#    plt.plot(layers_df.index, layers_df[var], label = var, color = color)
-#plt.legend(loc='upper left', frameon = False)
-
-#fig, ax = plt.subplots(1, 1, figsize = (12, 8))
-#fig.patch.set_facecolor('white')
-#colour_idx = np.linspace(0, 1, len(CO2_layer_names_list))
-#ax.tick_params(axis = 'x', labelsize = 14)
-#ax.tick_params(axis = 'y', labelsize = 14)
-#ax.set_xlabel('$Date$', fontsize = 18)
-#ax.set_ylabel('$CO2\/\/[ppm]$', fontsize = 18)
-#ax.xaxis.set_ticks_position('bottom')
-#ax.yaxis.set_ticks_position('left')
-#ax.spines['right'].set_visible(False)
-#ax.spines['top'].set_visible(False)
-#for i, var in enumerate(CO2_layer_names_list):
-#    color = plt.cm.cool(colour_idx[i])
-#    plt.plot(layers_df.index, layers_df[var], label = var, color = color)
-#plt.legend(loc='upper left', frameon = False)
