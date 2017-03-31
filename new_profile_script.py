@@ -19,13 +19,18 @@ class storage(object):
     def __init__(self, df, CO2_str = 'CO2', Tair_str = 'Tair', use_Tair = None):
         
         self.df = df
-        self.use_Tair = use_Tair
         self.CO2_level_names, self.CO2_levels = self.get_levels(CO2_str)
         self.Tair_level_names, self.Tair_levels = self.get_levels(Tair_str)
-        self.n_Tair = len(self.Tair_level_names)
+        self.use_Tair = use_Tair
+        if len(self.Tair_level_names) == 1: 
+            self.use_Tair = self.Tair_level_names[0]
         self.Tair_level_names = self.cross_check_Tair()
         self.levels = self.CO2_levels
         self.CO2_layer_names, self.CO2_layers = self.get_layers(CO2_str)
+        if self.use_Tair is None:
+            self.Tair_layer_names, self.Tair_layers = self.get_layers(Tair_str)
+        else:
+            self.Tair_layer_names, self.Tair_layers = None, None
 
     def get_levels(self, search_str, return_levels = True):
 
@@ -147,24 +152,24 @@ def calculate_CO2_storage(df,
                           Tair_layer_names_list,
                           layer_depths_list):
     
+    storage_names_list = ['Sc{0}'.format(var.split('CO2')[1]) for var in 
+                          CO2_layer_names_list]
+    
     storage_df = pd.DataFrame(index = df.index)
 
     for i, var in enumerate(CO2_layer_names_list):
         
         molar_density = (df['ps'] * 10**3 / 
-                         (8.3143 * (273.15 + df[Tair_layer_names_list[i]])))
-        
-        molar_density_CO2 = molar_density * df[var] * 10**-6
-                                              
+                         (8.3143 * (273.15 + df[Tair_layer_names_list[i]])))     
+        molar_density_CO2 = molar_density * df[var] * 10**-6                                           
         layer_moles_CO2 = molar_density_CO2 * layer_depths_list[i]
-
-        delta_layer_moles_CO2 = (layer_moles_CO2 - layer_moles_CO2.shift()) * 10**6                                              
+        delta_layer_moles_CO2 = ((layer_moles_CO2 - layer_moles_CO2.shift()) 
+                                 * 10**6)                                              
         delta_layer_moles_CO2_per_sec = delta_layer_moles_CO2 / 1800                                      
-        storage_df[storage_names[i]] = delta_layer_moles_CO2_per_sec
+        storage_df[storage_names_list[i]] = delta_layer_moles_CO2_per_sec
         
-    storage_df['Sc_total'] = storage_df[storage_names].sum(axis = 1)
+    storage_df['Sc_total'] = storage_df[storage_names_list].sum(axis = 1)
         
-   
     return storage_df
 
 
@@ -183,11 +188,22 @@ def main(site_alt = None, use_Tair = None):
     layers_df = get_layer_means(downsample_df, 
                                 profile_obj.CO2_level_names, 
                                 profile_obj.CO2_levels,
-                                profile_obj.CO2_layer_names) 
+                                profile_obj.CO2_layer_names)
 
+    if profile_obj.use_Tair == None:
+        layers_df = layers_df.join(get_layer_means(downsample_df,
+                                                   profile_obj.Tair_level_names, 
+                                                   profile_obj.Tair_levels,
+                                                   profile_obj.Tair_layer_names))
+    else:
+        layers_df[profile_obj.use_Tair] = downsample_df[profile_obj.use_Tair]
         
+    test = calculate_CO2_storage(layers_df, 
+                                 profile_obj.CO2_layer_names,
+                                 profile_obj.Tair_layer_names,
+                                 profile_obj.CO2_layers)
     
-    return profile_obj
+    return test
 
 
 
@@ -200,52 +216,6 @@ def get_standard_press(elevation):
 #------------------------------------------------------------------------------
 
 
-#this_df = pd.read_csv(path_to_file)
-#df = downsample_data(this_df, smooth_window = 10)
-#
-#if not 'press' in df.columns:
-#    if not site_alt is None:
-#        pass
-#    else:
-#        df['press'] = default_press
-#
-## Make name and level lists for CO2
-#CO2_level_names_list = [var for var in df.columns if 'CO2' in var]
-#CO2_level_names_list, CO2_levels_list = sort_level_names(CO2_level_names_list)
-#
-## Make name and level lists for T (include various checks)
-#Tair_level_names_list = [var for var in df.columns if 'Tair' in var]
-#if use_Tair_var:
-#    if not use_Tair_var in Tair_level_names_list:
-#        raise KeyError('User-specified air temperature variable not found in '
-#                        'data file - exiting!')
-#    n_Tair = 1
-#else:
-#    if len(Tair_level_names_list) == 1:
-#        use_Tair_var == Tair_level_names_list[0]
-#        n_Tair = 1
-#    if len(Tair_level_names_list) == len(CO2_level_names_list):
-#        Tair_level_names_list, Tair_levels_list = sort_level_names(Tair_level_names_list)
-#        n_Tair = len(CO2_level_names_list)
-#    else:
-#        raise Exception('Number of temperature variables does not match the '
-#                        'number of CO2 variables - when this is the case, '
-#                        'either a single temperature variable should be '
-#                        'included or the name of the desired temperature '
-#                        'variable should be passed as a keyword argument '
-#                        '(use_Ta_var); exiting!') 
-#
-#CO2_layers_df = get_layer_means(df)
-#if n_Tair == 1:
-#    layers_df = CO2_layers_df
-#    layers_df['Tair'] = df[use_Tair_var]
-#else:    
-#    Tair_layers_df = get_layer_means(df, var = 'Tair')
-#    layers_df = CO2_layers_df.join(Tair_layers_df)
-#
-#CO2_layer_names_list = get_layer_names(CO2_levels_list)
-#
-#test = calculate_CO2_storage(layers_df)
 #
 #diurnal_df = test.groupby([lambda x: x.hour, lambda y: y.minute]).mean()
 #diurnal_df.index = np.arange(48) / 2.0
