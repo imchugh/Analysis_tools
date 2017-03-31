@@ -16,9 +16,9 @@ class storage(object):
     """
     Docstring coming soon!
     """    
-    def __init__(self, df, CO2_str = 'CO2', Tair_str = 'Tair', use_Tair = None):
+    def __init__(self, col_names, CO2_str = 'CO2', Tair_str = 'Tair', use_Tair = None):
         
-        self.df = df
+        self.col_names = col_names
         self.CO2_level_names, self.CO2_levels = self.get_levels(CO2_str)
         self.Tair_level_names, self.Tair_levels = self.get_levels(Tair_str)
         self.use_Tair = use_Tair
@@ -34,7 +34,7 @@ class storage(object):
 
     def get_levels(self, search_str, return_levels = True):
 
-        name_list = [var for var in self.df.columns if search_str in var]        
+        name_list = [var for var in self.col_names if search_str in var]        
         
         str_levels_list = [name.split('_')[1][:-1] for name in name_list]
         num_levels_list = []
@@ -172,18 +172,17 @@ def calculate_CO2_storage(df,
         
     return storage_df
 
-
 def main(site_alt = None, use_Tair = None):
     
     raw_df = get_formatted_data()
     
-    profile_obj = storage(raw_df, use_Tair = use_Tair)
+    profile_obj = storage(raw_df.columns, use_Tair = use_Tair)
         
-    downsample_df = downsample_data(profile_obj.df)
+    downsample_df = downsample_data(raw_df)
 
     check_ps(downsample_df, site_alt = 100)
     
-    layers_df = get_layer_means(downsample_df, 
+    layers_df = get_layer_means(downsample_df,  
                                 profile_obj.CO2_level_names, 
                                 profile_obj.CO2_levels,
                                 profile_obj.CO2_layer_names)
