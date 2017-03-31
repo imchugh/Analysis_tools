@@ -175,11 +175,9 @@ def calculate_CO2_storage(df,
 
 def main(site_alt = None, use_Tair = None):
     
-    raw_data = get_formatted_data()
+    raw_df = get_formatted_data()
     
-    profile_obj = storage(raw_data, use_Tair = use_Tair)
-    
-    profile_obj.cross_check_Tair()
+    profile_obj = storage(raw_df, use_Tair = use_Tair)
         
     downsample_df = downsample_data(profile_obj.df)
 
@@ -198,12 +196,14 @@ def main(site_alt = None, use_Tair = None):
     else:
         layers_df[profile_obj.use_Tair] = downsample_df[profile_obj.use_Tair]
         
-    test = calculate_CO2_storage(layers_df, 
-                                 profile_obj.CO2_layer_names,
-                                 profile_obj.Tair_layer_names,
-                                 profile_obj.CO2_layers)
+    layers_df['ps'] = downsample_df['ps']
+        
+    storage_df = calculate_CO2_storage(layers_df, 
+                                       profile_obj.CO2_layer_names,
+                                       profile_obj.Tair_layer_names,
+                                       profile_obj.CO2_layers)
     
-    return test
+    return storage_df
 
 
 
