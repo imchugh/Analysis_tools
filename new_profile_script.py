@@ -13,64 +13,19 @@ import pdb
 import matplotlib.pyplot as plt
 
 class storage(object):
-    
-    def __init__(self, target_file, CO2_str = 'CO2', Ta_str = 'Tair'):
+    """
+    Docstring coming soon!
+    """    
+    def __init__(self, df, CO2_str = 'CO2', Tair_str = 'Tair', use_Tair = None):
         
-        self.target_file = target_file
-        self.df = self.get_data()
-        self.level_names, self.levels = self.get_levels(CO2_str)
-        self.T_channels = [var for var in self.df.columns if Ta_str in var]
-        self.layer_names, self.layers = self.get_layers(CO2_str)
-
-    def get_data(self):
-    
-        df = pd.read_csv(self.target_file)
-        df.index = pd.to_datetime(df.Datetime)
-        return df
-
-    def downsample_data(self, output_freq = 30, smooth_window = 0):
-    
-        """
-        This function downsamples profile data to the requested output frequency
-        (generally 30 minutes);
-        - args: 'df' (pandas sdataframe with datetime index)
-        - kwargs: 'output_freq' (int, minutes) - the output interval required
-                  'smooth_window' (int, minutes) - applies a centered running 
-                  average over the requested interval
-        """
-        
-        if not isinstance(output_freq, int):
-            raise Exception('Output frequency must be an integer (units = minutes)')
-        output_freq_string = '{0}T'.format(str(output_freq))
-
-        local_df = cp.copy(self.df)
-        
-        if not smooth_window == 0:
-            current_freq = pd.infer_freq(local_df.index)
-            upsample_df = local_df.resample('1T').interpolate()
-            smooth_df = upsample_df.rolling(window = smooth_window, 
-                                            center = True).mean()
-            downsample_df = smooth_df.resample(current_freq).pad()
-            return downsample_df.resample(output_freq_string).pad()
-        else:
-            return local_df.resample(output_freq_string).pad()
-
-    def get_layer_means(self, var = 'CO2'):
-        
-        layers_df = pd.DataFrame(index = self.df.index)
-        for i in range(len(self.levels)):   
-            if i == 0:
-                level_name = self.level_names[i]
-                layer_name = self.layer_names[i]
-                layers_df[layer_name] = self.df[level_name]
-            else:
-                upper_level_name = self.level_names[i]
-                lower_level_name = self.level_names[i - 1]
-                layer_name = self.layer_names[i]
-                layers_df[layer_name] = (self.df[upper_level_name] + 
-                                         self.df[lower_level_name]) / 2
-        
-        return layers_df
+        self.df = df
+        self.use_Tair = use_Tair
+        self.CO2_level_names, self.CO2_levels = self.get_levels(CO2_str)
+        self.Tair_level_names, self.Tair_levels = self.get_levels(Tair_str)
+        self.n_Tair = len(self.Tair_level_names)
+        self.Tair_level_names = self.cross_check_Tair()
+        self.levels = self.CO2_levels
+        self.CO2_layer_names, self.CO2_layers = self.get_layers(CO2_str)
 
     def get_levels(self, search_str, return_levels = True):
 
@@ -109,110 +64,141 @@ class storage(object):
             return names_list, depths_list
         else:
             return names_list
+        
+    def cross_check_Tair(self):
+        
+        if self.use_Tair:
+            if isinstance(self.use_Tair, str):
+                if self.use_Tair in self.Tair_level_names:
+                    return [self.use_Tair] * len(self.CO2_level_names)
+                else:
+                    raise KeyError('Kwarg \'Tair_var\' not found in dataframe!')
+            else:
+                raise IOError('Kwarg \'Tair_var\' must be a string!')
+        elif len(self.Tair_level_names) == 1:
+            return self.Tair_level_names * len(self.CO2_level_names)
+        elif len(self.Tair_level_names) == len(self.CO2_level_names):        
+            if not self.Tair_levels == self.CO2_levels:
+                raise KeyError('Levels for air temperature do not match '
+                               'levels for CO2!')
+        else:
+            raise IOError('Number of air temperature variables in data file '
+                          'does not match number of CO2 variables!')
+        return self.Tair_level_names
     
-    def calculate_CO2_storage(self):
+def downsample_data(df, output_freq = 30, smooth_window = 0):
 
-        test = self.downsample_data()
-#        get_layer_means(var = 'CO2')
-        return test
-
-def foo():
+    """
+    This function downsamples profile data to the requested output frequency
+    (generally 30 minutes);
+    - args: 'df' (pandas sdataframe with datetime index)
+    - kwargs: 'output_freq' (int, minutes) - the output interval required
+              'smooth_window' (int, minutes) - applies a centered running 
+              average over the requested interval
+    """
     
-    print 'Hello world!'
+    if not isinstance(output_freq, int):
+        raise Exception('Output frequency must be an integer (units = minutes)')
+    output_freq_string = '{0}T'.format(str(output_freq))
 
-#    def calculate_CO2_storage(df, site_alt = None):
-#        
-#        CO2_layer_names_list = get_names(df)
-#        Tair_layer_names_list = get_names(df, var = 'Tair')
-#        if not len(Tair_layer_names_list) == len(CO2_layer_names_list):
-#            Tair_layer_names_list = Tair_layer_names_list * len(CO2_layer_names_list)
-#        lookup_dict = dict(zip(CO2_layer_names_list, Tair_layer_names_list))
-#        
-#        storage_names = ['Sc{0}'.format(this_var.split('CO2')[1]) 
-#                         for this_var in CO2_layer_names_list]
-#        
-#        storage_depths = get_layer_depths_from_layer_names(CO2_layer_names_list)
-#        
-#        storage_df = pd.DataFrame(index = df.index)
-#        
-#        if not 'ps' in df.columns:
-#            df['ps'] = get_standard_press(site_alt)
-#        
-#        for i, var in enumerate(CO2_layer_names_list):
-#            
-#            molar_density = (df['ps'] * 10**3 / 
-#                             (8.3143 * (273.15 + df[Tair_layer_names_list[i]])))
-#            
-#            molar_density_CO2 = molar_density * df[var] * 10**-6
-#                                                  
-#            layer_moles_CO2 = molar_density_CO2 * storage_depths[i]
-#    
-#            delta_layer_moles_CO2 = (layer_moles_CO2 - layer_moles_CO2.shift()) * 10**6                                              
-#            delta_layer_moles_CO2_per_sec = delta_layer_moles_CO2 / 1800                                      
-#            storage_df[storage_names[i]] = delta_layer_moles_CO2_per_sec
-#            
-#        storage_df['Sc_total'] = storage_df[storage_names].sum(axis = 1)
-#            
-#       
-#        return storage_df
+    local_df = cp.copy(df)
+    
+    if not smooth_window == 0:
+        current_freq = pd.infer_freq(local_df.index)
+        upsample_df = local_df.resample('1T').interpolate()
+        smooth_df = upsample_df.rolling(window = smooth_window, 
+                                        center = True).mean()
+        downsample_df = smooth_df.resample(current_freq).pad()
+        return downsample_df.resample(output_freq_string).pad()
+    else:
+        return local_df.resample(output_freq_string).pad()
+
+def get_formatted_data():
+    
+    file_path = '/home/ian/Documents/profile.csv'
+    
+    df = pd.read_csv(file_path)
+    df.index = pd.to_datetime(df.Datetime)
+    return df
+
+def get_layer_means(df, level_names, levels, layer_names):
+    
+    layers_df = pd.DataFrame(index = df.index)
+    for i in range(len(levels)):   
+        if i == 0:
+            level_name = level_names[i]
+            layer_name = layer_names[i]
+            layers_df[layer_name] = df[level_name]
+        else:
+            upper_level_name = level_names[i]
+            lower_level_name = level_names[i - 1]
+            layer_name = layer_names[i]
+            layers_df[layer_name] = (df[upper_level_name] + 
+                                     df[lower_level_name]) / 2
+    
+    return layers_df
+
+def check_ps(df, site_alt):
+    if not 'ps' in df.columns:
+        df['ps'] = 101.3
+
+def calculate_CO2_storage(df, 
+                          CO2_layer_names_list,
+                          Tair_layer_names_list,
+                          layer_depths_list):
+    
+    storage_df = pd.DataFrame(index = df.index)
+
+    for i, var in enumerate(CO2_layer_names_list):
+        
+        molar_density = (df['ps'] * 10**3 / 
+                         (8.3143 * (273.15 + df[Tair_layer_names_list[i]])))
+        
+        molar_density_CO2 = molar_density * df[var] * 10**-6
+                                              
+        layer_moles_CO2 = molar_density_CO2 * layer_depths_list[i]
+
+        delta_layer_moles_CO2 = (layer_moles_CO2 - layer_moles_CO2.shift()) * 10**6                                              
+        delta_layer_moles_CO2_per_sec = delta_layer_moles_CO2 / 1800                                      
+        storage_df[storage_names[i]] = delta_layer_moles_CO2_per_sec
+        
+    storage_df['Sc_total'] = storage_df[storage_names].sum(axis = 1)
+        
+   
+    return storage_df
+
+
+def main(site_alt = None, use_Tair = None):
+    
+    raw_data = get_formatted_data()
+    
+    profile_obj = storage(raw_data, use_Tair = use_Tair)
+    
+    profile_obj.cross_check_Tair()
+        
+    downsample_df = downsample_data(profile_obj.df)
+
+    check_ps(downsample_df, site_alt = 100)
+    
+    layers_df = get_layer_means(downsample_df, 
+                                profile_obj.CO2_level_names, 
+                                profile_obj.CO2_levels,
+                                profile_obj.CO2_layer_names) 
+
+        
+    
+    return profile_obj
+
+
 
 def get_standard_press(elevation):
     
     return 101.3
 
-
-def get_layer_names(levels_list, var = 'CO2'):
     
-    zero_levels_list = cp.copy(levels_list)
-    zero_levels_list.insert(0, 0)
-    return ['{0}_{1}-{2}m'.format(var,
-                                  str(zero_levels_list[i - 1]),
-                                  str(zero_levels_list[i])) 
-            for i in range(1, len(zero_levels_list))]
-
-def get_layer_depths_from_layer_names(layer_names_list):
-    
-    new_list = [name.replace('-', '_').split('_') for name in layer_names_list]
-    lower_plane = [int(i[1]) for i in new_list]    
-    upper_plane = [int(i[2][:-1]) for i in new_list]
-    return [upper_plane[i] - lower_plane[i] for i in range(len(upper_plane))]
-
-def get_layer_depths_from_levels(levels_list):
-    
-    zero_levels_list = cp.copy(levels_list)
-    zero_levels_list.insert(0, 0)
-    return [zero_levels_list[i] - zero_levels_list[i - 1] 
-            for i in range(1, len(zero_levels_list))]
-    
-#def get_layer_means(df, var = 'CO2'):
-#    
-#    level_names_list = get_names(df, var = var)    
-#    level_names_list, levels_list = sort_level_names(level_names_list)
-#    layer_names_list = get_layer_names(levels_list, var = var)
-#    
-#    layers_df = pd.DataFrame(index = df.index)
-#    for i in range(len(levels_list)):   
-#        if i == 0:
-#            level_name = level_names_list[i]
-#            layer_name = layer_names_list[i]
-#            layers_df[layer_name] = df[level_name]
-#        else:
-#            upper_level_name = level_names_list[i]
-#            lower_level_name = level_names_list[i - 1]
-#            layer_name = layer_names_list[i]
-#            layers_df[layer_name] = (df[upper_level_name] + 
-#                                     df[lower_level_name]) / 2
-#    
-#    return layers_df
 
 #------------------------------------------------------------------------------
 
-path_to_file = '/home/ian/Documents/profile.csv'
-default_press = 101.325
-site_alt = None
-output_int = 30
-smooth_window = 10
-use_Tair_var = False
 
 #this_df = pd.read_csv(path_to_file)
 #df = downsample_data(this_df, smooth_window = 10)
