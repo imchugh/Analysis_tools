@@ -30,7 +30,7 @@ class storage(object):
         if self.use_Tair is None:
             self.Tair_layer_names, self.Tair_layers = self.get_layers(Tair_str)
         else:
-            self.Tair_layer_names, self.Tair_layers = None, None
+            self.Tair_layer_names = [self.use_Tair] * len(self.CO2_levels)
 
     def get_levels(self, search_str, return_levels = True):
 
@@ -71,7 +71,7 @@ class storage(object):
             return names_list
         
     def cross_check_Tair(self):
-        
+
         if self.use_Tair:
             if isinstance(self.use_Tair, str):
                 if self.use_Tair in self.Tair_level_names:
@@ -174,7 +174,7 @@ def calculate_CO2_storage(df, profile_obj):
     storage_df = pd.DataFrame(index = df.index)
 
     for i, var in enumerate(profile_obj.CO2_layer_names):
-        
+
         molar_density = (df['ps'] * 10**3 / 
                          (8.3143 * (273.15 + df[profile_obj.Tair_layer_names[i]])))     
         molar_density_CO2 = molar_density * df[var] * 10**-6                                           
@@ -221,9 +221,11 @@ def diurnal_plot(df):
     fig, ax = plt.subplots(1, 1, figsize = (12, 8))
     fig.patch.set_facecolor('white')
     colour_idx = np.linspace(0, 1, len(vars_list))
+    ax.set_xlim([0, 24])
+    ax.set_xticks([0,4,8,12,16,20,24])
     ax.tick_params(axis = 'x', labelsize = 14)
     ax.tick_params(axis = 'y', labelsize = 14)
-    ax.set_xlabel('$Date$', fontsize = 18)
+    ax.set_xlabel('$Time$', fontsize = 18)
     ax.set_ylabel('$CO2\/\/[ppm]$', fontsize = 18)
     ax.xaxis.set_ticks_position('bottom')
     ax.yaxis.set_ticks_position('left')
@@ -235,13 +237,13 @@ def diurnal_plot(df):
                  label = strip_vars_list[i], color = color)
     plt.plot(diurnal_df.index, diurnal_df.Sc_total, 
              label = 'Total', color = 'grey')
-    plt.legend(loc='lower left', frameon = False, ncol = 2)    
+    plt.legend(loc=[0.65, 0.18], frameon = False, ncol = 2)    
     
 def main(site_alt = None, use_Tair = None, 
-         plot_all = False, plot_diurnal = True):
+         plot_all = False, plot_diurnal = False):
     
     raw_df = get_formatted_data()
-    
+
     profile_obj = storage(raw_df.columns, use_Tair = use_Tair)
         
     downsample_df = downsample_data(raw_df)
@@ -257,4 +259,4 @@ def main(site_alt = None, use_Tair = None,
     if plot_diurnal:
         diurnal_plot(storage_df)
     
-    return storage_df
+    return
