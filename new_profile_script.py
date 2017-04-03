@@ -12,6 +12,8 @@ import copy as cp
 import pdb
 import matplotlib.pyplot as plt
 
+import site_profile_data_processing as spdp
+
 class storage(object):
     """
     Docstring coming soon!
@@ -121,10 +123,13 @@ def downsample_data(df, output_freq = 30, smooth_window = 0):
 def get_formatted_data():
     
     file_path = '/home/ian/Documents/profile.csv'
-    
     df = pd.read_csv(file_path)
     df.index = pd.to_datetime(df.Datetime)
     return df
+
+def get_raw_data(site):
+    
+    return spdp.get_site(site)
 
 def make_layers_df(df, profile_obj):
     
@@ -240,13 +245,16 @@ def diurnal_plot(df):
     plt.legend(loc=[0.65, 0.18], frameon = False, ncol = 2)    
     
 def main(site_alt = None, use_Tair = None, 
-         plot_all = False, plot_diurnal = False):
+         plot_all = False, plot_diurnal = False, site = None):
     
-    raw_df = get_formatted_data()
-
-    profile_obj = storage(raw_df.columns, use_Tair = use_Tair)
+    if site is None:
+        data_df = get_formatted_data()
+    else:
+        data_df = get_raw_data(site)
+    
+    profile_obj = storage(data_df.columns, use_Tair = use_Tair)
         
-    downsample_df = downsample_data(raw_df)
+    downsample_df = downsample_data(data_df)
 
     check_ps(downsample_df, site_alt = 100)
     
