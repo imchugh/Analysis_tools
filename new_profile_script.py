@@ -11,6 +11,7 @@ import pandas as pd
 import copy as cp
 import pdb
 import matplotlib.pyplot as plt
+import Tkinter, tkFileDialog
 
 import site_profile_data_processing as spdp
 
@@ -92,6 +93,15 @@ class storage(object):
             raise IOError('Number of air temperature variables in data file '
                           'does not match number of CO2 variables!')
         return self.Tair_level_names
+ 
+def file_select_dialog():
+    
+    """ Open a file select dialog to get path for file retrieval"""
+    
+    root = Tkinter.Tk(); root.withdraw()
+    file_in = tkFileDialog.askopenfilename(initialdir='')
+    root.destroy()   
+    return file_in
     
 def downsample_data(df, output_freq = 30, smooth_window = 0):
 
@@ -122,14 +132,19 @@ def downsample_data(df, output_freq = 30, smooth_window = 0):
 
 def get_formatted_data():
     
-    file_path = '/home/ian/Documents/profile.csv'
+    file_path = file_select_dialog()
     df = pd.read_csv(file_path)
     df.index = pd.to_datetime(df.Datetime)
     return df
 
-def get_raw_data(site):
+def process_raw_data(site, output_dir = False):
     
-    return spdp.get_site(site)
+    df = spdp.get_site_dsata(site)
+    if output_dir:
+        df.to_csv('/home/ian/Documents/profile.csv', 
+                  index_label = df.index.name)
+    else:
+        return df
 
 def make_layers_df(df, profile_obj):
     
@@ -250,7 +265,7 @@ def main(site_alt = None, use_Tair = None,
     if site is None:
         data_df = get_formatted_data()
     else:
-        data_df = get_raw_data(site)
+        data_df = process_raw_data(site)
     
     profile_obj = storage(data_df.columns, use_Tair = use_Tair)
         
@@ -267,4 +282,4 @@ def main(site_alt = None, use_Tair = None,
     if plot_diurnal:
         diurnal_plot(storage_df)
     
-    return
+    return storage_df

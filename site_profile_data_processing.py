@@ -5,24 +5,16 @@ Created on Mon Mar 20 10:07:35 2017
 
 @author: ian
 """
-import Tkinter, tkFileDialog, tkMessageBox
 import pandas as pd
 import datetime as dt
+import new_profile_script as pdp
 import pdb
 
-def get_site(site_name):
+def get_site_data(site_name):
     
     sites_dict = {'warra1': warra_average} 
     
     return sites_dict[site_name]()
-
-def file_select_dialog():
-    """ Open a file select dialog to get path for file retrieval"""
-    
-    root = Tkinter.Tk(); root.withdraw()
-    file_in = tkFileDialog.askopenfilename(initialdir='')
-    root.destroy()   
-    return file_in
 
 # User configurations
 path = '/home/ian/Downloads/TOA5_RawData392.dat'
@@ -100,8 +92,7 @@ def warra_average():
                 8: 0}
 
     # Prepare df
-#    file_in = file_select_dialog()
-    file_in = '/home/ian/Downloads/TOA5_25569.SiteAvg.dat'
+    file_in = pdp.file_select_dialog()
     df = pd.read_csv(file_in, skiprows = [0, 2, 3])
     df.index = pd.to_datetime(df.TIMESTAMP)
     idx = df[df.valve_number == 8].index
