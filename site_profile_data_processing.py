@@ -7,7 +7,7 @@ Created on Mon Mar 20 10:07:35 2017
 """
 import pandas as pd
 import datetime as dt
-import new_profile_script as pdp
+import profile_data_processing as pdp
 import pdb
 
 def get_site_data(site_name):
@@ -30,6 +30,10 @@ def warra_raw():
     heights_dict = heights_dict = dict(zip(profile_n, 
                                            [str(height) for height in 
                                             profile_heights]))
+
+#    dir_in = pdp.dir_select_dialog()
+#    pdb.set_trace()
+#    return dir_in
         
     file_in = pdp.file_select_dialog()
     df = pd.read_csv(file_in, skiprows = [0, 2, 3])

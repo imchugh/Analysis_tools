@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import Tkinter, tkFileDialog
 
 import site_profile_data_processing as spdp
-
+reload(spdp)
 #------------------------------------------------------------------------------
 class storage(object):
     """
@@ -273,7 +273,7 @@ def plot_diurnal(df):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def plot_ts(df):
+def plot_time_series(df):
     
     vars_list = list(df.columns)
     vars_list.remove('Sc_total')
@@ -324,7 +324,7 @@ def main(site_alt = None, use_Tair = None, output_freq = 30,
     storage_df = calculate_CO2_storage(layers_df, profile_obj)
     
     if plot_ts:
-        plot_ts(storage_df)
+        plot_time_series(storage_df)
     if plot_diurnal_avg:
         plot_diurnal(storage_df)
     
