@@ -127,6 +127,17 @@ def calculate_CO2_storage(df, profile_obj):
     return storage_df
 #------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+def dir_select_dialog():
+    
+    """ Open a file select dialog to get path for file retrieval"""
+    
+    root = Tkinter.Tk(); root.withdraw()
+    dir_in = tkFileDialog.askdirectory()
+    root.destroy()   
+    return dir_in
+#------------------------------------------------------------------------------
+
 #------------------------------------------------------------------------------    
 def downsample_data(df, output_freq = 30, smooth_window = 0):
 
@@ -165,6 +176,17 @@ def file_select_dialog():
     file_in = tkFileDialog.askopenfilename(initialdir='')
     root.destroy()   
     return file_in
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def format_raw_data(site, output_dir = False):
+    
+    df = spdp.get_site_data(site)
+    if output_dir:
+        df.to_csv(output_dir, 
+                  index_label = df.index.name)
+    else:
+        return df
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -217,10 +239,14 @@ def get_layer_means(df, level_names, levels, layer_names):
 
 #------------------------------------------------------------------------------
 def plot_diurnal(df):
-    
+
+    # No idea why this is needed
+    for var in df.columns:
+        df[var] = df[var].astype(np.float64)
+
     diurnal_df = df.groupby([lambda x: x.hour, lambda y: y.minute]).mean()
     diurnal_df.index = np.arange(48) / 2.0
-    pdb.set_trace()    
+ 
     vars_list = list(df.columns)
     vars_list.remove('Sc_total')
     strip_vars_list = [var.split('_')[1] for var in vars_list]
@@ -270,17 +296,6 @@ def plot_ts(df):
     plt.legend(loc='lower left', frameon = False, ncol = 2)    
 #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-def process_raw_data(site, output_dir = False):
-    
-    df = spdp.get_site_data(site)
-    if output_dir:
-        df.to_csv('/home/ian/Documents/profile.csv', 
-                  index_label = df.index.name)
-    else:
-        return df
-#------------------------------------------------------------------------------
-
 ###############################################################################
 # Start main program                                                          #
 ###############################################################################   
@@ -296,7 +311,7 @@ def main(site_alt = None, use_Tair = None, output_freq = 30,
     if site is None:
         data_df = get_formatted_data()
     else:
-        data_df = process_raw_data(site)
+        data_df = format_raw_data(site)
     
     profile_obj = storage(data_df.columns, use_Tair = use_Tair)
     
