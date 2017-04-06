@@ -12,22 +12,27 @@ import pdb
 
 def get_site_data(site_name):
     
-    sites_dict = {'warra1': warra_average} 
+    sites_dict = {'warra_avg': warra_average,
+                  'warra_raw': warra_raw} 
     
     return sites_dict[site_name]()
 
 # User configurations
 path = '/home/ian/Downloads/TOA5_RawData392.dat'
 
-def warra_raw(df, heights_dict):
+def warra_raw():
+
+    # Trim n leading seconds to allow manifold flush
+    drop_n_leading_seconds = 5
 
     profile_n = [1, 2, 3, 4, 5, 6, 7, 8]
     profile_heights = [2, 4, 8, 16, 30, 42, 54, 70]
-    
-    # Trim n leading seconds to allow manifold flush
-    drop_n_leading_seconds = 5
-    
-    # Prepare data
+    heights_dict = heights_dict = dict(zip(profile_n, 
+                                           [str(height) for height in 
+                                            profile_heights]))
+        
+    file_in = pdp.file_select_dialog()
+    df = pd.read_csv(file_in, skiprows = [0, 2, 3])
     df.index = pd.to_datetime(df.TIMESTAMP)
     df['modulo_15'] = df.index.second % 15
     
@@ -53,7 +58,7 @@ def warra_raw(df, heights_dict):
     
     # Make an output dataframe
     rslt_df = pd.DataFrame(index = dt_range_out, 
-                          columns = CO2_names_list + T_names_list)
+                           columns = CO2_names_list + T_names_list)
     
     # Cycle through all time periods
     for i in xrange(len(dt_range_1)):
