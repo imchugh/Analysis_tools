@@ -43,12 +43,10 @@ def warra_raw():
     df_list = []
     for f in dir_list:
         full_path = os.path.join(dir_str, f)
-        df_list.append(pd.read_csv(full_path, skiprows = [0, 2, 3]))
-#        df_list.append(full_path)
-#    a = df_list[1]
-#    print a
-#    df = pd.read_csv(a, skiprows = [0, 2, 3])
-    df = df_list[0]
+        df_list.append(full_path)
+    a = df_list[1]
+    print a
+    df = pd.read_csv(a, skiprows = [0, 2, 3])
     df.index = pd.to_datetime(df.TIMESTAMP)
     df['modulo_15'] = df.index.second % 15
     
