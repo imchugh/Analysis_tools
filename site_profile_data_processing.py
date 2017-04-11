@@ -8,6 +8,7 @@ Created on Mon Mar 20 10:07:35 2017
 import pandas as pd
 import datetime as dt
 import profile_data_processing as pdp
+import os
 import pdb
 
 def get_site_data(site_name):
@@ -35,8 +36,19 @@ def warra_raw():
 #    pdb.set_trace()
 #    return dir_in
         
-    file_in = pdp.file_select_dialog()
-    df = pd.read_csv(file_in, skiprows = [0, 2, 3])
+    file_in = '/home/ian/OzFlux/Sites/Warra/Data/Profile/Raw/TOA5_RawData391.dat'
+    dir_str = '/home/ian/OzFlux/Sites/Warra/Data/Profile/Raw'
+    dir_list = os.listdir(dir_str)
+    file_in = os.path.join('/home/ian/OzFlux/Sites/Warra/Data/Profile/Raw', dir_list[0])
+    df_list = []
+    for f in dir_list:
+        full_path = os.path.join(dir_str, f)
+        df_list.append(pd.read_csv(full_path, skiprows = [0, 2, 3]))
+#        df_list.append(full_path)
+#    a = df_list[1]
+#    print a
+#    df = pd.read_csv(a, skiprows = [0, 2, 3])
+    df = df_list[0]
     df.index = pd.to_datetime(df.TIMESTAMP)
     df['modulo_15'] = df.index.second % 15
     
