@@ -11,6 +11,10 @@ import profile_data_processing as pdp
 import os
 import pdb
 
+#------------------------------------------------------------------------------
+# Common scripts
+#------------------------------------------------------------------------------
+
 def get_site_data(site_name):
     
     sites_dict = {'warra_avg': warra_average,
@@ -18,12 +22,33 @@ def get_site_data(site_name):
     
     return sites_dict[site_name]()
 
-# User configurations
-path = '/home/ian/Downloads/TOA5_RawData392.dat'
+def write_data_to_file(df, path, site):
+    
+    if not os.path.isdir(path):
+        home_dir = os.path.expanduser('~')
+        output_dir = os.path.join(home_dir, 'profile_data')
+        if not os.path.isdir(output_dir):
+            os.mkdir(output_dir)
+        print ('The specified directory for data output could not be found!'
+               '\nWriting to the following directory: {0}'
+               .format(output_dir))
+    else:
+        output_dir = path
 
+    fname = '{0}_standard_format_profile.csv'.format(site)
+    target = os.path.join(output_dir, fname)    
+     
+    df.to_csv(target, index_label = 'Datetime')
+    
+    return
+
+#------------------------------------------------------------------------------    
+# Site scripts
 #------------------------------------------------------------------------------
+
+###############################################################################
 # Warra
-#------------------------------------------------------------------------------
+###############################################################################
 
 def warra_raw(write_to_dir = None):
 
@@ -38,15 +63,6 @@ def warra_raw(write_to_dir = None):
     heights_list = [2, 4, 8, 16, 30, 42, 54, 70]
     ###########################################################################
 
-#    dir_in = pdp.dir_select_dialog() 
-#    pdb.set_trace()
-#    return dir_in
-        
-    file_in = '/home/ian/OzFlux/Sites/Warra/Data/Profile/Raw/TOA5_RawData391.dat'
-    dir_str = '/home/ian/OzFlux/Sites/Warra/Data/Profile/Raw'
-    dir_list = os.listdir(dir_str)
-    df_list = []
-
     # Open files and concatenate (note that the file configuration
     # currently has files starting on day x 00:00:00.5 and ending on 
     # day x+1 00:00:00; this is a problem because the switch to the next valve 
@@ -54,6 +70,10 @@ def warra_raw(write_to_dir = None):
     # on valve 1 only has 14 instead of 15 instances, and there is a single 
     # observation on valve 1 at the end of the file; so we just move the time 
     # stamp by 0.5s)
+    dir_str = pdp.dir_select_dialog()        
+#    dir_str = '/home/ian/OzFlux/Sites/Warra/Data/Profile/Raw'
+    dir_list = os.listdir(dir_str)
+    df_list = []
     for f in dir_list:
         full_path = os.path.join(dir_str, f)
         df_list.append(pd.read_csv(full_path, skiprows = [0, 2, 3]))
@@ -113,9 +133,14 @@ def warra_raw(write_to_dir = None):
             rslt_df.loc[dt_range_out[i], 
                         T_names_dict[valve]] = sub_df.loc[valve, T_name]
     
+    if not write_to_dir is None:
+        write_data_to_file(rslt_df, write_to_dir, 'Warra')
+        
     return rslt_df
-    
-def warra_average():
+
+#------------------------------------------------------------------------------
+        
+def warra_average(write_to_dir):
     
     # Create a dict to reference heights to valve numbers
     profile_n = [1, 2, 3, 4, 5, 6, 7, 8]
@@ -156,23 +181,4 @@ def warra_average():
         
     return rslt_df
 
-#------------------------------------------------------------------------------
-
-
-## Start program
-#
-#profile_n = [1, 2, 3, 4, 5, 6, 7, 8]
-#profile_heights = [2, 4, 8, 16, 30, 42, 54, 70]
-#
-#path_to_avg_file = '/home/ian/Downloads/TOA5_25569.SiteAvg.dat'
-#path_to_raw_file = '/home/ian/Downloads/TOA5_RawData392.dat'
-#
-#heights_dict = dict(zip(profile_n, [str(height) for height in profile_heights]))
-#        
-##avg_df = pd.read_csv(path_to_avg_file, skiprows = [0, 2, 3])
-##rslt_avg_df = process_avg_series(avg_df, heights_dict)
-#
-#raw_df = pd.read_csv(path_to_raw_file, skiprows = [0, 2, 3])
-#rslt_raw_df = process_raw_series(raw_df, heights_dict)
-#
-#rslt_avg_df.to_csv('/home/ian/Documents/profile.csv', index_label = 'Datetime')
+###############################################################################
