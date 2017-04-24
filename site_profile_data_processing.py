@@ -91,7 +91,8 @@ def warra_raw(write_to_dir = None):
     dt_range_1 = pd.date_range(start, end, freq = '2T')
     dt_range_2 = dt_range_1 + dt.timedelta(minutes = 1, seconds = 59, 
                                            microseconds = 500000)
-    dt_range_out = dt_range_1 + dt.timedelta(minutes = 2)
+    dt_range_out = dt_range_1 + dt.timedelta(minutes = 1, seconds = 59, 
+                                             microseconds = 500000)
     
     # Make a reference dictionary cross-matching valve number with height
     str_heights_list = [str(height) for height in heights_list]
