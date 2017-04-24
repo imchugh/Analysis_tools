@@ -21,54 +21,72 @@ def get_site_data(site_name):
 # User configurations
 path = '/home/ian/Downloads/TOA5_RawData392.dat'
 
-def warra_raw():
+#------------------------------------------------------------------------------
+# Warra
+#------------------------------------------------------------------------------
 
-    # Trim n leading seconds to allow manifold flush
+def warra_raw(write_to_dir = None):
+
+    ###########################################################################
+    # User-setable options - set with CARE!!!
+    # 1) Variable setting the number of seconds to drop to allow for manifold 
+    #    flush
     drop_n_leading_seconds = 5
+    # 2) List of profile valve numbers
+    valve_list = [1, 2, 3, 4, 5, 6, 7, 8]
+    # 3) List of profile heights to cross-match with valve numbers
+    heights_list = [2, 4, 8, 16, 30, 42, 54, 70]
+    ###########################################################################
 
-    profile_n = [1, 2, 3, 4, 5, 6, 7, 8]
-    profile_heights = [2, 4, 8, 16, 30, 42, 54, 70]
-    heights_dict = heights_dict = dict(zip(profile_n, 
-                                           [str(height) for height in 
-                                            profile_heights]))
-
-#    dir_in = pdp.dir_select_dialog()
+#    dir_in = pdp.dir_select_dialog() 
 #    pdb.set_trace()
 #    return dir_in
         
     file_in = '/home/ian/OzFlux/Sites/Warra/Data/Profile/Raw/TOA5_RawData391.dat'
     dir_str = '/home/ian/OzFlux/Sites/Warra/Data/Profile/Raw'
     dir_list = os.listdir(dir_str)
-    file_in = os.path.join('/home/ian/OzFlux/Sites/Warra/Data/Profile/Raw', dir_list[0])
     df_list = []
+
+    # Open files and concatenate (note that the file configuration
+    # currently has files starting on day x 00:00:00.5 and ending on 
+    # day x+1 00:00:00; this is a problem because the switch to the next valve 
+    # occurs after 00:00:00; this means that the first set of measurements 
+    # on valve 1 only has 14 instead of 15 instances, and there is a single 
+    # observation on valve 1 at the end of the file; so we just move the time 
+    # stamp by 0.5s)
     for f in dir_list:
         full_path = os.path.join(dir_str, f)
-        df_list.append(full_path)
-    a = df_list[1]
-    print a
-    df = pd.read_csv(a, skiprows = [0, 2, 3])
+        df_list.append(pd.read_csv(full_path, skiprows = [0, 2, 3]))
+    df = pd.concat(df_list)
     df.index = pd.to_datetime(df.TIMESTAMP)
+    df.sort_index(inplace = True)
+    df.index = df.index + dt.timedelta(seconds = 0.5)
+    df = df.reindex(df.index - dt.timedelta(seconds = 0.5))
     df['modulo_15'] = df.index.second % 15
-    
+
     # Generate the required date ranges for indexing and outputting data
     start = dt.datetime(df.index[0].year, df.index[0].month, df.index[0].day,
-                        0, 0, 0)
-    end = dt.datetime(df.index[0].year, df.index[0].month, df.index[0].day,
-                      23, 58)
+                        0, 0, 0, 500000)
+    end = dt.datetime(df.index[-1].year, df.index[-1].month, df.index[-1].day)
     dt_range_1 = pd.date_range(start, end, freq = '2T')
     dt_range_2 = dt_range_1 + dt.timedelta(minutes = 1, seconds = 59, 
                                            microseconds = 500000)
     dt_range_out = dt_range_1 + dt.timedelta(minutes = 2)
     
-    # Make a CO2 names list and a reference dictionary for assigning the data to 
-    # the output dataframe
-    CO2_names_list = ['CO2_{0}m'.format(heights_dict[i]) for i in heights_dict.keys()]    
-    CO2_names_dict = dict(zip(heights_dict.keys(), CO2_names_list))
+    # Make a reference dictionary cross-matching valve number with height
+    str_heights_list = [str(height) for height in heights_list]
     
-    # Make a T names list and a reference dictionary for assigning the data to 
-    # the output dataframe
-    T_names_list = ['Tair_{0}m'.format(heights_dict[i]) for i in heights_dict.keys()] 
-    T_names_dict = dict(zip(heights_dict.keys(), T_names_list))
+    # Make a CO2 names list and a reference dictionary for assigning the data 
+    # to the output dataframe
+    CO2_names_list = ['CO2_{0}m'.format(height) 
+                      for height in str_heights_list]    
+    CO2_names_dict = dict(zip(valve_list, CO2_names_list))
+    
+    # Make a T names list and a reference dictionary for assigning the data 
+    # to the output dataframe
+    T_names_list = ['Tair_{0}m'.format(height) 
+                    for height in str_heights_list] 
+    T_names_dict = dict(zip(valve_list, T_names_list))
     
     # Make an output dataframe
     rslt_df = pd.DataFrame(index = dt_range_out, 
@@ -83,11 +101,17 @@ def warra_raw():
         sub_df = (this_df[this_df.modulo_15 >= drop_n_leading_seconds]
                   .groupby('valve_number').mean())
     
-        # Do the averaging for each valve and send CO2 and temp data to output df
-        for j in profile_n:
-            rslt_df.loc[dt_range_out[i], CO2_names_dict[j]] = sub_df.loc[j, 'CO2']
-            T_name = 'T_air({0})'.format(str(j))
-            rslt_df.loc[dt_range_out[i], T_names_dict[j]] = sub_df.loc[j, T_name]
+        # Do the averaging for each valve and send CO2 and temp data to output 
+        # df
+        for valve in valve_list:
+            try:
+                rslt_df.loc[dt_range_out[i], 
+                            CO2_names_dict[valve]] = sub_df.loc[valve, 'CO2']
+            except:
+                continue
+            T_name = 'T_air({0})'.format(str(valve))
+            rslt_df.loc[dt_range_out[i], 
+                        T_names_dict[valve]] = sub_df.loc[valve, T_name]
     
     return rslt_df
     
@@ -96,7 +120,7 @@ def warra_average():
     # Create a dict to reference heights to valve numbers
     profile_n = [1, 2, 3, 4, 5, 6, 7, 8]
     profile_heights = [2, 4, 8, 16, 30, 42, 54, 70]
-    heights_dict = heights_dict = dict(zip(profile_n, 
+    heights_dict = dict(zip(profile_n, 
                                            [str(height) for height in 
                                             profile_heights]))
     
@@ -131,8 +155,10 @@ def warra_average():
         rslt_df[T_out_name] = sub_df[T_in_name]
         
     return rslt_df
-#
-##------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+
+
 ## Start program
 #
 #profile_n = [1, 2, 3, 4, 5, 6, 7, 8]
