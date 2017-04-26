@@ -100,7 +100,19 @@ class storage(object):
 #------------------------------------------------------------------------------
 def check_ps(df, site_alt):
     if not 'ps' in df.columns:
-        df['ps'] = 101.3
+        if site_alt is None:
+            print ('Warning: there are no pressure data available in the raw '
+                   'data file and a site altitude has not been specified; '
+                   'standard sea level pressure will be used for subsequent '
+                   'calculations but may result in substantial storage error '
+                   'for high altitude sites (by a factor of 1-p/p0!')
+            df['ps'] = 101.3
+        else:
+            # Put pressure-height equation in here!
+            df['ps'] = 101.3
+            
+    return
+            
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -284,7 +296,7 @@ def plot_time_series(df):
     ax.tick_params(axis = 'x', labelsize = 14)
     ax.tick_params(axis = 'y', labelsize = 14)
     ax.set_xlabel('$Date$', fontsize = 18)
-    ax.set_ylabel('$CO2\/\/[ppm]$', fontsize = 18)
+    ax.set_ylabel('$S_c\/(\mu mol\/CO_2\/m^{-2}\/s^{-1})$', fontsize = 18)
     ax.xaxis.set_ticks_position('bottom')
     ax.yaxis.set_ticks_position('left')
     ax.spines['right'].set_visible(False)
@@ -303,7 +315,23 @@ def main(site_alt = None, use_Tair = None, output_freq = 30,
          plot_ts = False, plot_diurnal_avg = False, site = None):
 
     """
-    Docstring coming soon!
+    Processes profile CO2 data to storage estimates;
+    
+    Kwargs:
+        - site (str; default None): if a site name is passed, the script 
+          searches for the site raw data processing script in the site-specific
+          profile module (profile_data_processing.py); if the site string is 
+          valid, the user must then select the valid file or directory in the 
+          file select dialog; if the site string is invalid, an IOError will be 
+          raised 
+        - site_alt (int; default None): script searches for a pressure variable 
+          named 'ps' in the input file; if present, it uses the data from that 
+          variable; if absent, it calculates the mean expected pressure for the 
+          given site altitude; if site_alt is None AND there is no pressure 
+          variable in the dataset, mean sea level pressure is used as input 
+          to the equation of state; note that this may lead to large errors for
+          high-altitude sites (a user warning to this effect is printed to 
+          screen)
     """
     
     # Either prompt for already formatted file, or prompt for directory 
@@ -317,7 +345,7 @@ def main(site_alt = None, use_Tair = None, output_freq = 30,
     
     downsample_df = downsample_data(data_df, output_freq = output_freq)
 
-    check_ps(downsample_df, site_alt = 100)
+    check_ps(downsample_df, site_alt = site_alt)
     
     layers_df = make_layers_df(downsample_df, profile_obj)
         
