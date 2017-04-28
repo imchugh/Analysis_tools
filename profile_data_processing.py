@@ -176,6 +176,7 @@ def downsample_data(df, output_freq = 30, smooth_window = 0):
         downsample_df = smooth_df.resample(current_freq).pad()
         return downsample_df.resample(output_freq_string).pad()
     else:
+#        pdb.set_trace()
         return local_df.resample(output_freq_string).pad()
 #------------------------------------------------------------------------------
 
@@ -340,7 +341,7 @@ def main(site_alt = None, use_Tair = None, output_freq = 30,
         data_df = get_formatted_data()
     else:
         data_df = format_raw_data(site)
-    
+    return data_df
     profile_obj = storage(data_df.columns, use_Tair = use_Tair)
     
     downsample_df = downsample_data(data_df, output_freq = output_freq)

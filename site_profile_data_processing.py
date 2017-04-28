@@ -17,7 +17,8 @@ import pdb
 
 def get_site_data(site_name):
     
-    sites_dict = {'warra_avg': warra_average,
+    sites_dict = {'howard_springs': howard_springs,
+                  'warra_avg': warra_average,
                   'warra_raw': warra_raw} 
     
     return sites_dict[site_name]()
@@ -71,7 +72,6 @@ def warra_raw(write_to_dir = None):
     # observation on valve 1 at the end of the file; so we just move the time 
     # stamp by 0.5s)
     dir_str = pdp.dir_select_dialog()        
-#    dir_str = '/home/ian/OzFlux/Sites/Warra/Data/Profile/Raw'
     dir_list = os.listdir(dir_str)
     df_list = []
     for f in dir_list:
@@ -141,7 +141,7 @@ def warra_raw(write_to_dir = None):
 
 #------------------------------------------------------------------------------
         
-def warra_average(write_to_dir):
+def warra_average(write_to_dir = None):
     
     # Create a dict to reference heights to valve numbers
     profile_n = [1, 2, 3, 4, 5, 6, 7, 8]
@@ -183,3 +183,23 @@ def warra_average(write_to_dir):
     return rslt_df
 
 ###############################################################################
+
+
+
+###############################################################################
+# Howard Springs                                                              #
+###############################################################################
+
+def howard_springs(write_to_dir = None):
+
+    file_str = '/home/ian/OzFlux/Sites/Howard_Springs/Data/Profile/Howard_profile_Slow_avg2.dat'
+    #pdp.dir_select_dialog()        
+
+    df = pd.read_csv(file_str, skiprows = [0, 2, 3])
+    df.index = pd.to_datetime(df.TIMESTAMP)
+    df.drop_duplicates(inplace = True)
+    df = pd.concat([df.iloc[:1], df.iloc[2:]])    
+
+    
+
+    return df
