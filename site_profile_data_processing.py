@@ -196,10 +196,22 @@ def howard_springs(write_to_dir = None):
     #pdp.dir_select_dialog()        
 
     df = pd.read_csv(file_str, skiprows = [0, 2, 3])
+    df.drop(df.index[1], inplace = True)
     df.index = pd.to_datetime(df.TIMESTAMP)
     df.drop_duplicates(inplace = True)
-    df = pd.concat([df.iloc[:1], df.iloc[2:]])    
 
+    old_names = [i for i in df.columns if 'Cc' in i]
+    old_names.sort()
+
+    new_names = ['CO2_{0}'.format(this_name.split('_')[2]) 
+                 for this_name in old_names]
     
+    old_names.append('T_air_Avg')
+    new_names.append('Tair_2m')
+    
+    names_dict = dict(zip(old_names, new_names))
+    new_df = pd.DataFrame(index = df.index)
+    for name in names_dict.keys():
+        new_df[names_dict[name]] = df[name]
 
-    return df
+    return new_df

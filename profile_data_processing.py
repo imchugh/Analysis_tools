@@ -108,8 +108,21 @@ def check_ps(df, site_alt):
                    'for high altitude sites (by a factor of 1-p/p0!')
             df['ps'] = 101.3
         else:
-            # Put pressure-height equation in here!
-            df['ps'] = 101.3
+            p0 = 101325
+            L = 0.0065
+            R = 8.3143
+            T0 = 288.15
+            g = 9.80665
+            M = 0.0289644
+            
+            A = (g * M) / (R * L)
+            B = L / T0
+            
+            p = (p0 * (1 - B * site_alt) ** A) / 1000
+                          
+            df['ps'] = p
+            
+            print p
             
     return
             
@@ -271,7 +284,7 @@ def plot_diurnal(df):
     ax.tick_params(axis = 'x', labelsize = 14)
     ax.tick_params(axis = 'y', labelsize = 14)
     ax.set_xlabel('$Time$', fontsize = 18)
-    ax.set_ylabel('$CO2\/\/[ppm]$', fontsize = 18)
+    ax.set_ylabel('$S_c\/(\mu mol\/CO_2\/m^{-2}\/s^{-1})$', fontsize = 18)
     ax.xaxis.set_ticks_position('bottom')
     ax.yaxis.set_ticks_position('left')
     ax.spines['right'].set_visible(False)
@@ -341,7 +354,7 @@ def main(site_alt = None, use_Tair = None, output_freq = 30,
         data_df = get_formatted_data()
     else:
         data_df = format_raw_data(site)
-    return data_df
+
     profile_obj = storage(data_df.columns, use_Tair = use_Tair)
     
     downsample_df = downsample_data(data_df, output_freq = output_freq)
