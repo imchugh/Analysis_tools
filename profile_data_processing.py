@@ -9,6 +9,7 @@ Created on Tue Mar 21 09:52:14 2017
 import numpy as np
 import pandas as pd
 import copy as cp
+import os
 import pdb
 import matplotlib.pyplot as plt
 import Tkinter, tkFileDialog
@@ -18,7 +19,11 @@ reload(spdp)
 #------------------------------------------------------------------------------
 class storage(object):
     """
-    Docstring coming soon!
+    This class is a container for a set of profile data attributes required 
+    for calculation of the storage term, including names and heights of
+    CO2 and temperature variables, and layer depths used for vertical scaling 
+    of the storage estimates; the only positional argument required is a 
+    list of column names (str; note that the column names must...)
     """    
     def __init__(self, col_names, CO2_str = 'CO2', Tair_str = 'Tair', 
                  use_Tair = None):
@@ -98,37 +103,6 @@ class storage(object):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def check_ps(df, site_alt):
-    if not 'ps' in df.columns:
-        if site_alt is None:
-            print ('Warning: there are no pressure data available in the raw '
-                   'data file and a site altitude has not been specified; '
-                   'standard sea level pressure will be used for subsequent '
-                   'calculations but may result in substantial storage error '
-                   'for high altitude sites (by a factor of 1-p/p0!')
-            df['ps'] = 101.3
-        else:
-            p0 = 101325
-            L = 0.0065
-            R = 8.3143
-            T0 = 288.15
-            g = 9.80665
-            M = 0.0289644
-            
-            A = (g * M) / (R * L)
-            B = L / T0
-            
-            p = (p0 * (1 - B * site_alt) ** A) / 1000
-                          
-            df['ps'] = p
-            
-            print p
-            
-    return
-            
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
 def calculate_CO2_storage(df, profile_obj):
     
     storage_names_list = ['Sc{0}'.format(var.split('CO2')[1]) for var in 
@@ -150,6 +124,38 @@ def calculate_CO2_storage(df, profile_obj):
     storage_df['Sc_total'] = storage_df[storage_names_list].sum(axis = 1)
         
     return storage_df
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def check_ps(df, site_alt):
+    if not 'ps' in df.columns:
+        if site_alt is None:
+            print ('Warning: there are no pressure data available in the raw '
+                   'data file and a site altitude has not been specified; '
+                   'standard sea level pressure will be used for subsequent '
+                   'calculations but may result in substantial storage '
+                   'underestimation for high altitude sites (by a factor of '
+                   '1-p/p0!')
+            df['ps'] = 101.3
+        else:
+            p0 = 101325
+            L = 0.0065
+            R = 8.3143
+            T0 = 288.15
+            g = 9.80665
+            M = 0.0289644
+            
+            A = (g * M) / (R * L)
+            B = L / T0
+            
+            p = (p0 * (1 - B * site_alt) ** A) / 1000
+                          
+            df['ps'] = p
+            
+            print p
+            
+    return
+            
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -180,17 +186,18 @@ def downsample_data(df, output_freq = 30, smooth_window = 0):
     output_freq_string = '{0}T'.format(str(output_freq))
 
     local_df = cp.copy(df)
+    current_freq = pd.infer_freq(local_df.index)
     
     if not smooth_window == 0:
-        current_freq = pd.infer_freq(local_df.index)
         upsample_df = local_df.resample('1T').interpolate()
         smooth_df = upsample_df.rolling(window = smooth_window, 
                                         center = True).mean()
         downsample_df = smooth_df.resample(current_freq).pad()
-        return downsample_df.resample(output_freq_string).pad()
     else:
-#        pdb.set_trace()
-        return local_df.resample(output_freq_string).pad()
+        downsample_df = local_df
+    
+    return downsample_df.resample(output_freq_string).pad()
+    
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -205,23 +212,43 @@ def file_select_dialog():
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def format_raw_data(site, output_dir = False):
-    
-    df = spdp.get_site_data(site)
-    if output_dir:
-        df.to_csv(output_dir, 
-                  index_label = df.index.name)
-    else:
-        return df
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
 def get_formatted_data():
     
     file_path = file_select_dialog()
     df = pd.read_csv(file_path)
     df.index = pd.to_datetime(df.Datetime)
     return df
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_layer_means(df, level_names, levels, layer_names):
+    
+    mean_df = pd.DataFrame(index = df.index)
+    for i in range(len(levels)):   
+        if i == 0:
+            level_name = level_names[i]
+            layer_name = layer_names[i]
+            mean_df[layer_name] = df[level_name]
+        else:
+            upper_level_name = level_names[i]
+            lower_level_name = level_names[i - 1]
+            layer_name = layer_names[i]
+            mean_df[layer_name] = (df[upper_level_name] + 
+                                     df[lower_level_name]) / 2
+    
+    return mean_df
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_raw_data(site, output_dir = False):
+    
+    df = spdp.get_site_data(site)
+    if output_dir:
+        file_name = site + '_OzFlux_format_profile.csv'
+        write_data_to_file(df, output_dir, file_name)
+    return df
+
+#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 def make_layers_df(df, profile_obj):
@@ -242,25 +269,6 @@ def make_layers_df(df, profile_obj):
     layers_df['ps'] = df['ps']
     
     return layers_df
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-def get_layer_means(df, level_names, levels, layer_names):
-    
-    mean_df = pd.DataFrame(index = df.index)
-    for i in range(len(levels)):   
-        if i == 0:
-            level_name = level_names[i]
-            layer_name = layer_names[i]
-            mean_df[layer_name] = df[level_name]
-        else:
-            upper_level_name = level_names[i]
-            lower_level_name = level_names[i - 1]
-            layer_name = layer_names[i]
-            mean_df[layer_name] = (df[upper_level_name] + 
-                                     df[lower_level_name]) / 2
-    
-    return mean_df
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -322,11 +330,33 @@ def plot_time_series(df):
     plt.legend(loc='lower left', frameon = False, ncol = 2)    
 #------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+def write_data_to_file(df, path, file_name):
+    
+    if not os.path.isdir(path):
+        home_dir = os.path.expanduser('~')
+        output_dir = os.path.join(home_dir, 'profile_data')
+        if not os.path.isdir(output_dir):
+            os.mkdir(output_dir)
+        print ('Warning - the specified directory for data output could not be'
+               ' found! \nWriting to the following directory: {0}'
+               .format(output_dir))
+    else:
+        output_dir = path
+
+    target = os.path.join(output_dir, file_name)    
+     
+    df.to_csv(target, index_label = 'Datetime')
+    
+    return
+#------------------------------------------------------------------------------
+
 ###############################################################################
 # Start main program                                                          #
 ###############################################################################   
-def main(site_alt = None, use_Tair = None, output_freq = 30, 
-         plot_ts = False, plot_diurnal_avg = False, site = None):
+def main(site = None, site_alt = None, use_Tair = None, 
+         output_freq = 30, plot_ts = False, plot_diurnal_avg = False, 
+         output_dir = None):
 
     """
     Processes profile CO2 data to storage estimates;
@@ -346,14 +376,33 @@ def main(site_alt = None, use_Tair = None, output_freq = 30,
           to the equation of state; note that this may lead to large errors for
           high-altitude sites (a user warning to this effect is printed to 
           screen)
+        - use_Tair (str: default None): if a temperature variable name is 
+          passed, this variable will be used as the temperature input to the 
+          equation of state (which converts mole fraction to molar density); 
+          otherwise, the script searches for either a set of temperature 
+          variables with heights matching those for the CO2 variables, or a 
+          single temperature variable; if there are multiple temperature 
+          variables in the file but they do not match the heights for the CO2
+          variables, or there are more than 1 but less than the number of CO2 
+          variables, an exception is raised
+        - output_freq (int; default 30 [units - minutes]): the desired output 
+          frequency of the storage calculation
+        - plot_ts (bool; default False): output a plot of the entire time 
+          series for storage
+        - plot_diurnal_avg (bool; default False): output a plot of the 
+          diurnally averaged data
+        - output_dir (str; default None): if not None, writes data to a csv 
+          file in the nominated directory (if the directory is invalid, a
+          warning message is printed to screen and the data is written to the 
+          location documented in the message)
     """
     
     # Either prompt for already formatted file, or prompt for directory 
-    # containing unformateed file/s
+    # containing unformatted file/s
     if site is None:
         data_df = get_formatted_data()
     else:
-        data_df = format_raw_data(site)
+        data_df = get_raw_data(site)
 
     profile_obj = storage(data_df.columns, use_Tair = use_Tair)
     
@@ -370,4 +419,10 @@ def main(site_alt = None, use_Tair = None, output_freq = 30,
     if plot_diurnal_avg:
         plot_diurnal(storage_df)
     
+    if not output_dir is None:
+        if site is None: site = 'generic'
+        file_name = site + '_storage.csv'
+        write_data_to_file(storage_df, output_dir, file_name)
+    
     return storage_df
+###############################################################################

@@ -5,6 +5,7 @@ Created on Mon Mar 20 10:07:35 2017
 
 @author: ian
 """
+import numpy as np
 import pandas as pd
 import datetime as dt
 import profile_data_processing as pdp
@@ -17,41 +18,158 @@ import pdb
 
 def get_site_data(site_name):
     
-    sites_dict = {'howard_springs': howard_springs,
+    sites_dict = {'cumberland plains': cumberland_plains, 
+                  'howard springs': howard_springs,
                   'warra_avg': warra_average,
-                  'warra_raw': warra_raw} 
+                  'warra_raw': warra_raw,
+                  'whroo': whroo} 
     
     return sites_dict[site_name]()
-
-def write_data_to_file(df, path, site):
-    
-    if not os.path.isdir(path):
-        home_dir = os.path.expanduser('~')
-        output_dir = os.path.join(home_dir, 'profile_data')
-        if not os.path.isdir(output_dir):
-            os.mkdir(output_dir)
-        print ('The specified directory for data output could not be found!'
-               '\nWriting to the following directory: {0}'
-               .format(output_dir))
-    else:
-        output_dir = path
-
-    fname = '{0}_standard_format_profile.csv'.format(site)
-    target = os.path.join(output_dir, fname)    
-     
-    df.to_csv(target, index_label = 'Datetime')
-    
-    return
 
 #------------------------------------------------------------------------------    
 # Site scripts
 #------------------------------------------------------------------------------
 
 ###############################################################################
+# Cumberland Plains                                                           #
+###############################################################################
+
+def cumberland_plains():
+    
+    def interpolate_T(T_series_lower, T_series_upper, T_height):
+           
+        T1_height = 7
+        T2_height = 30
+        dtdz = (T_series_upper - T_series_lower) / (T2_height - T1_height)
+        
+        return (T_height - T1_height) * dtdz + T_series_lower
+    
+    max_CO2 = 1000
+    min_CO2 = 300    
+    target_var = 'CO2_Avg'
+    missing_data_float = -9999
+    input_profile_file_path = '/home/ian/OzFlux/Sites/CumberlandPlains/Data/Profile/EFS_S00_CO2PROFILE_R_2017.csv'
+    input_met_data_path = '/home/ian/OzFlux/Sites/CumberlandPlains/Data/Profile/EddyFlux_slow_met_2017.csv'
+    
+    # Get data and create index 
+    df = pd.read_csv(input_profile_file_path)
+    df.index = [dt.datetime.combine(dt.datetime.strptime(
+                                        df.Date[i], '%d/%m/%Y').date(),
+                                    dt.datetime.strptime(
+                                        df.Time[i], '%H:%M:%S').time()) 
+                for i in xrange(len(df))]
+    
+    # Remove missing_data_values and replace with NaN
+    df[target_var] = np.where(df[target_var] == missing_data_float, 
+                              np.nan, 
+                              df[target_var])
+    total_obs = len(df)
+    missing_obs = total_obs - len(df[target_var].dropna())
+    print ('{0}% of records contain no data'
+           .format(str(round(missing_obs / float(total_obs),1))))
+    
+    # Remove data that is outside specified range and replace with NaN
+    df[target_var] = np.where((df[target_var] < min_CO2)|
+                              (df[target_var] > max_CO2),
+                              np.nan, 
+                              df[target_var])
+    dropped_obs = len(df[target_var].dropna()) - missing_obs
+    print ('{0}% of records contain data outside range limits'
+           .format(str(round(dropped_obs / float(total_obs),1))))
+    
+    # Remove irregular time stamps then align all to half-hour (+59 seconds!!!)
+    startdate_lst = []
+    enddate_lst = []
+    series_list = []
+    valve_list = [1, 2, 3, 4, 5, 6, 7, 8]
+    heights_list = [0.5, 1, 2, 3.5, 7, 12, 20, 29]
+    for i, valve in enumerate(valve_list):
+        new_name = 'CO2_{0}m'.format(str(heights_list[i]))
+        expected_minute = valve - 1
+        temp_s = df[target_var][df['ValveNo'] == valve].copy()
+        index = [i for i in temp_s.index if i.minute %30 != expected_minute]
+        if not len(index) == 0:
+            print ('{0} instances of inconsistent time step found for valve {1} '
+                   '({2}); removed!'
+                   .format(str(len(index)), 
+                           str(valve), 
+                           ','.join([str(i) for i in index])))               
+            temp_s.drop(index, axis = 0, inplace = True)
+        new_index = [i - dt.timedelta(minutes = expected_minute,
+                                      seconds = 59) for i in temp_s.index]    
+        temp_s.index = new_index
+        temp_s.name = new_name
+        startdate_lst.append(temp_s.index[0])
+        enddate_lst.append(temp_s.index[-1])
+        series_list.append(temp_s)
+    
+    # Sort the start and end date lists and create a universal date range to be applied to all valve series'
+    startdate_lst.sort()
+    enddate_lst.sort()    
+    new_index = pd.date_range(startdate_lst[0], enddate_lst[-1], freq='30T')
+    
+    # Reindex, write to dataframe and return
+    for series in series_list:
+        series = series.reindex(new_index)   
+    output_df = pd.concat(series_list, axis = 1)
+    
+    # Import met data and align time index with profile data
+    met_df = pd.read_csv(input_met_data_path)
+    met_df.index = [dt.datetime.combine(dt.datetime.strptime(
+                                            met_df.Date[i], '%d/%m/%Y').date(),
+                                        dt.datetime.strptime(
+                                            met_df.Time[i], '%H:%M:%S').time()) 
+                    for i in xrange(len(met_df))]
+    met_df = met_df[['Ta_HMP_01_Avg', 'Ta_HMP_155_Avg', 'ps_7500_Avg']]
+    met_df.columns = ['Tair_lower', 'Tair_upper', 'ps']
+    met_df = met_df.reindex(output_df.index)
+    
+    # Interpolate the temperature data to the same heights as the CO2 
+    # measurements
+    for this_height in heights_list:
+        T_name = 'Tair_{0}m'.format(str(this_height))
+        output_df[T_name] = interpolate_T(met_df.Tair_lower, met_df.Tair_upper, 
+                                          this_height)
+    output_df['ps'] = met_df.ps
+    
+    return output_df
+
+
+###############################################################################
+# Howard Springs                                                              #
+###############################################################################
+
+def howard_springs():
+
+    file_str = pdp.dir_select_dialog()        
+
+    df = pd.read_csv(file_str, skiprows = [0, 2, 3])
+    df.drop(df.index[1], inplace = True)
+    df.index = pd.to_datetime(df.TIMESTAMP)
+    df.drop_duplicates(inplace = True)
+
+    old_names = [i for i in df.columns if 'Cc' in i]
+    old_names.sort()
+
+    new_names = ['CO2_{0}'.format(this_name.split('_')[2]) 
+                 for this_name in old_names]
+    
+    old_names.append('T_air_Avg')
+    new_names.append('Tair_2m')
+    
+    names_dict = dict(zip(old_names, new_names))
+    new_df = pd.DataFrame(index = df.index)
+    for name in names_dict.keys():
+        new_df[names_dict[name]] = df[name]
+
+    return new_df
+
+
+###############################################################################
 # Warra
 ###############################################################################
 
-def warra_raw(write_to_dir = None):
+def warra_raw():
 
     ###########################################################################
     # User-setable options - set with CARE!!!
@@ -134,14 +252,11 @@ def warra_raw(write_to_dir = None):
             rslt_df.loc[dt_range_out[i], 
                         T_names_dict[valve]] = sub_df.loc[valve, T_name]
     
-    if not write_to_dir is None:
-        write_data_to_file(rslt_df, write_to_dir, 'Warra')
-        
     return rslt_df
 
 #------------------------------------------------------------------------------
         
-def warra_average(write_to_dir = None):
+def warra_average():
     
     # Create a dict to reference heights to valve numbers
     profile_n = [1, 2, 3, 4, 5, 6, 7, 8]
@@ -182,36 +297,100 @@ def warra_average(write_to_dir = None):
         
     return rslt_df
 
-###############################################################################
+#------------------------------------------------------------------------------
 
-
-
-###############################################################################
-# Howard Springs                                                              #
-###############################################################################
-
-def howard_springs(write_to_dir = None):
-
-    file_str = '/home/ian/OzFlux/Sites/Howard_Springs/Data/Profile/Howard_profile_Slow_avg2.dat'
-    #pdp.dir_select_dialog()        
-
-    df = pd.read_csv(file_str, skiprows = [0, 2, 3])
-    df.drop(df.index[1], inplace = True)
-    df.index = pd.to_datetime(df.TIMESTAMP)
+def whroo():
+    
+    """
+    This script should be used to make any adjustments to CO2 data; it drops all
+    other variables except the timestamp and the CO2 data because it assumes
+    that these variables have been used to make corrections and are 
+    redundant when the data is returned (as dictionary)
+    """
+ 
+    # Set locations   
+    path = '/home/ian/OzFlux/Sites/Whroo/Data/Processed/Profile/'
+    files = ['Whroo_profile_IRGA_avg_1.dat' , 'Whroo_profile_IRGA_avg_2.dat',
+             'Whroo_profile_IRGA_avg_3.dat', 'Whroo_profile_IRGA_avg.dat']
+    met_file = 'Whroo_slow_core.dat'
+    
+    # Set var names
+    CO2_vars_list = ['Cc_LI840_1m', 'Cc_LI840_2m', 'Cc_LI840_4m', 'Cc_LI840_8m', 
+                     'Cc_LI840_16m', 'Cc_LI840_32m']
+    
+    # Set dates for correction
+    last_1min_date = '2012-02-28 12:03:00'
+    first_2min_date = '2012-02-28 12:10:00'
+    baddata_dates = [['2013-08-24', '2013-10-29'],
+                     ['2016-10-12 12:00', 
+                      dt.datetime.strftime(dt.datetime.today().date(), 
+                                           '%Y-%m-%d')]]
+    badcoeff_dates = ['2012-06-28 11:00:00', '2012-10-17 12:50:00']
+    instrument_dates = [['2011-12-02 12:00:00', '2012-06-28 10:58:00'],
+                        ['2012-06-28 11:00:00', '2012-10-13 12:00:00'],
+                        ['2012-10-13 12:02:00', '2013-08-23 23:58:00'],
+                        ['2013-10-29 12:00:00', '2014-06-02 23:58:00']]
+    
+    
+    
+    # Set some other stuff    
+    coeff_correct = 2.5
+    true_heights = [0.5, 2, 4, 8, 16, 36]
+    CO2_range = [300, 600]
+    
+    # Import datasets, adjust frequency for 1-minute data then concatenate,
+    # drop duplicates and extraneous data and ensure no missing time stamps
+    df_dict = {}
+    for f in files:
+        this_df = pd.read_csv(os.path.join(path, f), skiprows = [0,2,3],
+                              na_values = 'NAN')
+        this_df.index = pd.to_datetime(this_df['TIMESTAMP'])
+        df_dict[f] = this_df
+    df = pd.concat([df_dict[files[0]].loc[:last_1min_date].resample('2T').mean(),
+                    df_dict[files[0]].loc[first_2min_date:],
+                    df_dict[files[1]],
+                    df_dict[files[2]],
+                    df_dict[files[3]]])
     df.drop_duplicates(inplace = True)
-
-    old_names = [i for i in df.columns if 'Cc' in i]
-    old_names.sort()
-
-    new_names = ['CO2_{0}'.format(this_name.split('_')[2]) 
-                 for this_name in old_names]
+    df.sort_index(inplace = True)
+    df = df.reindex(pd.date_range(df.index[0], df.index[-1], freq = '2T'))
+    df = df[CO2_vars_list]
     
-    old_names.append('T_air_Avg')
-    new_names.append('Tair_2m')
+    # Correct the data for 1) no data; 2) wrong instrument scaling coefficients; 
+    # 3) range checks; 4) reversed label assignment of CO2
     
-    names_dict = dict(zip(old_names, new_names))
-    new_df = pd.DataFrame(index = df.index)
-    for name in names_dict.keys():
-        new_df[names_dict[name]] = df[name]
+    # Remove block bad data
+    for date_span in baddata_dates:
+        df.loc[date_span[0]: date_span[1], CO2_vars_list] = np.nan
+    
+    # Correct bad program scalar
+    df.loc[badcoeff_dates[0]: badcoeff_dates[1], CO2_vars_list] *= coeff_correct
+    
+    # Impose range limits
+    for this_var in CO2_vars_list:
+        df.loc[:, this_var][df.loc[:, this_var] < CO2_range[0]] = np.nan
+        df.loc[:, this_var][df.loc[:, this_var] > CO2_range[1]] = np.nan
+    
+    # Reverse names, which have always referred to wrong heights
+    true_heights.reverse()
+    new_CO2_vars_list = ['CO2_{0}m'.format(str(i)) for i in true_heights]
+    reverse_dict = {CO2_vars_list[i]: new_CO2_vars_list[i] 
+                    for i in range(len(CO2_vars_list))}
+    df = df.rename(columns = reverse_dict)
+    
+    # Downsample CO2 to match temperature and pressure data
+    downsample_df = pdp.downsample_data(df)
+    
+    # Open temperature and pressure series and align and join with CO2
+    met_df = pd.read_csv(os.path.join(path, met_file), skiprows = [0,2,3],
+                         na_values = 'NAN')
+    met_df.index = pd.to_datetime(met_df.TIMESTAMP)
+    met_df.drop_duplicates(inplace = True)
+    met_df.sort_index(inplace = True)
+    met_df = met_df.reindex(df.index)
+    downsample_df['Tair_36m'] = met_df['Ta_HMP_Avg']
+    downsample_df['ps'] = met_df['ps_7500_Avg']
+    
+    return downsample_df
 
-    return new_df
+###############################################################################
