@@ -23,8 +23,11 @@ class ER(object):
             self.drivers = np.column_stack([T, sws])            
        
     def get_ER(self, drivers, *params):
-        T_response = params[0]  * np.exp(params[1] * (1 / (10 + 46.02) - 
-                                         1 / (drivers[:, 0] + 46.02)))
+        try:
+            T_response = params[0]  * np.exp(params[1] * (1 / (10 + 46.02) - 
+                                             1 / (drivers[:, 0] + 46.02)))
+        except:
+            pdb.set_trace()
         if drivers.shape[1] == 1:
             return T_response
         else:
@@ -41,7 +44,7 @@ class ER(object):
             if not theta_1 == None and theta_2 == None:
                 print ('Theta parameters can only be passed to '
                        'fitting function of a class instance '
-                       'containing Series sws... ignoring theta parameters!')
+                       'containing Series Sws... ignoring theta parameters!')
         else:
             index = None
 
@@ -90,7 +93,7 @@ class ER(object):
         
     def plot_respiration(self, title_str):
         
-        if not self.sws == None:
+        if not self.sws is None:
             
             print 'Watch this space! Going to make a 3D contour plot!'
             return
@@ -143,9 +146,7 @@ params_dict = this_ER.get_fit()
 # Instantiate class with soil moisture
 wt_ER = ER(temp, est_resp_H2O, vwc)
 
-this_dict = wt_ER.get_fit(theta_1 = 3)
-
-
+this_dict = wt_ER.get_fit()
 #------------------------------------------------------------------------------
 #fig = plt.figure()
 #ax = fig.gca(projection='3d')
