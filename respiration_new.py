@@ -36,6 +36,28 @@ def check_slice_length(sub_df, configs_dict, year = None):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+def generate_data(obs_df, params_df):
+    
+    output_df = pd.DataFrame(index = df.index, columns = ['ER'])
+
+    for this_date in params_df.index:
+        date_str = dt.datetime.strftime(this_date, '%Y-%m-%d')
+        sub_df = obs_df.loc[date_str]
+        param_list = map(lambda x: params_df.loc[date_str, x], ['rb', 'Eo', 
+                                                                'theta_1', 
+                                                                'theta_2'])
+        if not any(np.isnan(param_list)):
+            pdb.set_trace()
+        output_df.loc[date_str, 'ER'] = response_func(sub_df.Ts, 
+                                                      sub_df.Sws, 
+                                                      param_list[0], 
+                                                      param_list[1],
+                                                      param_list[2], 
+                                                      param_list[3])
+    return output_df
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
 def get_data(configs_dict):
 
     df = io.OzFluxQCnc_to_data_structure(configs_dict['file_path'], 
@@ -55,14 +77,23 @@ def make_date_iterator(df, configs_dict):
     
     size = configs_dict['window_size']
     step = configs_dict['window_step']
+    interval_mins = int(filter(str.isdigit, configs_dict['interval']))
     start_date = df.index[0].to_pydatetime().date() + dt.timedelta(size / 2)
     end_date = df.index[-1].to_pydatetime().date()
     freq_str = '{}D'.format(str(int(step)))
-    dates = (pd.date_range(start_date, end_date, freq = freq_str) + 
-             dt.timedelta(0.5))
-    date_bounds = zip(dates - dt.timedelta(size / 2.0 - 30 / 1440.0),
-                      dates + dt.timedelta(size / 2.0))
+    dates = pd.date_range(start_date, end_date, freq = freq_str)
+    ref_dates = dates + dt.timedelta(0.5)
+    date_bounds = zip(ref_dates - dt.timedelta(size / 2.0 - interval_mins / 1440.0),
+                      ref_dates + dt.timedelta(size / 2.0))
     return dict(zip(dates, date_bounds))
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def make_params_df(df):
+    return pd.DataFrame(index = pd.date_range(df.index[0].date(), 
+                                              df.index[-1].date(), freq = 'D'),
+                        columns = ['rb', 'Eo', 'theta_1', 'theta_2', 'QCFlag'],
+                        dtype = 'float')
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -79,12 +110,11 @@ def process_data(df, configs_dict):
 
     # Generate a date iterator based on window size and step
     date_iterator_dict = make_date_iterator(df, configs_dict)
-    
-    # Make a result dataframe to hold parameter values
     dates_list = sorted(date_iterator_dict.keys())
-    params_df = pd.DataFrame(index = dates_list, 
-                             columns = ['rb', 'Eo', 'theta_1', 'theta_2', 'QCFlag'])
-    
+
+    # Make a result dataframe to hold parameter values
+    params_df = make_params_df(df)
+
     # Initialise the model
     model = Model(response_func, independent_vars = ['t_series', 
                                                      'vwc_series'])
@@ -142,7 +172,7 @@ def response_func(t_series, vwc_series, rb, Eo, theta_1, theta_2):
 # Set window size and step (both in units of days)
 configs_dict = {'file_path': ('/home/ian/OzFlux/Sites/GatumPasture/Data/'
                               'Processed/All/GatumPasture_L3.nc'),
-                'window_size': 10, 
+                'window_size': 7, 
                 'window_step': 5,
                 'min_data_pct_window': 20,
                 'min_data_pct_annual': 10}
@@ -151,6 +181,7 @@ configs_dict = {'file_path': ('/home/ian/OzFlux/Sites/GatumPasture/Data/'
 df = get_data(configs_dict)
 
 # Get parameters
-params_df = process_data(df, configs_dict)
+params_df = process_data(df, configs_dict).interpolate()
 
-#sub_df = df.loc[start_date: end_date, ['Fc', 'Ts', 'Sws']]
+# Calculate respiration for time series
+result_df = generate_data(df, params_df)

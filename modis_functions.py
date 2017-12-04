@@ -6,7 +6,6 @@ Created on Fri Oct  7 16:36:26 2016
 """
 
 import numpy as np
-import datetime as dt
 from suds.client import *
 import datetime as dt
 
