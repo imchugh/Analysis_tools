@@ -7,12 +7,20 @@ Created on Fri Oct  7 16:36:26 2016
 
 import numpy as np
 from suds.client import *
+import webbrowser
 import datetime as dt
+import sys
 
+def get_products():
+    webbrowser.open('https://lpdaac.usgs.gov/dataset_discovery/modis/modis_products_table')
+
+def get_sites():
+    webbrowser.open('http://www.ozflux.org.au/monitoringsites/index.html')
+    
 def get_MODIS_subset(lat, lon, product, data_band, QC_band, 
                      requestStart = None, requestEnd = None):
     
-    wsdlurl = 'http://daac.ornl.gov/cgi-bin/MODIS/GLBVIZ_1_Glb_subset/MODIS_webservice.wsdl'
+    wsdlurl = 'https://modis.ornl.gov/cgi-bin/MODIS/soapservice/MODIS_soapservice.wsdl'
                 
     # Get the available dates on the server
     client = Client(wsdlurl)
