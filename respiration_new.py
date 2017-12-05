@@ -46,8 +46,8 @@ def generate_data(obs_df, params_df):
         param_list = map(lambda x: params_df.loc[date_str, x], ['rb', 'Eo', 
                                                                 'theta_1', 
                                                                 'theta_2'])
-        if not any(np.isnan(param_list)):
-            pdb.set_trace()
+#        if not any(np.isnan(param_list)):
+#            pdb.set_trace()
         output_df.loc[date_str, 'ER'] = response_func(sub_df.Ts, 
                                                       sub_df.Sws, 
                                                       param_list[0], 
@@ -155,7 +155,7 @@ def process_data(df, configs_dict):
                            vwc_series = df.Sws, params = params)
         params_df.loc[this_date, 'rb'] = result.best_values['rb']
     
-    return params_df
+    return params_df.interpolate()
 #------------------------------------------------------------------------------    
 
 #------------------------------------------------------------------------------
@@ -181,7 +181,7 @@ configs_dict = {'file_path': ('/home/ian/OzFlux/Sites/GatumPasture/Data/'
 df = get_data(configs_dict)
 
 # Get parameters
-params_df = process_data(df, configs_dict).interpolate()
+params_df = process_data(df, configs_dict)
 
 # Calculate respiration for time series
 result_df = generate_data(df, params_df)
