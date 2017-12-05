@@ -7,10 +7,7 @@ Created on Thu Oct 12 17:07:47 2017
 """
 
 import calendar
-<<<<<<< HEAD
-=======
 import copy as cp
->>>>>>> test
 import datetime as dt
 from lmfit import Model
 import numpy as np
@@ -25,27 +22,6 @@ import DataIO as io
 ###############################################################################
 
 #------------------------------------------------------------------------------
-def check_slice_length(sub_df, configs_dict, year = None):
-    
-    interval_mins = int(filter(str.isdigit, configs_dict['interval']))
-    if year is None:
-        pct_required = configs_dict['min_data_pct_window']
-        expected_length = 1440 / interval_mins * configs_dict['window_size']
-    else:
-<<<<<<< HEAD
-        n_days = 366 if calendar.isleap(year) else 365
-=======
-        n_days = 366 if calendar.isleap(int(year)) else 365
->>>>>>> test
-        expected_length = 1440 / interval_mins * n_days
-        pct_required = configs_dict['min_data_pct_annual']
-    pct_available = len(sub_df) / float(expected_length) * 100
-    assert pct_available > pct_required
-#------------------------------------------------------------------------------
-
-#------------------------------------------------------------------------------
-<<<<<<< HEAD
-=======
 def get_slice(df, configs_dict, date_obj):
     
     interval_mins = int(filter(str.isdigit, configs_dict['interval']))
@@ -65,28 +41,8 @@ def get_slice(df, configs_dict, date_obj):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
->>>>>>> test
 def generate_data(obs_df, params_df):
     
-    output_df = pd.DataFrame(index = df.index, columns = ['ER'])
-
-<<<<<<< HEAD
-    for this_date in params_df.index:
-        date_str = dt.datetime.strftime(this_date, '%Y-%m-%d')
-        sub_df = obs_df.loc[date_str]
-        param_list = map(lambda x: params_df.loc[date_str, x], ['rb', 'Eo', 
-                                                                'theta_1', 
-                                                                'theta_2'])
-#        if not any(np.isnan(param_list)):
-#            pdb.set_trace()
-        output_df.loc[date_str, 'ER'] = response_func(sub_df.Ts, 
-                                                      sub_df.Sws, 
-                                                      param_list[0], 
-                                                      param_list[1],
-                                                      param_list[2], 
-                                                      param_list[3])
-    return output_df
-=======
     df_list = []
     for this_date in params_df.index:
         date_str = dt.datetime.strftime(this_date, '%Y-%m-%d')
@@ -98,7 +54,6 @@ def generate_data(obs_df, params_df):
                                      param_list[2], param_list[3]))
     output_df = pd.DataFrame(pd.concat(df_list), columns = ['ER'])
     return output_df.reindex(obs_df.index).interpolate()
->>>>>>> test
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -142,11 +97,7 @@ def make_params_df(df):
 
 #------------------------------------------------------------------------------
 def optimise(df, model, params):
-<<<<<<< HEAD
-    result = model.fit(df.Fc_EP, t_series = df.Ts, vwc_series = df.Sws, 
-=======
     result = model.fit(df.Fc, t_series = df.Ts, vwc_series = df.Sws, 
->>>>>>> test
                        params = params)
 #    if params['Eo'] < 50 or params['Eo'] > 400:
         
@@ -169,23 +120,12 @@ def process_data(df, configs_dict):
     params = model.make_params(rb = 1, Eo = 200, theta_1 = 1, theta_2 = 10)
     
     # Iterate on year
-<<<<<<< HEAD
-    years_list = sorted(list(set(df.index.year)))
-    for this_year in years_list:
-        sub_df = (df.loc[df.Fsd < 5]
-                  .loc[str(this_year), ['Fc_EP', 'Ts', 'Sws']].dropna())
-        try:
-            check_slice_length(sub_df, configs_dict, year = this_year)
-        except AssertionError:
-            params_df.loc[str(this_year), 'QCFlag'] = 1
-=======
     years_list = sorted(map(lambda x: str(x), list(set(df.index.year))))
     for this_year in years_list:
         try:
             sub_df = get_slice(df, configs_dict, this_year)
         except AssertionError:
             params_df.loc[this_year, 'QCFlag'] = 1
->>>>>>> test
             continue
         result = optimise(sub_df, model, params)
         for param in result.best_values.keys():
@@ -199,26 +139,12 @@ def process_data(df, configs_dict):
     
     # Iterate on date
     for this_date in dates_list:
-<<<<<<< HEAD
-        start_date = date_iterator_dict[this_date][0]
-        end_date = date_iterator_dict[this_date][1]
-        sub_df = (df.loc[df.Fsd < 5]
-                  .loc[start_date: end_date, ['Fc_EP', 'Ts', 'Sws']].dropna())
-        try:
-            check_slice_length(sub_df, configs_dict)
-        except AssertionError:
-            params_df.loc[str(this_year), 'QCFlag'] = 2
-            continue
-        result = model.fit(sub_df.Fc_EP, t_series = sub_df.Ts, 
-                           vwc_series = df.Sws, params = params)
-=======
         try:
             sub_df = get_slice(df, configs_dict, date_iterator_dict[this_date])
         except AssertionError:
             params_df.loc[this_date, 'QCFlag'] = 2
             continue
         result = optimise(sub_df, model, params)
->>>>>>> test
         params_df.loc[this_date, 'rb'] = result.best_values['rb']
     
     return params_df.interpolate()
@@ -237,11 +163,7 @@ def response_func(t_series, vwc_series, rb, Eo, theta_1, theta_2):
     
 # Set window size and step (both in units of days)
 configs_dict = {'file_path': ('/home/ian/OzFlux/Sites/GatumPasture/Data/'
-<<<<<<< HEAD
-                              'Processed/All/GatumPasture_L3.nc'),
-=======
                               'Processed/All/GatumPasture_L4.nc'),
->>>>>>> test
                 'window_size': 7, 
                 'window_step': 5,
                 'min_data_pct_window': 20,
