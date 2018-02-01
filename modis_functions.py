@@ -21,7 +21,7 @@ def get_MODIS_subset(lat, lon, product, data_band, QC_band,
                      requestStart = None, requestEnd = None):
     
     wsdlurl = 'https://modis.ornl.gov/cgi-bin/MODIS/soapservice/MODIS_soapservice.wsdl'
-                
+
     # Get the available dates on the server
     client = Client(wsdlurl)
     
