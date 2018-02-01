@@ -99,7 +99,11 @@ def make_params_df(df):
 def optimise(df, model, params):
     result = model.fit(df.Fc, t_series = df.Ts, vwc_series = df.Sws, 
                        params = params)
-#    if params['Eo'] < 50 or params['Eo'] > 400:
+#    if ((result.best_values['Eo'] < 50) | (result.best_values['Eo'] > 400) |
+#        (result.best_values['rb'] < 0)):
+#        result = None
+#    if result.best_values['rb'] < 0:
+#        result = None
         
     return result
 #------------------------------------------------------------------------------
@@ -131,7 +135,7 @@ def process_data(df, configs_dict):
         for param in result.best_values.keys():
             if not param == 'rb':
                 params_df.loc[str(this_year), param] = result.best_values[param]
-   
+
     # Fix parameters
     params['Eo'].vary = False
     params['theta_1'].vary = False
