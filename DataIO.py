@@ -125,6 +125,7 @@ def OzFluxQCnc_to_data_structure(file_in,
     
     # Create nc object and data dictionary    
     nc_obj=netCDF4.Dataset(file_in)
+    nc_obj.set_auto_mask(False)
     data_dict = {}
     
     # Get dates
