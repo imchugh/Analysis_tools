@@ -111,9 +111,10 @@ def optimise(df, model, params):
 #------------------------------------------------------------------------------
 def process_data(df, configs_dict):
 
-    # Generate a date iterator based on window size and step
+    # Generate date (based on window size and step) and year iterators
     date_iterator_dict = make_date_iterator(df, configs_dict)
     dates_list = sorted(date_iterator_dict.keys())
+    years_list = map(lambda x: str(x), sorted(list(set(df.index.year))))
 
     # Make a result dataframe to hold parameter values
     params_df = make_params_df(df)
@@ -121,10 +122,9 @@ def process_data(df, configs_dict):
     # Initialise the model
     model = Model(response_func, independent_vars = ['t_series', 
                                                      'vwc_series'])
-    params = model.make_params(rb = 1, Eo = 200, theta_1 = 1, theta_2 = 10)
+    params = model.make_params(rb = 1, Eo = 100, theta_1 = 1, theta_2 = 10)
     
     # Iterate on year
-    years_list = sorted(map(lambda x: str(x), list(set(df.index.year))))
     for this_year in years_list:
         try:
             sub_df = get_slice(df, configs_dict, this_year)
@@ -132,6 +132,7 @@ def process_data(df, configs_dict):
             params_df.loc[this_year, 'QCFlag'] = 1
             continue
         result = optimise(sub_df, model, params)
+        pdb.set_trace()
         for param in result.best_values.keys():
             if not param == 'rb':
                 params_df.loc[str(this_year), param] = result.best_values[param]
@@ -168,7 +169,7 @@ def response_func(t_series, vwc_series, rb, Eo, theta_1, theta_2):
 # Set window size and step (both in units of days)
 configs_dict = {'file_path': ('/home/ian/OzFlux/Sites/GatumPasture/Data/'
                               'Processed/All/GatumPasture_L4.nc'),
-                'window_size': 7, 
+                'window_size': 10, 
                 'window_step': 5,
                 'min_data_pct_window': 20,
                 'min_data_pct_annual': 10}
