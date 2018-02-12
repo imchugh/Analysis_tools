@@ -62,12 +62,14 @@ def get_data(configs_dict):
     df = io.OzFluxQCnc_to_data_structure(configs_dict['file_path'], 
                                          output_structure='pandas') 
     try:
-        freq = pd.infer_freq(df.index)
-        assert freq == '30T' or '60T'
-    except AssertionError:
+        interval_mins = int(filter(str.isdigit, pd.infer_freq(df.index)))
+        assert interval_mins % 30 == 0
+    except (TypeError):
         print 'File is not chronologically continuous, exiting...'
         sys.exit()
-    configs_dict['interval'] = freq
+    except AssertionError:
+        print ''
+    configs_dict['interval'] = interval_mins
     return df
 #------------------------------------------------------------------------------
 
@@ -99,11 +101,9 @@ def make_params_df(df):
 def optimise(df, model, params):
     result = model.fit(df.Fc, t_series = df.Ts, vwc_series = df.Sws, 
                        params = params)
-#    if ((result.best_values['Eo'] < 50) | (result.best_values['Eo'] > 400) |
-#        (result.best_values['rb'] < 0)):
-#        result = None
-#    if result.best_values['rb'] < 0:
-#        result = None
+    if ((result.best_values['Eo'] < 50) | (result.best_values['Eo'] > 400) |
+        (result.best_values['rb'] < 0)):
+        result = None
         
     return result
 #------------------------------------------------------------------------------
@@ -132,11 +132,13 @@ def process_data(df, configs_dict):
             params_df.loc[this_year, 'QCFlag'] = 1
             continue
         result = optimise(sub_df, model, params)
-        pdb.set_trace()
-        for param in result.best_values.keys():
-            if not param == 'rb':
-                params_df.loc[str(this_year), param] = result.best_values[param]
-
+        try:
+            for param in result.best_values.keys():
+                if not param == 'rb':
+                    params_df.loc[str(this_year), param] = result.best_values[param]
+        except AttributeError:
+            continue
+            
     # Fix parameters
     params['Eo'].vary = False
     params['theta_1'].vary = False
