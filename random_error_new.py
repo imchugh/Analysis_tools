@@ -14,6 +14,190 @@ from scipy import stats
 import DataIO as io
 reload(io)
 
+
+class random_error(object):
+    
+    def __init__(self, dataframe, configs_dict):
+        
+        df = dataframe
+        configs_dict = configs_dict
+
+    #------------------------------------------------------------------------------
+    # Calculate regression parameters for random error
+    #------------------------------------------------------------------------------
+    def regress_sigma_delta(self, 
+                            t_threshold = 3, ws_threshold = 1, k_threshold = 35):    
+    
+        #--------------------------------------------------------------------------
+        # Internal functions
+        #--------------------------------------------------------------------------
+        # Split day and night
+        def bin_series():
+            
+            # Function that actually does the binning
+            def get_sigmas(df):
+                def calc(s):
+                    return abs(s - s.mean()).mean() * np.sqrt(2)
+                return pd.DataFrame({'sigma_delta': 
+                                      map(lambda x: calc(df.loc[df['quantile_label'] == x, 
+                                                                'flux_diff']), 
+                                          df['quantile_label'].unique().categories),
+                                     'mean': 
+                                      map(lambda x: df.loc[df['quantile_label'] == x,
+                                                           'flux_mean'].mean(),
+                                          df['quantile_label'].unique().categories)})
+            
+            # Separate into night and day 
+            noct_df = filter_df.loc[filter_df.Fsd_mean < nocturnal_threshold, 
+                                    ['flux_mean', 'flux_diff']]
+            day_df = filter_df.loc[filter_df.Fsd_mean > nocturnal_threshold, 
+                                   ['flux_mean', 'flux_diff']]
+                    
+            # Calculate n bins for day and night
+            nocturnal_propn = float(len(noct_df)) / len(filter_df)
+            num_cats_night = int(round(num_cats * nocturnal_propn))
+            num_cats_day = num_cats - num_cats_night
+            
+            # Do the binned flux mean and sigma_delta calculation for night
+            noct_df['quantile_label'] = pd.qcut(noct_df.flux_mean, num_cats_night, 
+                                                labels = np.arange(num_cats_night))
+            noct_group_df = get_sigmas(noct_df)
+            noct_group_df = noct_group_df.loc[noct_group_df['mean'] > 0]
+    
+            # Do the binned flux mean and sigma_delta calculation for day
+            day_df['quantile_label'] = pd.qcut(day_df.flux_mean, num_cats_day, 
+                                               labels = np.arange(num_cats_day))
+            day_group_df = get_sigmas(day_df)
+            day_group_df = day_group_df.loc[day_group_df['mean'] < 0]
+    
+            return noct_group_df, day_group_df
+        #--------------------------------------------------------------------------
+        # Convert external to internal names and drop filled flux time series values
+        def convert_names_and_QC():
+            
+            new_names_dict = {'flux_name': 'flux',
+                              'mean_flux_name': 'flux_mean',
+                              'QC_name': 'QC',
+                              'windspeed_name': 'Ws',
+                              'temperature_name': 'Ta',
+                              'insolation_name': 'Fsd'}
+            
+            try:
+                QC_code = config_dict.pop('QC_code')
+                assert 'QC_name' in config_dict.keys()
+            except (KeyError, AssertionError):
+                QC_code = None
+                new_names_dict.pop('QC_name')
+            old_names = [config_dict[name] for name in sorted(config_dict.keys())]
+            new_names = [new_names_dict[name] for name in sorted(new_names_dict.keys())]
+            sub_df = df[old_names].copy()
+            sub_df.columns = new_names
+            if not QC_code is None:
+                sub_df.loc[sub_df.QC != QC_code, 'flux'] = np.nan
+                sub_df.drop('QC', axis = 1, inplace = True)
+            return sub_df
+        #--------------------------------------------------------------------------    
+        # Do differencing
+        def difference_time_series():
+            diff_df = pd.DataFrame(index = work_df.index)
+            for var in ['flux', 'Ta', 'Fsd', 'Ws']:
+                var_name = var + '_diff'
+                temp = work_df[var] - work_df[var].shift(recs_per_day) 
+                diff_df[var_name] = temp if var == 'flux' else abs(temp)
+            diff_df['flux_mean'] = (work_df['flux_mean'] + 
+                                    work_df['flux_mean'].shift(recs_per_day)) / 2
+            diff_df['Fsd_mean'] = (work_df['Fsd'] + 
+                                   work_df['Fsd'].shift(recs_per_day)) / 2
+            return diff_df
+        #--------------------------------------------------------------------------
+        # Calculate basic regression statistics
+        def do_stats():
+            return {'night': stats.linregress(noct_group_df['mean'], 
+                                              noct_group_df['sigma_delta']),
+                    'day': stats.linregress(day_group_df['mean'], 
+                                            day_group_df['sigma_delta'])}
+        #--------------------------------------------------------------------------
+        # Filter on criteria
+        def filter_time_series():
+            bool_s = ((diff_df['Ws_diff'] < ws_threshold) & 
+                      (diff_df['Ta_diff'] < t_threshold) & 
+                      (diff_df['Fsd_diff'] < k_threshold))
+            return pd.DataFrame({var: diff_df[var][bool_s] for var in 
+                                 ['flux_diff', 'flux_mean', 'Fsd_mean']}).dropna()
+        #--------------------------------------------------------------------------
+        # Do plotting
+        def plot_data():
+            
+            fig, ax1 = plt.subplots(1, 1, figsize = (14, 8))
+            fig.patch.set_facecolor('white')
+            ax1.xaxis.set_ticks_position('bottom')
+            ax1.set_xlim([round(combined_df['mean'].min() * 1.05), 
+                          round(combined_df['mean'].max() * 1.05)])
+            ax1.set_ylim([0, round(combined_df['sigma_delta'].max() * 1.05)])
+            ax1.yaxis.set_ticks_position('left')
+            ax1.spines['right'].set_visible(False)
+            ax1.spines['top'].set_visible(False)
+            ax1.tick_params(axis = 'y', labelsize = 14)
+            ax1.tick_params(axis = 'x', labelsize = 14)
+            
+            ax1.set_xlabel('$flux\/(\mu mol\/CO_2\/m^{-2}\/s^{-1})$', fontsize = 18)
+            ax1.set_ylabel('$\sigma[\delta]\/(\mu mol\/CO_2\/m^{-2}\/s^{-1})$', fontsize = 18)
+            ax2 = ax1.twinx()
+            ax2.spines['right'].set_position('zero')
+            ax2.spines['left'].set_visible(False)
+            ax2.spines['top'].set_visible(False)
+            ax2.set_ylim(ax1.get_ylim())
+            ax2.tick_params(axis = 'y', labelsize = 14)
+            plt.setp(ax2.get_yticklabels()[0], visible = False)
+            
+            ax1.plot(combined_df['mean'], combined_df['sigma_delta'], 
+                     'o', mfc = 'grey')
+            
+            day_x = np.linspace(ax1.get_xlim()[0], 0, 5)
+            day_y = day_x * stats_dict['day'].slope + stats_dict['day'].intercept
+            night_x = np.linspace(0, ax1.get_xlim()[-1], 5)
+            night_y = night_x * stats_dict['night'].slope + stats_dict['night'].intercept
+            ax1.plot(day_x, day_y, color = 'grey')
+            ax1.plot(night_x, night_y, color = 'grey')
+            
+            return fig
+        #--------------------------------------------------------------------------
+        # Main routine
+        #--------------------------------------------------------------------------
+        
+        # Set stuff
+        num_cats = 60
+        nocturnal_threshold = 10
+        
+        # Convert names
+        work_df = convert_names_and_QC()
+        
+        # Get and check the interval
+        interval = int(filter(lambda x: x.isdigit(), pd.infer_freq(work_df.index)))
+        assert interval % 30 == 0
+        recs_per_day = 1440 / interval
+        
+        # Do the differencing
+        diff_df = difference_time_series()
+        
+        # Filter
+        filter_df = filter_time_series()
+            
+        # Do calculations for nocturnal and daytime
+        noct_group_df, day_group_df = bin_series()
+        
+        # Do the stats
+        stats_dict = do_stats()
+        
+        # Organise the outputs
+        output_dict = {'Stats': stats_dict}
+        combined_df = pd.concat([day_group_df, noct_group_df]).reset_index(drop = True)
+        if return_data: output_dict['Data'] = combined_df
+        if return_plot: output_dict['Figure'] = plot_data()
+        
+        return output_dict
+    #------------------------------------------------------------------------------
+
 #------------------------------------------------------------------------------
 # Estimate sigma_delta for a time series using regression coefficients
 #------------------------------------------------------------------------------
@@ -92,12 +276,6 @@ def propagate_random_error(sigma_delta_series, n_trials, scaling_coefficient = 1
     return float(pd.DataFrame(results_list).std() * crit_t)
 #------------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-# Calculate regression parameters for random error
-#------------------------------------------------------------------------------
-def regress_sigma_delta(df, config_dict,
-                        return_data = False, return_plot = False,
-                        t_threshold = 3, ws_threshold = 1, k_threshold = 35):    
 
     '''
     Calculates regression for sigma_delta on flux magnitude 
@@ -136,182 +314,9 @@ def regress_sigma_delta(df, config_dict,
         (default = 1m s\^{-1})
         * k_threshold (int): user set insolation difference threshold \
         (default = 35Wm-2)
-    
-    There be dragons here!
-    
-    Pass the following arguments:
-        1) dont push me cos I'm close to the edge
     '''
     
-    #--------------------------------------------------------------------------
-    # Internal functions
-    #--------------------------------------------------------------------------
-    # Split day and night
-    def bin_series():
-        
-        # Function that actually does the binning
-        def get_sigmas(df):
-            def calc(s):
-                return abs(s - s.mean()).mean() * np.sqrt(2)
-            return pd.DataFrame({'sigma_delta': 
-                                  map(lambda x: calc(df.loc[df['quantile_label'] == x, 
-                                                            'flux_diff']), 
-                                      df['quantile_label'].unique().categories),
-                                 'mean': 
-                                  map(lambda x: df.loc[df['quantile_label'] == x,
-                                                       'flux_mean'].mean(),
-                                      df['quantile_label'].unique().categories)})
-        
-        # Separate into night and day 
-        noct_df = filter_df.loc[filter_df.Fsd_mean < nocturnal_threshold, 
-                                ['flux_mean', 'flux_diff']]
-        day_df = filter_df.loc[filter_df.Fsd_mean > nocturnal_threshold, 
-                               ['flux_mean', 'flux_diff']]
-                
-        # Cqalculate n bins for day and night
-        nocturnal_propn = float(len(noct_df)) / len(filter_df)
-        num_cats_night = int(round(num_cats * nocturnal_propn))
-        num_cats_day = num_cats - num_cats_night
-        
-        # Do the binned flux mean and sigma_delta calculation for night
-        noct_df['quantile_label'] = pd.qcut(noct_df.flux_mean, num_cats_night, 
-                                    labels = np.arange(num_cats_night))
-        noct_group_df = get_sigmas(noct_df)
-        noct_group_df = noct_group_df.loc[noct_group_df['mean'] > 0]
 
-        # Do the binned flux mean and sigma_delta calculation for day
-        day_df['quantile_label'] = pd.qcut(day_df.flux_mean, num_cats_day, 
-                                       labels = np.arange(num_cats_day))
-        day_group_df = get_sigmas(day_df)
-        day_group_df = day_group_df.loc[day_group_df['mean'] < 0]
-
-        return noct_group_df, day_group_df
-    #--------------------------------------------------------------------------
-    # Convert external to internal names and drop filled flux time series values
-    def convert_names_and_QC():
-        
-        new_names_dict = {'flux_name': 'flux',
-                          'mean_flux_name': 'flux_mean',
-                          'QC_name': 'QC',
-                          'windspeed_name': 'Ws',
-                          'temperature_name': 'Ta',
-                          'insolation_name': 'Fsd'}
-        
-        try:
-            QC_code = config_dict.pop('QC_code')
-            assert 'QC_name' in config_dict.keys()
-        except (KeyError, AssertionError):
-            QC_code = None
-            new_names_dict.pop('QC_name')
-        old_names = [config_dict[name] for name in sorted(config_dict.keys())]
-        new_names = [new_names_dict[name] for name in sorted(new_names_dict.keys())]
-        sub_df = df[old_names].copy()
-        sub_df.columns = new_names
-        if not QC_code is None:
-            sub_df.loc[sub_df.QC != QC_code, 'flux'] = np.nan
-            sub_df.drop('QC', axis = 1, inplace = True)
-        return sub_df
-    #--------------------------------------------------------------------------    
-    # Do differencing
-    def difference_time_series():
-        diff_df = pd.DataFrame(index = work_df.index)
-        for var in ['flux', 'Ta', 'Fsd', 'Ws']:
-            var_name = var + '_diff'
-            temp = work_df[var] - work_df[var].shift(recs_per_day) 
-            diff_df[var_name] = temp if var == 'flux' else abs(temp)
-        diff_df['flux_mean'] = (work_df['flux_mean'] + 
-                                work_df['flux_mean'].shift(recs_per_day)) / 2
-        diff_df['Fsd_mean'] = (work_df['Fsd'] + 
-                               work_df['Fsd'].shift(recs_per_day)) / 2
-        return diff_df
-    #--------------------------------------------------------------------------
-    # Calculate basic regression statistics
-    def do_stats():
-        return {'night': stats.linregress(noct_group_df['mean'], 
-                                          noct_group_df['sigma_delta']),
-                'day': stats.linregress(day_group_df['mean'], 
-                                        day_group_df['sigma_delta'])}
-    #--------------------------------------------------------------------------
-    # Filter on criteria
-    def filter_time_series():
-        bool_s = ((diff_df['Ws_diff'] < ws_threshold) & 
-                  (diff_df['Ta_diff'] < t_threshold) & 
-                  (diff_df['Fsd_diff'] < k_threshold))
-        return pd.DataFrame({var: diff_df[var][bool_s] for var in 
-                             ['flux_diff', 'flux_mean', 'Fsd_mean']}).dropna()
-    #--------------------------------------------------------------------------
-    # Do plotting
-    def plot_data():
-        
-        fig, ax1 = plt.subplots(1, 1, figsize = (14, 8))
-        fig.patch.set_facecolor('white')
-        ax1.xaxis.set_ticks_position('bottom')
-        ax1.set_xlim([round(combined_df['mean'].min() * 1.05), 
-                      round(combined_df['mean'].max() * 1.05)])
-        ax1.set_ylim([0, round(combined_df['sigma_delta'].max() * 1.05)])
-        ax1.yaxis.set_ticks_position('left')
-        ax1.spines['right'].set_visible(False)
-        ax1.spines['top'].set_visible(False)
-        ax1.tick_params(axis = 'y', labelsize = 14)
-        ax1.tick_params(axis = 'x', labelsize = 14)
-        
-        ax1.set_xlabel('$flux\/(\mu mol\/CO_2\/m^{-2}\/s^{-1})$', fontsize = 18)
-        ax1.set_ylabel('$\sigma[\delta]\/(\mu mol\/CO_2\/m^{-2}\/s^{-1})$', fontsize = 18)
-        ax2 = ax1.twinx()
-        ax2.spines['right'].set_position('zero')
-        ax2.spines['left'].set_visible(False)
-        ax2.spines['top'].set_visible(False)
-        ax2.set_ylim(ax1.get_ylim())
-        ax2.tick_params(axis = 'y', labelsize = 14)
-        plt.setp(ax2.get_yticklabels()[0], visible = False)
-        
-        ax1.plot(combined_df['mean'], combined_df['sigma_delta'], 
-                 'o', mfc = 'grey')
-        
-        day_x = np.linspace(ax1.get_xlim()[0], 0, 5)
-        day_y = day_x * stats_dict['day'].slope + stats_dict['day'].intercept
-        night_x = np.linspace(0, ax1.get_xlim()[-1], 5)
-        night_y = night_x * stats_dict['night'].slope + stats_dict['night'].intercept
-        ax1.plot(day_x, day_y, color = 'grey')
-        ax1.plot(night_x, night_y, color = 'grey')
-        
-        return fig
-    #--------------------------------------------------------------------------
-    # Main routine
-    #--------------------------------------------------------------------------
-    
-    # Set stuff
-    num_cats = 60
-    nocturnal_threshold = 10
-    
-    # Convert names
-    work_df = convert_names_and_QC()
-    
-    # Get and check the interval
-    interval = int(filter(lambda x: x.isdigit(), pd.infer_freq(work_df.index)))
-    assert interval % 30 == 0
-    recs_per_day = 1440 / interval
-    
-    # Do the differencing
-    diff_df = difference_time_series()
-    
-    # Filter
-    filter_df = filter_time_series()
-        
-    # Do calculations for nocturnal and daytime
-    noct_group_df, day_group_df = bin_series()
-    
-    # Do the stats
-    stats_dict = do_stats()
-    
-    # Organise the outputs
-    output_dict = {'Stats': stats_dict}
-    combined_df = pd.concat([day_group_df, noct_group_df]).reset_index(drop = True)
-    if return_data: output_dict['Data'] = combined_df
-    if return_plot: output_dict['Figure'] = plot_data()
-    
-    return output_dict
-#------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
 # Main function for stringing the above together
