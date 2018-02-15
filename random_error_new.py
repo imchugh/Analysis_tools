@@ -9,6 +9,7 @@ Created on Thu Jan 25 12:29:02 2018
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import pdb
 from scipy import stats
 
 import DataIO as io
@@ -19,18 +20,18 @@ class random_error(object):
     
     def __init__(self, dataframe, configs_dict):
         
-        df = dataframe
-        configs_dict = configs_dict
+        self.df = dataframe
+        self.configs_dict = configs_dict
 
     #------------------------------------------------------------------------------
     # Calculate regression parameters for random error
     #------------------------------------------------------------------------------
-    def regress_sigma_delta(self, 
-                            t_threshold = 3, ws_threshold = 1, k_threshold = 35):    
+    def binned_series(self, 
+                      t_threshold = 3, ws_threshold = 1, k_threshold = 35):    
     
-        #--------------------------------------------------------------------------
+        #----------------------------------------------------------------------
         # Internal functions
-        #--------------------------------------------------------------------------
+        #----------------------------------------------------------------------
         # Split day and night
         def bin_series():
             
@@ -71,8 +72,10 @@ class random_error(object):
             day_group_df = day_group_df.loc[day_group_df['mean'] < 0]
     
             return noct_group_df, day_group_df
-        #--------------------------------------------------------------------------
-        # Convert external to internal names and drop filled flux time series values
+        
+        #----------------------------------------------------------------------
+        # Convert external to internal names and drop filled flux time series 
+        # values
         def convert_names_and_QC():
             
             new_names_dict = {'flux_name': 'flux',
@@ -81,21 +84,25 @@ class random_error(object):
                               'windspeed_name': 'Ws',
                               'temperature_name': 'Ta',
                               'insolation_name': 'Fsd'}
-            
+
+            internal_dict = self.configs_dict.copy()
             try:
-                QC_code = config_dict.pop('QC_code')
-                assert 'QC_name' in config_dict.keys()
+                QC_code = internal_dict.pop('QC_code')
+                assert 'QC_name' in internal_dict.keys()
             except (KeyError, AssertionError):
                 QC_code = None
                 new_names_dict.pop('QC_name')
-            old_names = [config_dict[name] for name in sorted(config_dict.keys())]
-            new_names = [new_names_dict[name] for name in sorted(new_names_dict.keys())]
-            sub_df = df[old_names].copy()
+            old_names = [internal_dict[name] for name in 
+                         sorted(internal_dict.keys())]
+            new_names = [new_names_dict[name] for name in 
+                         sorted(new_names_dict.keys())]
+            sub_df = self.df[old_names].copy()
             sub_df.columns = new_names
             if not QC_code is None:
                 sub_df.loc[sub_df.QC != QC_code, 'flux'] = np.nan
                 sub_df.drop('QC', axis = 1, inplace = True)
             return sub_df
+        
         #--------------------------------------------------------------------------    
         # Do differencing
         def difference_time_series():
@@ -109,13 +116,7 @@ class random_error(object):
             diff_df['Fsd_mean'] = (work_df['Fsd'] + 
                                    work_df['Fsd'].shift(recs_per_day)) / 2
             return diff_df
-        #--------------------------------------------------------------------------
-        # Calculate basic regression statistics
-        def do_stats():
-            return {'night': stats.linregress(noct_group_df['mean'], 
-                                              noct_group_df['sigma_delta']),
-                    'day': stats.linregress(day_group_df['mean'], 
-                                            day_group_df['sigma_delta'])}
+        
         #--------------------------------------------------------------------------
         # Filter on criteria
         def filter_time_series():
@@ -171,32 +172,43 @@ class random_error(object):
         
         # Convert names
         work_df = convert_names_and_QC()
-        
+
         # Get and check the interval
-        interval = int(filter(lambda x: x.isdigit(), pd.infer_freq(work_df.index)))
+        interval = int(filter(lambda x: x.isdigit(), 
+                              pd.infer_freq(work_df.index)))
         assert interval % 30 == 0
         recs_per_day = 1440 / interval
         
         # Do the differencing
         diff_df = difference_time_series()
-        
+
         # Filter
         filter_df = filter_time_series()
             
         # Do calculations for nocturnal and daytime
         noct_group_df, day_group_df = bin_series()
         
-        # Do the stats
-        stats_dict = do_stats()
-        
-        # Organise the outputs
-        output_dict = {'Stats': stats_dict}
-        combined_df = pd.concat([day_group_df, noct_group_df]).reset_index(drop = True)
-        if return_data: output_dict['Data'] = combined_df
-        if return_plot: output_dict['Figure'] = plot_data()
-        
-        return output_dict
+        return pd.concat([day_group_df, noct_group_df]).reset_index(drop = True)
+#        
+#        # Do the stats
+#        stats_dict = do_stats()
+#        
+#        # Organise the outputs
+#        output_dict = {'Stats': stats_dict}
+#        combined_df = 
+#        if return_data: output_dict['Data'] = combined_df
+#        if return_plot: output_dict['Figure'] = plot_data()
+#        
+#        return output_dict
     #------------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    # Calculate basic regression statistics
+    def regression_statistics(binned_df):
+            return {'night': stats.linregress(noct_group_df['mean'], 
+                                              noct_group_df['sigma_delta']),
+                    'day': stats.linregress(day_group_df['mean'], 
+                                            day_group_df['sigma_delta'])}
 
 #------------------------------------------------------------------------------
 # Estimate sigma_delta for a time series using regression coefficients
@@ -318,75 +330,75 @@ def propagate_random_error(sigma_delta_series, n_trials, scaling_coefficient = 1
     
 
 
-#------------------------------------------------------------------------------
-# Main function for stringing the above together
-#------------------------------------------------------------------------------
-def main(df, scaling_coefficient, config_dict = None, n_trials = 10**4):
-    '''
-    Function that combines the individual functions of the random_error module
-    together for convenience.
-    
-    Args:
-        * df (pandas dataframe): dataframe containing the required data, with \
-        names defined in the configuration dictionary (see below).
-        * scaling_coefficient (int or float): converts the flux data (an \
-        instantaneous average quantity) to the appropriate units for \
-        integrating over the time series length.
-        
-    Kwargs:
-        * config_dict (dictionary): sictionary for specifying naming convention \
-        for dataset passed to the function; keys must use the default names \
-        (specified below) expected by the script, and the values specify the \
-        name the relevant variable takes in the dataset; default names are as \
-        follows:\n
-            - flux_name: the turbulent flux for which to calculate random \
-            error 
-            - mean_flux_name: the flux series to use for calculating the \
-            bin average for the flux when estimating sigma_delta \
-            (since the turbulent flux already contains random error, a \
-            model series is generally recommended for this purpose)
-            - windspeed_name
-            - temperature_name
-            - insolation_name
-            - QC_name: (optional) if passed, used as a filter variable \
-            for the flux variable (if QC_code is not present, this is \
-            ignored, and no warning or error is raised)
-            - QC_code: (optional, int) if passed, all flux records that \
-            coincide with the occurrence of this code in the QC variable \
-            are retained, and all others set to NaN
-        * n_trials (int): the number of trials over which to compound to \
-        calculate the uncertainty due to random error.
-    
-    Returns:
-        * float: 2 sigma of the population (n = n_trials) of random error sums
-    '''
-    
-    if config_dict is None:
-        
-        config_dict = {'flux_name': 'Fc',
-                       'mean_flux_name': 'Fc_SOLO',
-                       'windspeed_name': 'Ws',
-                       'temperature_name': 'Ta',
-                       'insolation_name': 'Fsd',
-                       'QC_name': 'Fc_QCFlag',
-                       'QC_code': 0}
-        
-    results = regress_sigma_delta(df, config_dict)
-
-    sigma_delta_series = estimate_sigma_delta(df[config_dict ['mean_flux_name']], 
-                                                 results['Stats'])
-
-    summed_error = propagate_random_error(sigma_delta_series, 10000, 
-                                          scaling_coefficient)
-    
-    return summed_error
-#------------------------------------------------------------------------------
-
-
-path = '/home/ian/OzFlux/Sites/GatumPasture/Data/Processed/All/GatumPasture_L5.nc'
-
-df = io.OzFluxQCnc_to_data_structure(path, output_structure = 'pandas')
-
-scaling_coefficient = 30 * 60 * 12 * 10**-6
-
-error = main(df, scaling_coefficient)
+##------------------------------------------------------------------------------
+## Main function for stringing the above together
+##------------------------------------------------------------------------------
+#def main(df, scaling_coefficient, config_dict = None, n_trials = 10**4):
+#    '''
+#    Function that combines the individual functions of the random_error module
+#    together for convenience.
+#    
+#    Args:
+#        * df (pandas dataframe): dataframe containing the required data, with \
+#        names defined in the configuration dictionary (see below).
+#        * scaling_coefficient (int or float): converts the flux data (an \
+#        instantaneous average quantity) to the appropriate units for \
+#        integrating over the time series length.
+#        
+#    Kwargs:
+#        * config_dict (dictionary): sictionary for specifying naming convention \
+#        for dataset passed to the function; keys must use the default names \
+#        (specified below) expected by the script, and the values specify the \
+#        name the relevant variable takes in the dataset; default names are as \
+#        follows:\n
+#            - flux_name: the turbulent flux for which to calculate random \
+#            error 
+#            - mean_flux_name: the flux series to use for calculating the \
+#            bin average for the flux when estimating sigma_delta \
+#            (since the turbulent flux already contains random error, a \
+#            model series is generally recommended for this purpose)
+#            - windspeed_name
+#            - temperature_name
+#            - insolation_name
+#            - QC_name: (optional) if passed, used as a filter variable \
+#            for the flux variable (if QC_code is not present, this is \
+#            ignored, and no warning or error is raised)
+#            - QC_code: (optional, int) if passed, all flux records that \
+#            coincide with the occurrence of this code in the QC variable \
+#            are retained, and all others set to NaN
+#        * n_trials (int): the number of trials over which to compound to \
+#        calculate the uncertainty due to random error.
+#    
+#    Returns:
+#        * float: 2 sigma of the population (n = n_trials) of random error sums
+#    '''
+#    
+#    if config_dict is None:
+#        
+#        config_dict = {'flux_name': 'Fc',
+#                       'mean_flux_name': 'Fc_SOLO',
+#                       'windspeed_name': 'Ws',
+#                       'temperature_name': 'Ta',
+#                       'insolation_name': 'Fsd',
+#                       'QC_name': 'Fc_QCFlag',
+#                       'QC_code': 0}
+#        
+#    results = regress_sigma_delta(df, config_dict)
+#
+#    sigma_delta_series = estimate_sigma_delta(df[config_dict ['mean_flux_name']], 
+#                                                 results['Stats'])
+#
+#    summed_error = propagate_random_error(sigma_delta_series, 10000, 
+#                                          scaling_coefficient)
+#    
+#    return summed_error
+##------------------------------------------------------------------------------
+#
+#
+#path = '/home/ian/OzFlux/Sites/GatumPasture/Data/Processed/All/GatumPasture_L5.nc'
+#
+#df = io.OzFluxQCnc_to_data_structure(path, output_structure = 'pandas')
+#
+#scaling_coefficient = 30 * 60 * 12 * 10**-6
+#
+#error = main(df, scaling_coefficient)
