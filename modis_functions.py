@@ -9,7 +9,6 @@ import numpy as np
 from suds.client import *
 import webbrowser
 import datetime as dt
-import sys
 
 def get_products():
     webbrowser.open('https://lpdaac.usgs.gov/dataset_discovery/modis/modis_products_table')
@@ -54,7 +53,6 @@ def get_MODIS_subset(lat, lon, product, data_band, QC_band,
         except Exception, e:
             print 'ORNL DAAC Server error with the following message: '
             print e[0]
-            quit
         this_QC_str_list = QC.subset[0].split(',')
         this_QC = '{0:08b}'.format(int(this_QC_str_list[-1]))
         QC_list.append(this_QC)

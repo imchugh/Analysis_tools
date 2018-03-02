@@ -24,7 +24,7 @@ import DataIO as io
 #------------------------------------------------------------------------------
 def get_slice(df, configs_dict, date_obj):
     
-    interval_mins = int(filter(str.isdigit, configs_dict['interval']))
+    interval_mins = configs_dict['interval']
     if isinstance(date_obj, tuple):
         pct_required = configs_dict['min_data_pct_window']
         expected_length = 1440 / interval_mins * configs_dict['window_size']
@@ -66,9 +66,8 @@ def get_data(configs_dict):
         assert interval_mins % 30 == 0
     except (TypeError):
         print 'File is not chronologically continuous, exiting...'
-        sys.exit()
     except AssertionError:
-        print ''
+        print 'Unknown time interval'
     configs_dict['interval'] = interval_mins
     return df
 #------------------------------------------------------------------------------
@@ -78,7 +77,7 @@ def make_date_iterator(df, configs_dict):
     
     size = configs_dict['window_size']
     step = configs_dict['window_step']
-    interval_mins = int(filter(str.isdigit, configs_dict['interval']))
+    interval_mins = configs_dict['interval']
     start_date = df.index[0].to_pydatetime().date() + dt.timedelta(size / 2)
     end_date = df.index[-1].to_pydatetime().date()
     freq_str = '{}D'.format(str(int(step)))
