@@ -45,7 +45,7 @@ class random_error(object):
     #------------------------------------------------------------------------------
     # Calculate regression parameters for random error
     #------------------------------------------------------------------------------
-    def binned_series(self):    
+    def get_flux_binned_sigma_delta(self):    
 
         # Set stuff
         num_cats = 60
@@ -56,6 +56,17 @@ class random_error(object):
         #----------------------------------------------------------------------
         # Split day and night
         def bin_series():
+            
+            convert_names_and_qc
+            
+            
+            
+            
+            
+            
+            
+            
+            
             
             # Function that actually does the binning
             def get_sigmas(df):
