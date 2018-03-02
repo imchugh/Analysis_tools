@@ -18,16 +18,38 @@ reload(io)
 
 class random_error(object):
     
-    def __init__(self, dataframe, configs_dict):
+    def __init__(self, dataframe, t_threshold = 3, ws_threshold = 1,
+                 k_threshold = 35, configs_dict = False):
         
+        if not configs_dict:
+            configs_dict = {'flux_name': 'Fc',
+                            'mean_flux_name': 'Fc_SOLO',
+                            'windspeed_name': 'Ws',
+                            'temperature_name': 'Ta',
+                            'insolation_name': 'Fsd',
+                            'QC_name': 'Fc_QCFlag',
+                            'QC_code': 0}
+        
+        # Get and check the interval
+        interval = int(filter(lambda x: x.isdigit(), 
+                              pd.infer_freq(dataframe.index)))
+        assert interval % 30 == 0
+        recs_per_day = 1440 / interval
+        self.recs_per_day = recs_per_day
         self.df = dataframe
         self.configs_dict = configs_dict
+        self.t_threshold = t_threshold
+        self.ws_threshold = ws_threshold
+        self.k_threshold = k_threshold
 
     #------------------------------------------------------------------------------
     # Calculate regression parameters for random error
     #------------------------------------------------------------------------------
-    def binned_series(self, 
-                      t_threshold = 3, ws_threshold = 1, k_threshold = 35):    
+    def binned_series(self):    
+
+        # Set stuff
+        num_cats = 60
+        nocturnal_threshold = 10
     
         #----------------------------------------------------------------------
         # Internal functions
@@ -70,38 +92,38 @@ class random_error(object):
                                                labels = np.arange(num_cats_day))
             day_group_df = get_sigmas(day_df)
             day_group_df = day_group_df.loc[day_group_df['mean'] < 0]
-    
+
             return noct_group_df, day_group_df
         
         #----------------------------------------------------------------------
-        # Convert external to internal names and drop filled flux time series 
-        # values
-        def convert_names_and_QC():
-            
-            new_names_dict = {'flux_name': 'flux',
-                              'mean_flux_name': 'flux_mean',
-                              'QC_name': 'QC',
-                              'windspeed_name': 'Ws',
-                              'temperature_name': 'Ta',
-                              'insolation_name': 'Fsd'}
+    # Convert external to internal names and drop filled flux time series 
+    # values
+    def convert_names_and_QC(self):
+        
+        new_names_dict = {'flux_name': 'flux',
+                          'mean_flux_name': 'flux_mean',
+                          'QC_name': 'QC',
+                          'windspeed_name': 'Ws',
+                          'temperature_name': 'Ta',
+                          'insolation_name': 'Fsd'}
 
-            internal_dict = self.configs_dict.copy()
-            try:
-                QC_code = internal_dict.pop('QC_code')
-                assert 'QC_name' in internal_dict.keys()
-            except (KeyError, AssertionError):
-                QC_code = None
-                new_names_dict.pop('QC_name')
-            old_names = [internal_dict[name] for name in 
-                         sorted(internal_dict.keys())]
-            new_names = [new_names_dict[name] for name in 
-                         sorted(new_names_dict.keys())]
-            sub_df = self.df[old_names].copy()
-            sub_df.columns = new_names
-            if not QC_code is None:
-                sub_df.loc[sub_df.QC != QC_code, 'flux'] = np.nan
-                sub_df.drop('QC', axis = 1, inplace = True)
-            return sub_df
+        internal_dict = self.configs_dict.copy()
+        try:
+            QC_code = internal_dict.pop('QC_code')
+            assert 'QC_name' in internal_dict.keys()
+        except (KeyError, AssertionError):
+            QC_code = None
+            new_names_dict.pop('QC_name')
+        old_names = [internal_dict[name] for name in 
+                     sorted(internal_dict.keys())]
+        new_names = [new_names_dict[name] for name in 
+                     sorted(new_names_dict.keys())]
+        sub_df = self.df[old_names].copy()
+        sub_df.columns = new_names
+        if not QC_code is None:
+            sub_df.loc[sub_df.QC != QC_code, 'flux'] = np.nan
+            sub_df.drop('QC', axis = 1, inplace = True)
+        return sub_df
         
         #--------------------------------------------------------------------------    
         # Do differencing
@@ -166,18 +188,10 @@ class random_error(object):
         # Main routine
         #--------------------------------------------------------------------------
         
-        # Set stuff
-        num_cats = 60
-        nocturnal_threshold = 10
+
         
         # Convert names
         work_df = convert_names_and_QC()
-
-        # Get and check the interval
-        interval = int(filter(lambda x: x.isdigit(), 
-                              pd.infer_freq(work_df.index)))
-        assert interval % 30 == 0
-        recs_per_day = 1440 / interval
         
         # Do the differencing
         diff_df = difference_time_series()
