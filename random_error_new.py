@@ -9,7 +9,6 @@ Created on Thu Jan 25 12:29:02 2018
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import pdb
 from scipy import stats
 from statsmodels.formula.api import ols
 
@@ -17,7 +16,7 @@ import DataIO as io
 reload(io)
 
 #------------------------------------------------------------------------------
-# Initiate class
+# Class init
 #------------------------------------------------------------------------------
 class random_error(object):
     
@@ -239,23 +238,13 @@ class random_error(object):
                 for state in data_dict.keys()}
     #--------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-# Estimate sigma_delta for a time series using regression coefficients
-#------------------------------------------------------------------------------
+    #--------------------------------------------------------------------------
+    # Estimate sigma_delta for a time series using regression coefficients
+    #--------------------------------------------------------------------------
     def estimate_sigma_delta(self):
-        """
-        Calculates sigma_delta value for each member of a time series
         
-        Args:
-            * flux_series (array-like): the series for which sigma-delta is to be \
-            calculated
-            * stats_dict (dictionary): regression parameters (slope and intercept) \
-            generated from *regress_sigma_delta()*
-    
-        Returns:
-            * ret1 (array-like): time series of sigma_delta for each valid value in \
-            the originally passed array-like
-        """
+        """Calculates sigma_delta value for each member of a time series"""
+        
         work_df = self.convert_names_and_QC()
         stats_dict = self.get_regression_statistics()
         work_df.loc[np.isnan(work_df.flux), 'flux_mean'] = np.nan
@@ -266,60 +255,54 @@ class random_error(object):
         work_df.loc[work_df.Fsd > self.noct_threshold, 'sigma_delta'] = (
             work_df.flux_mean * stats_dict['day'].slope +
             stats_dict['day'].intercept)
-#        if any(sig_del_series < 0):
-#            n_below = len(sig_del_series[sig_del_series < 0])
-#            print ('Warning: approximately {0} estimates of sigma_delta have value ' 
-#                   'less than 0 - setting to mean of all other values'
-#                   .format(str(n_below)))
-#            sig_del_series = np.where(sig_del_series > 0, 
-#                                      sig_del_series, 
-#                                      sig_del_series[sig_del_series > 0].mean())
+        if any(work_df['sigma_delta'] < 0):
+            n_below = len(work_df['sigma_delta'][work_df['sigma_delta'] < 0])
+            print ('Warning: approximately {0} estimates of sigma_delta have value ' 
+                   'less than 0 - setting to mean of all other values'
+                   .format(str(n_below)))
+            work_df.loc[work_df['sigma_delta'] < 0, 'sigma_delta'] = (
+                work_df['sigma_delta']).mean()
         return work_df['sigma_delta']
-#------------------------------------------------------------------------------
+    #--------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-# Generate scaled noise realisation for time series
-#------------------------------------------------------------------------------
-def estimate_random_error(sigma_delta_series):
-    """
-    Generates a random error realisation for a single point
-    Pass the following arguments: 1) numpy array or pandas series 
-                                     containing sigma_delta estimate for NEE
-    Returns a series of random error estimate drawn from the Laplace 
-    distribution with sigma_delta as the scaling parameter
-    (location parameter is 0)
-    """
-    return np.random.laplace(0, sigma_delta_series / np.sqrt(2))
-#------------------------------------------------------------------------------
+    #--------------------------------------------------------------------------
+    # Generate scaled noise realisation for time series
+    #--------------------------------------------------------------------------
+    def estimate_random_error(self):
+        
+        """ Generate single realisation of random error for time series """
+        sigma_delta_series = self.estimate_sigma_delta()
+        return pd.Series(np.random.laplace(0, sigma_delta_series / np.sqrt(2)),
+                         index = sigma_delta_series.index)
+    #--------------------------------------------------------------------------
 
-#------------------------------------------------------------------------------
-# Propagate random error
-#------------------------------------------------------------------------------
-def propagate_random_error(sigma_delta_series, n_trials, scaling_coefficient = 1):
-    '''
-    Function to run Monte Carlo-style trials to assess uncertainty due to 
-    random error.
-    
-    Args:
-        * sigma_delta_series (array-like): sigma_delta estimates for each valid \
-        data point in the flux series.
-        * n_trials (int):  number of trials over which to compound the sum.
-        * scaling_coefficient (int or float): scales summed value to required \
-        units.
-    
-    Returns:
-        * float: scaled estimate of 2-sigma bounds of all random error\
-        trial sums.
-    '''
-    # Calculate critical t-statistic for p = 0.095
-    crit_t = stats.t.isf(0.025, n_trials)    
-
-    results_list = []
-    for this_trial in xrange(n_trials):
-        results_list.append(sum(estimate_random_error(sigma_delta_series) *
-                                scaling_coefficient))
-    return float(pd.DataFrame(results_list).std() * crit_t)
-#------------------------------------------------------------------------------
+    #------------------------------------------------------------------------------
+    # Propagate random error
+    #--------------------------------------------------------------------------
+    def propagate_random_error(self, n_trials, scaling_coefficient = 1):
+        """ Run Monte Carlo-style trials to assess uncertainty due to 
+        random error over entire dataset
+        
+        Args:
+            * n_trials (int):  number of trials over which to compound the sum.
+            * scaling_coefficient (int or float): scales summed value to required \
+            units.
+        
+        Returns:
+            * float: scaled estimate of 2-sigma bounds of all random error\
+            trial sums.
+        """
+        
+        sigma_delta_series = self.estimate_sigma_delta()
+        crit_t = stats.t.isf(0.025, n_trials)  
+        results_list = []
+        for this_trial in xrange(n_trials):
+            results_list.append(pd.Series(np.random.laplace(0, 
+                                                            sigma_delta_series / 
+                                                            np.sqrt(2))).sum() *
+                                scaling_coefficient)
+        return round(float(pd.DataFrame(results_list).std() * crit_t), 2)
+    #--------------------------------------------------------------------------
 
 
     '''
@@ -360,78 +343,3 @@ def propagate_random_error(sigma_delta_series, n_trials, scaling_coefficient = 1
         * k_threshold (int): user set insolation difference threshold \
         (default = 35Wm-2)
     '''
-    
-
-
-##------------------------------------------------------------------------------
-## Main function for stringing the above together
-##------------------------------------------------------------------------------
-#def main(df, scaling_coefficient, config_dict = None, n_trials = 10**4):
-#    '''
-#    Function that combines the individual functions of the random_error module
-#    together for convenience.
-#    
-#    Args:
-#        * df (pandas dataframe): dataframe containing the required data, with \
-#        names defined in the configuration dictionary (see below).
-#        * scaling_coefficient (int or float): converts the flux data (an \
-#        instantaneous average quantity) to the appropriate units for \
-#        integrating over the time series length.
-#        
-#    Kwargs:
-#        * config_dict (dictionary): sictionary for specifying naming convention \
-#        for dataset passed to the function; keys must use the default names \
-#        (specified below) expected by the script, and the values specify the \
-#        name the relevant variable takes in the dataset; default names are as \
-#        follows:\n
-#            - flux_name: the turbulent flux for which to calculate random \
-#            error 
-#            - mean_flux_name: the flux series to use for calculating the \
-#            bin average for the flux when estimating sigma_delta \
-#            (since the turbulent flux already contains random error, a \
-#            model series is generally recommended for this purpose)
-#            - windspeed_name
-#            - temperature_name
-#            - insolation_name
-#            - QC_name: (optional) if passed, used as a filter variable \
-#            for the flux variable (if QC_code is not present, this is \
-#            ignored, and no warning or error is raised)
-#            - QC_code: (optional, int) if passed, all flux records that \
-#            coincide with the occurrence of this code in the QC variable \
-#            are retained, and all others set to NaN
-#        * n_trials (int): the number of trials over which to compound to \
-#        calculate the uncertainty due to random error.
-#    
-#    Returns:
-#        * float: 2 sigma of the population (n = n_trials) of random error sums
-#    '''
-#    
-#    if config_dict is None:
-#        
-#        config_dict = {'flux_name': 'Fc',
-#                       'mean_flux_name': 'Fc_SOLO',
-#                       'windspeed_name': 'Ws',
-#                       'temperature_name': 'Ta',
-#                       'insolation_name': 'Fsd',
-#                       'QC_name': 'Fc_QCFlag',
-#                       'QC_code': 0}
-#        
-#    results = regress_sigma_delta(df, config_dict)
-#
-#    sigma_delta_series = estimate_sigma_delta(df[config_dict ['mean_flux_name']], 
-#                                                 results['Stats'])
-#
-#    summed_error = propagate_random_error(sigma_delta_series, 10000, 
-#                                          scaling_coefficient)
-#    
-#    return summed_error
-##------------------------------------------------------------------------------
-#
-#
-#path = '/home/ian/OzFlux/Sites/GatumPasture/Data/Processed/All/GatumPasture_L5.nc'
-#
-#df = io.OzFluxQCnc_to_data_structure(path, output_structure = 'pandas')
-#
-#scaling_coefficient = 30 * 60 * 12 * 10**-6
-#
-#error = main(df, scaling_coefficient)
