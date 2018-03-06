@@ -55,7 +55,7 @@ class random_error(object):
 #------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------        
-    def convert_names_and_QC(self):
+    def _convert_names_and_QC(self):
         
         new_names_dict = {'flux_name': 'flux',
                           'mean_flux_name': 'flux_mean',
@@ -160,7 +160,7 @@ class random_error(object):
         # Main routine
         #----------------------------------------------------------------------
 
-        work_df = self.convert_names_and_QC()
+        work_df = self._convert_names_and_QC()
         diff_df = difference_time_series()
         filter_df = filter_time_series()
         day_df, noct_df = bin_time_series()
@@ -205,24 +205,30 @@ class random_error(object):
         ax2.set_ylim(ax1.get_ylim())
         ax2.tick_params(axis = 'y', labelsize = 14)
         plt.setp(ax2.get_yticklabels()[0], visible = False)
-        text_list = []
+        outlier_df_list = []
         for state in data_dict.keys():
-            stats = stats_dict[state]
+            stats = stats_dict[state]['stats']
             df = data_dict[state]
+            if 'outliers' in stats_dict[state]:
+                outlier_df_list.append(df.loc[stats_dict[state]['outliers']])
             x = np.linspace(df['mean'].min(), df['mean'].max(), 2)
             y = x * stats.slope + stats.intercept
+            text_str = ('${0}: a = {1}, b = {2}, r^2 = {3}$'
+                        .format(state[0].upper() + state[1:],
+                        str(round(stats.slope, 2)),
+                        str(round(stats.intercept, 2)),
+                        str(round(stats.rvalue ** 2, 2))))
             ax1.plot(df['mean'], df['sigma_delta'], 'o', 
-                     mfc = colour_dict[state], mec = 'black')
+                     mfc = colour_dict[state], mec = 'black', label = text_str)
             ax1.plot(x, y, color = colour_dict[state])
-            text_list.append('${0}: a = {1}, b = {2}, r^2 = {3}$'
-                             .format(state[0].upper() + state[1:],
-                                     str(round(stats.slope, 2)),
-                                     str(round(stats.intercept, 2)),
-                                     str(round(stats.rvalue ** 2, 2))))
-        text_str = '\n'.join(text_list)
-        props = dict(boxstyle = 'round', facecolor = 'None', alpha = 0.5)
-        ax1.text(0.05, 0.175, text_str, transform=ax1.transAxes, fontsize=14,
-                verticalalignment='top', bbox=props)
+        try:
+            outlier_df = pd.concat(outlier_df_list)
+            ax1.plot(outlier_df['mean'], outlier_df['sigma_delta'], 's', 
+                     mfc = 'None', mec = 'black', ms = 15, 
+                     label = '$Outlier\/(excluded)$')
+        except ValueError:
+            pass
+        ax1.legend(loc = [0.05, 0.1], fontsize = 14)
         return fig
     #--------------------------------------------------------------------------
     
@@ -230,12 +236,20 @@ class random_error(object):
     # Calculate basic regression statistics
     def get_regression_statistics(self):
         
+        regression_dict = {}
         data_dict = self.binned_error
-#        for state in data_dict.keys():
-#            ols.
-        return {state: stats.linregress(data_dict[state]['mean'],
-                                        data_dict[state]['sigma_delta'])
-                for state in data_dict.keys()}
+        for state in data_dict:
+            df = data_dict[state].copy()
+            regression = ols("data ~ x", data = dict(data = df['sigma_delta'], 
+                                                     x = df['mean'])).fit()
+            df = df.join(regression.outlier_test())
+            outlier_list = df.loc[df['bonf(p)'] < 0.5].index.tolist()
+            df = df.loc[df['bonf(p)'] > 0.5]
+            statistics = stats.linregress(df['mean'], df['sigma_delta'])
+            regression_dict[state] = {'stats': statistics}
+            if not len(outlier_list) == 0: 
+                regression_dict[state]['outliers'] = outlier_list
+        return regression_dict
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -245,16 +259,16 @@ class random_error(object):
         
         """Calculates sigma_delta value for each member of a time series"""
         
-        work_df = self.convert_names_and_QC()
+        work_df = self._convert_names_and_QC()
         stats_dict = self.get_regression_statistics()
         work_df.loc[np.isnan(work_df.flux), 'flux_mean'] = np.nan
         work_df['sigma_delta'] = np.nan
+        night_stats = stats_dict['night']['stats']
         work_df.loc[work_df.Fsd < self.noct_threshold, 'sigma_delta'] = (
-            work_df.flux_mean * stats_dict['night'].slope +
-            stats_dict['night'].intercept)
+            work_df.flux_mean * night_stats.slope + night_stats.intercept)
+        day_stats = stats_dict['day']['stats']
         work_df.loc[work_df.Fsd > self.noct_threshold, 'sigma_delta'] = (
-            work_df.flux_mean * stats_dict['day'].slope +
-            stats_dict['day'].intercept)
+            work_df.flux_mean * day_stats.slope + day_stats.intercept)
         if any(work_df['sigma_delta'] < 0):
             n_below = len(work_df['sigma_delta'][work_df['sigma_delta'] < 0])
             print ('Warning: approximately {0} estimates of sigma_delta have value ' 
