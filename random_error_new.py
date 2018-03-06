@@ -20,18 +20,33 @@ reload(io)
 #------------------------------------------------------------------------------
 class random_error(object):
     
+    """ 
+    Random error class
+    
+    Args:
+        * dataframe (pandas dataframe): with columns containing required data
+          (minimum of: turbulent flux, temperature, wind speed, insolation)
+    
+    Kwargs:
+        * configs_dict (dict): a dictionary containing the required 
+          configuration items (default uses OzFluxQC nomenclature and is 
+          compatible with a standard L5 dataset); example dictionary can be 
+          extracted as a method of class random_error class 
+          (random_error.get_configs_dict())
+        * num_bins (int): number of bins to use for the averaging of the errors
+        * noct_threshold (int or float): the threshold (in Wm-2 insolation) below which
+          the onset of night occurs
+        * t_threshold (int or float): the difference threshold for temperature
+        * ws_threshold (int or float): the difference threshold for wind_speed
+        * k_threshold (int or float): the difference threshold for insolation
+    """
+    
     def __init__(self, dataframe, configs_dict = False, num_bins = 50,
                  noct_threshold = 10,
                  t_threshold = 3, ws_threshold = 1, k_threshold = 35):
         
         if not configs_dict:
-            configs_dict = {'flux_name': 'Fc',
-                            'mean_flux_name': 'Fc_SOLO',
-                            'windspeed_name': 'Ws',
-                            'temperature_name': 'Ta',
-                            'insolation_name': 'Fsd',
-                            'QC_name': 'Fc_QCFlag',
-                            'QC_code': 0}
+            configs_dict = self.get_configs_dict()
         
         # Get and check the interval
         interval = int(filter(lambda x: x.isdigit(), 
@@ -53,9 +68,12 @@ class random_error(object):
 #------------------------------------------------------------------------------
 # Class methods
 #------------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------        
+        
+    #--------------------------------------------------------------------------
     def _convert_names_and_QC(self):
+        
+        """ Converts the external dataset naming convention to the internal 
+        scheme, and excludes data on the basis of QC code (if requested)"""
         
         new_names_dict = {'flux_name': 'flux',
                           'mean_flux_name': 'flux_mean',
@@ -86,9 +104,8 @@ class random_error(object):
     #--------------------------------------------------------------------------
     def get_flux_binned_sigma_delta(self):    
 
-        #----------------------------------------------------------------------
-        # Nested functions
-        #----------------------------------------------------------------------
+        """ Calculate the daily differences and bin average as a function of 
+        flux magnitude """
         
         #----------------------------------------------------------------------
         # Bin day and night data
@@ -122,12 +139,10 @@ class random_error(object):
             noct_df['quantile_label'] = pd.qcut(noct_df.flux_mean, num_cats_night, 
                                                 labels = np.arange(num_cats_night))
             noct_group_df = get_sigmas(noct_df)
-#            noct_group_df = noct_group_df.loc[noct_group_df['mean'] > 0]
     
             day_df['quantile_label'] = pd.qcut(day_df.flux_mean, num_cats_day, 
                                                labels = np.arange(num_cats_day))
             day_group_df = get_sigmas(day_df)
-#            day_group_df = day_group_df.loc[day_group_df['mean'] < 0]
 
             return day_group_df, noct_group_df
         #----------------------------------------------------------------------
@@ -167,9 +182,73 @@ class random_error(object):
         return {'day': day_df, 'night': noct_df}
     
     #-------------------------------------------------------------------------- 
+    
+    #--------------------------------------------------------------------------
+    def estimate_random_error(self):
+        
+        """ Generate single realisation of random error for time series """
+        sigma_delta_series = self.estimate_sigma_delta()
+        return pd.Series(np.random.laplace(0, sigma_delta_series / np.sqrt(2)),
+                         index = sigma_delta_series.index)
+    #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    # Do plotting
+    def estimate_sigma_delta(self):
+        
+        """Calculates sigma_delta value for each member of a time series"""
+        
+        work_df = self._convert_names_and_QC()
+        stats_dict = self.get_regression_statistics()
+        work_df.loc[np.isnan(work_df.flux), 'flux_mean'] = np.nan
+        work_df['sigma_delta'] = np.nan
+        night_stats = stats_dict['night']['stats']
+        work_df.loc[work_df.Fsd < self.noct_threshold, 'sigma_delta'] = (
+            work_df.flux_mean * night_stats.slope + night_stats.intercept)
+        day_stats = stats_dict['day']['stats']
+        work_df.loc[work_df.Fsd > self.noct_threshold, 'sigma_delta'] = (
+            work_df.flux_mean * day_stats.slope + day_stats.intercept)
+        if any(work_df['sigma_delta'] < 0):
+            n_below = len(work_df['sigma_delta'][work_df['sigma_delta'] < 0])
+            print ('Warning: approximately {0} estimates of sigma_delta have '
+                   'value less than 0 - setting to mean of all other values'
+                   .format(str(n_below)))
+            work_df.loc[work_df['sigma_delta'] < 0, 'sigma_delta'] = (
+                work_df['sigma_delta']).mean()
+        return work_df['sigma_delta']
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_configs_dict(self):
+
+        return {'flux_name': 'Fc',
+                'mean_flux_name': 'Fc_SOLO',
+                'windspeed_name': 'Ws',
+                'temperature_name': 'Ta',
+                'insolation_name': 'Fsd',
+                'QC_name': 'Fc_QCFlag',
+                'QC_code': 0}
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    # Calculate basic regression statistics
+    def get_regression_statistics(self):
+        
+        regression_dict = {}
+        data_dict = self.binned_error
+        for state in data_dict:
+            df = data_dict[state].copy()
+            regression = ols("data ~ x", data = dict(data = df['sigma_delta'], 
+                                                     x = df['mean'])).fit()
+            df = df.join(regression.outlier_test())
+            outlier_list = df.loc[df['bonf(p)'] < 0.5].index.tolist()
+            df = df.loc[df['bonf(p)'] > 0.5]
+            statistics = stats.linregress(df['mean'], df['sigma_delta'])
+            regression_dict[state] = {'stats': statistics}
+            if not len(outlier_list) == 0: 
+                regression_dict[state]['outliers'] = outlier_list
+        return regression_dict
+    #--------------------------------------------------------------------------
+
     #--------------------------------------------------------------------------
     def plot_data(self, flux_units = '\mu mol\/CO_2\/m^{-2}\/s^{-1}'):
         
@@ -231,67 +310,7 @@ class random_error(object):
         ax1.legend(loc = [0.05, 0.1], fontsize = 14)
         return fig
     #--------------------------------------------------------------------------
-    
-    #--------------------------------------------------------------------------
-    # Calculate basic regression statistics
-    def get_regression_statistics(self):
-        
-        regression_dict = {}
-        data_dict = self.binned_error
-        for state in data_dict:
-            df = data_dict[state].copy()
-            regression = ols("data ~ x", data = dict(data = df['sigma_delta'], 
-                                                     x = df['mean'])).fit()
-            df = df.join(regression.outlier_test())
-            outlier_list = df.loc[df['bonf(p)'] < 0.5].index.tolist()
-            df = df.loc[df['bonf(p)'] > 0.5]
-            statistics = stats.linregress(df['mean'], df['sigma_delta'])
-            regression_dict[state] = {'stats': statistics}
-            if not len(outlier_list) == 0: 
-                regression_dict[state]['outliers'] = outlier_list
-        return regression_dict
-    #--------------------------------------------------------------------------
 
-    #--------------------------------------------------------------------------
-    # Estimate sigma_delta for a time series using regression coefficients
-    #--------------------------------------------------------------------------
-    def estimate_sigma_delta(self):
-        
-        """Calculates sigma_delta value for each member of a time series"""
-        
-        work_df = self._convert_names_and_QC()
-        stats_dict = self.get_regression_statistics()
-        work_df.loc[np.isnan(work_df.flux), 'flux_mean'] = np.nan
-        work_df['sigma_delta'] = np.nan
-        night_stats = stats_dict['night']['stats']
-        work_df.loc[work_df.Fsd < self.noct_threshold, 'sigma_delta'] = (
-            work_df.flux_mean * night_stats.slope + night_stats.intercept)
-        day_stats = stats_dict['day']['stats']
-        work_df.loc[work_df.Fsd > self.noct_threshold, 'sigma_delta'] = (
-            work_df.flux_mean * day_stats.slope + day_stats.intercept)
-        if any(work_df['sigma_delta'] < 0):
-            n_below = len(work_df['sigma_delta'][work_df['sigma_delta'] < 0])
-            print ('Warning: approximately {0} estimates of sigma_delta have value ' 
-                   'less than 0 - setting to mean of all other values'
-                   .format(str(n_below)))
-            work_df.loc[work_df['sigma_delta'] < 0, 'sigma_delta'] = (
-                work_df['sigma_delta']).mean()
-        return work_df['sigma_delta']
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    # Generate scaled noise realisation for time series
-    #--------------------------------------------------------------------------
-    def estimate_random_error(self):
-        
-        """ Generate single realisation of random error for time series """
-        sigma_delta_series = self.estimate_sigma_delta()
-        return pd.Series(np.random.laplace(0, sigma_delta_series / np.sqrt(2)),
-                         index = sigma_delta_series.index)
-    #--------------------------------------------------------------------------
-
-    #------------------------------------------------------------------------------
-    # Propagate random error
     #--------------------------------------------------------------------------
     def propagate_random_error(self, n_trials, scaling_coefficient = 1):
         """ Run Monte Carlo-style trials to assess uncertainty due to 
@@ -317,43 +336,3 @@ class random_error(object):
                                 scaling_coefficient)
         return round(float(pd.DataFrame(results_list).std() * crit_t), 2)
     #--------------------------------------------------------------------------
-
-
-    '''
-    Calculates regression for sigma_delta on flux magnitude 
-    
-    Args:
-        * df (pandas dataframe): dataframe containing the required data, with \
-        names defined in the configuration dictionary (see below).
-        * config_dict (dictionary): dictionary for specifying naming convention \
-        for dataset passed to the function; keys must use the default names \
-        (specified below) expected by the script, and the values specify the \
-        name the relevant variable takes in the dataset; default names are as \
-        follows:\n
-            - flux_name: the turbulent flux for which to calculate random \
-            error 
-            - mean_flux_name: the flux series to use for calculating the \
-            bin average for the flux when estimating sigma_delta \
-            (since the turbulent flux already contains random error, a \
-            model series is generally recommended for this purpose)
-            - windspeed_name
-            - temperature_name
-            - insolation_name
-            - QC_name: (optional) if passed, used as a filter variable \
-            for the flux variable (if QC_code is not present, this is \
-            ignored, and no warning or error is raised)
-            - QC_code: (optional, int) if passed, all flux records that \
-            coincide with the occurrence of this code in the QC variable \
-            are retained, and all others set to NaN
-    Kwargs:
-        * return_data (bool): if True attaches bin averaged flux and \
-        sigma_delta estimates to the returned results dictionary
-        * return_plot (bool): if True attaches plot of sigma_delta as a \
-        function of flux magnitude to the returned results dictionary
-        * t_threshold (int): user-set temperature difference threshold \
-        default = 3superscriptoC)
-        * ws_threshold (int): user-set wind speed difference threshold \
-        (default = 1m s\^{-1})
-        * k_threshold (int): user set insolation difference threshold \
-        (default = 35Wm-2)
-    '''
