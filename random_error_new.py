@@ -104,8 +104,15 @@ class random_error(object):
     #--------------------------------------------------------------------------
     def get_flux_binned_sigma_delta(self):    
 
-        """ Calculate the daily differences and bin average as a function of 
-        flux magnitude """
+        """
+        Calculate the daily differences and bin average as a function of 
+        flux magnitude
+        
+        Returns:
+            * Dictionary containing keys of 'night' and 'day', each of which
+              contains a pandas dataframe with estimates of binned mean flux
+              and corresponding sigma_delta estimate.
+        """
         
         #----------------------------------------------------------------------
         # Bin day and night data
@@ -187,6 +194,7 @@ class random_error(object):
     def estimate_random_error(self):
         
         """ Generate single realisation of random error for time series """
+        
         sigma_delta_series = self.estimate_sigma_delta()
         return pd.Series(np.random.laplace(0, sigma_delta_series / np.sqrt(2)),
                          index = sigma_delta_series.index)
@@ -313,6 +321,7 @@ class random_error(object):
 
     #--------------------------------------------------------------------------
     def propagate_random_error(self, n_trials, scaling_coefficient = 1):
+        
         """ Run Monte Carlo-style trials to assess uncertainty due to 
         random error over entire dataset
         
