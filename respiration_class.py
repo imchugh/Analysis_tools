@@ -25,15 +25,15 @@ class respiration(object):
           radiation and CO2 flux.
     Kwargs:
         * names_dict (dict): maps the variable names used in the dataset to 
-          common names (air_temperature, 'soil_temperature', 'insolation',
-          Cflux); if None, defaults to the internal specification, which works
-          for PyFluxPro
+          common names (keys must be 'air_temperature', 'soil_temperature', 
+          'insolation', 'Cflux'); if None, defaults to the internal 
+          specification, which works for PyFluxPro.
         * weighting (str, int or float): if str, must be either 'air' or 'soil',
           which determines which temperature series is used for the fit; if 
           int or float is supplied, the number is used as a ratio for weighting
           the air and soil series - note that the ratio is air: soil, such that
           e.g. choice of 3 would cause weighting of 3:1 in favour of air 
-          temperature, or e.g. float(1/3) would result in the reverse
+          temperature, or e.g. float(1/3) would result in the reverse.
     """
     def __init__(self, dataframe, names_dict = None, weighting = 'air'):
         
@@ -103,16 +103,17 @@ class respiration(object):
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def estimate_rb(self, window_size = 4, window_step = 4):
+    def estimate_rb(self, window_size = 4, window_step = 4, Eo = None):
         
         out_df = pd.DataFrame(index = self.make_date_iterator
                               (size = window_size, 
                                step = window_step))
-        try:
-            Eo = self.estimate_Eo()
-        except RuntimeError:
-            print 'Could not find any valid values of Eo'
-            return
+        if not Eo:
+            try:
+                Eo = self.estimate_Eo()
+            except RuntimeError:
+                print 'Could not find any valid values of Eo'
+                return
         out_df['Eo'] = Eo
         out_df['rb'] = np.nan
         for date in out_df.index:
@@ -148,7 +149,6 @@ class respiration(object):
             resp_series = resp_series.append(_LT_Eo_long(t_series = t_series, 
                                                          Eo = Eo, rb = rb))
         return resp_series
-
     #--------------------------------------------------------------------------
     
     #--------------------------------------------------------------------------
