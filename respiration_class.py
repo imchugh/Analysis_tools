@@ -1,173 +1,173 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-Created on Wed Jan 18 08:21:07 2017
+Created on Thu Mar 15 13:53:16 2018
 
 @author: ian
 """
+
+import datetime as dt
+from lmfit import Model
 import numpy as np
-import pdb
-from scipy. optimize import curve_fit
-import matplotlib.pyplot as plt
+import pandas as pd
 
-class ER(object):
-
-    def __init__(self, T, ER, sws = None):
-        self.T = T
-        self.ER = ER
-        self.sws = sws
-        
-        if sws is None:
-            self.drivers = np.reshape(T, [len(T), 1])
-        else:
-            self.drivers = np.column_stack([T, sws])            
-       
-    def get_ER(self, drivers, *params):
-        try:
-            T_response = params[0]  * np.exp(params[1] * (1 / (10 + 46.02) - 
-                                             1 / (drivers[:, 0] + 46.02)))
-        except:
-            pdb.set_trace()
-        if drivers.shape[1] == 1:
-            return T_response
-        else:
-            return T_response * (1 / (1 + np.exp(params[2] - params[3] *
-                                                 drivers[:, 1])))
-
-    def get_fit(self, rb = None, Eo = None, theta_1 = None, theta_2 = None):
-        
-        # Check if sws is a valid attribute of class instance - if None, set
-        # truncating index accordingly; if theta parameters have been passed,
-        # warn the user and then ignore
-        if self.sws is None:
-            index = -2
-            if not theta_1 == None and theta_2 == None:
-                print ('Theta parameters can only be passed to '
-                       'fitting function of a class instance '
-                       'containing Series Sws... ignoring theta parameters!')
-        else:
-            index = None
-
-        # Set up lists for string construction to be passed into function 
-        # string for evaluation
-        passed_list = ['rb', 'Eo', 'theta_1', 'theta_2'][:index]
-        fitted_list = ['a', 'b', 'c', 'd'][:index]
-        init_est_list = [1, 100, 1, 10][:index]
-        boolean_list = [i == None for i in [rb, Eo, theta_1, theta_2]][:index]
-        
-        # Make strings including function string
-        sub_fitted_str = ','.join([fitted_list[i] for i, d 
-                                   in enumerate(boolean_list) if d])
-        all_str = ','.join([fitted_list[i] if d else passed_list[i] for i, d  
-                            in enumerate(boolean_list)])
-        func_str = ('lambda x, {0}, self = self: self.get_ER(x, {1})'
-                    .format(sub_fitted_str, all_str))
-
-        # Make list of prior estimates for curve_fit
-        p0_list = [init_est_list[i] for i, d in enumerate(boolean_list) if d]
-
-        # Make function by evaluating string (find another way before this goes
-        # public!!!)      
-        func = eval(func_str)
-
-        # Now fit
-        try:
-            params, cov = curve_fit(func, self.drivers, self.ER, p0 = p0_list)
-            error_state = 0
-        except RuntimeError:
-            params = [np.nan] * len(sub_fitted_str)
-            cov = None
-            error_state = 1
-        
-        results_d = {'parameters': params,
-                     'covariance_matrix': cov,
-                     'error_state': error_state}
-        
-        return results_d
-
-    def get_series(self):
-        
-        results_dict = self.get_fit()
-        return self.get_ER(self.drivers, results_dict['parameters'][0], 
-                                             results_dict['parameters'][1])
-        
-    def plot_respiration(self, title_str):
-        
-        if not self.sws is None:
-            
-            print 'Watch this space! Going to make a 3D contour plot!'
-            return
-        
-        x = self.drivers[:, 0]
-        y1 = self.ER
-        y2 = self.get_series()
-        
-        # Plot
-        fig = plt.figure(figsize = (12,8))
-        fig.patch.set_facecolor('white')
-        ax = plt.gca()
-        ax.plot(x, y1, 'o' , markerfacecolor = 'none',
-                 markeredgecolor = 'black', label = 'NEE_obs', color = 'black')
-        ax.plot(x, y2, linestyle = ':', color = 'black', 
-                 label = 'NEE_est')
-        ax.set_title(title_str)
-        ax.set_xlabel('$Temperature\/(^oC)$', fontsize = 18)
-        ax.set_ylabel('$NEE\/(\mu mol C\/m^{-2}\/s^{-1}$)', fontsize = 18)
-        ax.axhline(y = 0, color = 'black')
-        ax.xaxis.set_ticks_position('bottom')
-        ax.yaxis.set_ticks_position('left')
-        ax.spines['right'].set_visible(False)
-        ax.spines['top'].set_visible(False)
-        
-        return fig
-        
-# Set parameters    
-Eo = 200
-rb = 2.5
-theta_1 = 3 
-theta_2 = 30
-
-# Make some fake data
-temp = np.linspace(0, 30, 100)
-vwc = np.linspace(0.5, 0.1, 100)
-vwc_func = 1 / (1 + np.exp(theta_1 - theta_2 * vwc))
-est_resp = (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02))) +
-            np.random.randn(100))
-
-est_resp_H2O = (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (temp + 46.02))) +
-                np.random.randn(100)) * vwc_func            
-            
-# Instantiate class without soil moisture
-this_ER = ER(temp, est_resp)
-
-# Get the results dictionary
-params_dict = this_ER.get_fit()
-
-# Instantiate class with soil moisture
-wt_ER = ER(temp, est_resp_H2O, vwc)
-
-this_dict = wt_ER.get_fit()
 #------------------------------------------------------------------------------
-#fig = plt.figure()
-#ax = fig.gca(projection='3d')
-#
-## Make data.
-#x = temp
-#y = vwc
-#X, Y = np.meshgrid(x, y)
-#Z = (rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (X + 46.02))) +
-#     np.random.randn(100)) * 1 / (1 + np.exp(theta_1 - theta_2 * Y))  
-#
-## Plot the surface.
-#surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm,
-#                       linewidth=0, antialiased=False)
-#
-## Customize the z axis.
-##ax.set_zlim(-1.01, 1.01)
-##ax.zaxis.set_major_locator(LinearLocator(10))
-##ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
-#
-## Add a color bar which maps values to colors.
-#fig.colorbar(surf, shrink=0.5, aspect=5)
-#
-#plt.show()
+# Init
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+class respiration_reichstein(object):
+    
+    def __init__(self, dataframe, names_dict = None, weighting = 'air'):
+        
+        df = dataframe.copy()
+        if not names_dict: names_dict = self.get_default_external_names()
+        self.df = self._rewrite_dataframe_for_internal(df, names_dict, 
+                                                       weighting)
+        
+        interval = int(filter(lambda x: x.isdigit(), 
+                              pd.infer_freq(dataframe.index)))
+        assert interval % 30 == 0
+        self.interval = interval
+#------------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    # Methods
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def get_subset(self, date, size):
+        
+        noct_threshold = 10
+        ref_date = date + dt.timedelta(0.5)
+        date_tuple = (ref_date - dt.timedelta(size / 2.0 - 
+                                              self.interval / 1440.0),
+                      ref_date + dt.timedelta(size / 2.0))
+        sub_df = self.df.loc[date_tuple[0]: date_tuple[1], 
+                             ['NEE', 'Fsd', 'TC']].dropna()
+        return sub_df.loc[sub_df.Fsd < noct_threshold].drop('Fsd', axis = 1)
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def make_date_iterator(self, size, step):
+        
+        start_date = (self.df.index[0].to_pydatetime().date() + 
+                      dt.timedelta(size / 2))
+        end_date = self.df.index[-1].to_pydatetime().date()
+        return pd.date_range(start_date, end_date, 
+                             freq = '{}D'.format(str(step)))
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def estimate_Eo(self, window_size = 15, window_step = 5):
+        
+        Eo_list = []
+        date_list = self.make_date_iterator(size = window_size, 
+                                            step = window_step)
+        for date in date_list:
+            df = self.get_subset(date, size = window_size)
+            if not len(df) > 6: continue
+            model = Model(_LT_Eo_long, independent_vars = ['t_series'])
+            params = model.make_params(rb = 1, Eo = 100)
+            result = model.fit(df.NEE,
+                               t_series = df.TC,
+                               params = params)
+            if not 50 < result.params['Eo'].value < 400: continue
+            se = (result.conf_interval()['Eo'][4][1] - 
+                  result.conf_interval()['Eo'][2][1]) / 2
+            if se > result.params['Eo'].value / 2.0: continue
+            Eo_list.append([result.params['Eo'].value, se])
+        print ('Found {} valid estimates of Eo'.format(str(len(Eo_list))))
+        if len(Eo_list) == 0: raise RuntimeError
+        Eo_array = np.array(Eo_list)
+        Eo = sum(Eo_array[:, 0] * Eo_array[:, 1]) / sum(Eo_array[:, 1])
+        if not 50 < Eo < 400: raise RuntimeError
+        return Eo
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def estimate_rb(self, window_size = 4, window_step = 4):
+        
+        out_df = pd.DataFrame(index = self.make_date_iterator
+                              (size = window_size, 
+                               step = window_step))
+        try:
+            Eo = self.estimate_Eo()
+        except RuntimeError:
+            print 'Could not find any valid values of Eo'
+            return
+        out_df['Eo'] = Eo
+        out_df['rb'] = np.nan
+        for date in out_df.index:
+            df = self.get_subset(date, size = window_size)
+            if not len(df) > 0: continue
+            test = _LT_Eo_long
+            model = Model(test, independent_vars = ['t_series'])
+            params = model.make_params(rb = 1, Eo = Eo)
+            params['Eo'].vary = False
+            result = model.fit(df.NEE,
+                               t_series = df.TC, 
+                               params = params)
+            if result.params['rb'].value < 0: continue
+            out_df.loc[date, 'rb'] = result.params['rb'].value
+        out_df = out_df.resample('D').interpolate()
+        out_df = out_df.reindex(np.unique(self.df.index.date))
+        out_df.fillna(method = 'bfill', inplace = True)
+        out_df.fillna(method = 'ffill', inplace = True)
+        return out_df
+    #--------------------------------------------------------------------------            
+    
+    #--------------------------------------------------------------------------
+    def estimate_er(self, params_df = False):
+        
+        if not isinstance(params_df, pd.core.frame.DataFrame):
+            params_df = self.estimate_rb()
+        resp_series = pd.Series()
+        for date in params_df.index:
+            Eo = params_df.loc[date, 'Eo']
+            rb = params_df.loc[date, 'rb']
+            str_date = dt.datetime.strftime(date, '%Y-%m-%d')
+            t_series = self.df.loc[str_date, 'TC']
+            resp_series = resp_series.append(_LT_Eo_long(t_series = t_series, 
+                                                         Eo = Eo, rb = rb))
+        return resp_series
+
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def get_default_external_names(self):
+
+        return {'Cflux': 'Fc',
+                'air_temperature': 'Ta',
+                'soil_temperature': 'Ts',
+                'insolation': 'Fsd'}
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _rewrite_dataframe_for_internal(self, df, external_names, weighting):
+
+        internal_names = {'Cflux': 'NEE',
+                          'air_temperature': 'Ta',
+                          'soil_temperature': 'Ts',
+                          'insolation': 'Fsd'}
+        
+        swap_dict = {external_names[key]: internal_names[key] 
+                     for key in internal_names.keys()}
+        sub_df = df[swap_dict.keys()]
+        sub_df.columns = swap_dict.values()
+        
+        if weighting == 'air':
+            s = sub_df[internal_names['air_temperature']].copy()
+        elif weighting == 'soil':
+            s = sub_df[internal_names['soil_temperature']].copy()
+        elif isinstance(weighting, (int, float)):
+            s = ((sub_df['Ta'] * weighting + sub_df['Ts']) / (weighting + 1))
+        s.name = 'TC'
+        return sub_df.join(s)
+    #--------------------------------------------------------------------------
+    
+#------------------------------------------------------------------------------
+def _LT_Eo_long(t_series, rb, Eo):
+
+    return rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (t_series + 46.02)))
+#------------------------------------------------------------------------------
