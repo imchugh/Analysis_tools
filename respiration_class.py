@@ -16,8 +16,25 @@ import pandas as pd
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-class respiration_reichstein(object):
+class respiration(object):
+    """
+    Class for fitting of respiration parameters and estimation of respiration
     
+    Args:
+        * dataframe (pd.dataframe): containing a minimum of temperature, solar 
+          radiation and CO2 flux.
+    Kwargs:
+        * names_dict (dict): maps the variable names used in the dataset to 
+          common names (air_temperature, 'soil_temperature', 'insolation',
+          Cflux); if None, defaults to the internal specification, which works
+          for PyFluxPro
+        * weighting (str, int or float): if str, must be either 'air' or 'soil',
+          which determines which temperature series is used for the fit; if 
+          int or float is supplied, the number is used as a ratio for weighting
+          the air and soil series - note that the ratio is air: soil, such that
+          e.g. choice of 3 would cause weighting of 3:1 in favour of air 
+          temperature, or e.g. float(1/3) would result in the reverse
+    """
     def __init__(self, dataframe, names_dict = None, weighting = 'air'):
         
         df = dataframe.copy()
