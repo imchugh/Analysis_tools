@@ -9,19 +9,19 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-class model_error(object):
-    
-    def __init__(self, dataframe):
-
-        interval = int(filter(lambda x: x.isdigit(), 
-                              pd.infer_freq(dataframe.index)))
-        assert interval % 30 == 0
-        self.interval = interval
-        self.df = dataframe
-
-    def est_model_error(self, noct_threshold = 10):
-        
-        
+#class model_error(object):
+#    
+#    def __init__(self, dataframe):
+#
+#        interval = int(filter(lambda x: x.isdigit(), 
+#                              pd.infer_freq(dataframe.index)))
+#        assert interval % 30 == 0
+#        self.interval = interval
+#        self.df = dataframe
+#
+#    def est_model_error(self, noct_threshold = 10):
+#        
+#        
 
 
 def estimate_model_error(data_dict, configs_dict):
