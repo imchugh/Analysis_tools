@@ -83,7 +83,6 @@ class respiration(object):
         date_list = self.make_date_iterator(size = window_size, 
                                             step = window_step)
         for date in date_list:
-            print date
             df = self.get_subset(date, size = window_size)
             if not len(df) > 6: continue
             model = Model(_LT_Eo_long, independent_vars = ['t_series'])
@@ -99,7 +98,8 @@ class respiration(object):
         print ('Found {} valid estimates of Eo'.format(str(len(Eo_list))))
         if len(Eo_list) == 0: raise RuntimeError
         Eo_array = np.array(Eo_list)
-        Eo = sum(Eo_array[:, 0] / Eo_array[:, 1]) * sum(Eo_array[:, 1])
+        Eo = ((Eo_array[:, 0] / (Eo_array[:, 1])).sum() / 
+              (1 / Eo_array[:, 1]).sum())
         if not 50 < Eo < 400: raise RuntimeError
         return Eo
     #--------------------------------------------------------------------------
