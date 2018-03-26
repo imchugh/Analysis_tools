@@ -50,6 +50,7 @@ def get_MODIS_subset(lat, lon, product, data_band, QC_band,
             data = client.service.getsubset(lat, lon, product, data_band, 
                                             date, date, 
                                             0, 0)
+            print 'Successfully retrieved data for {}'.format(date)
         except Exception, e:
             print 'ORNL DAAC Server error with the following message: '
             print e[0]

@@ -10,7 +10,8 @@ import datetime as dt
 from lmfit import Model
 import numpy as np
 import pandas as pd
-import pdb
+
+import utils
 
 #------------------------------------------------------------------------------
 # Init
@@ -37,16 +38,19 @@ class respiration(object):
           temperature, or e.g. float(1/3) would result in the reverse.
     """
     def __init__(self, dataframe, names_dict = None, weighting = 'air'):
-        
-        df = dataframe.copy()
-        if not names_dict: names_dict = self.get_default_external_names()
-        self.df = self._rewrite_dataframe_for_internal(df, names_dict, 
-                                                       weighting)
-        
+
         interval = int(filter(lambda x: x.isdigit(), 
                               pd.infer_freq(dataframe.index)))
         assert interval % 30 == 0
         self.interval = interval
+        
+        if not names_dict: 
+            self.external_names = self._define_default_external_names()
+        else:
+            self.external_names = names_dict
+        self.internal_names = self._define_default_internal_names()
+
+        self.df = self._make_formatted_df(dataframe, weighting)
 #------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -154,7 +158,16 @@ class respiration(object):
     #--------------------------------------------------------------------------
     
     #--------------------------------------------------------------------------
-    def get_default_external_names(self):
+    def _define_default_internal_names(self):
+
+        return {'Cflux': 'NEE',
+                'air_temperature': 'Ta',
+                'soil_temperature': 'Ts',
+                'insolation': 'Fsd'}
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _define_default_external_names(self):
 
         return {'Cflux': 'Fc',
                 'air_temperature': 'Ta',
@@ -163,22 +176,14 @@ class respiration(object):
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _rewrite_dataframe_for_internal(self, df, external_names, weighting):
-
-        internal_names = {'Cflux': 'NEE',
-                          'air_temperature': 'Ta',
-                          'soil_temperature': 'Ts',
-                          'insolation': 'Fsd'}
+    def _make_formatted_df(self, df, weighting):
         
-        swap_dict = {external_names[key]: internal_names[key] 
-                     for key in internal_names.keys()}
-        sub_df = df[swap_dict.keys()]
-        sub_df.columns = swap_dict.values()
-        
+        sub_df = utils.rename_df(df, self.external_names,
+                                 self.internal_names)
         if weighting == 'air':
-            s = sub_df[internal_names['air_temperature']].copy()
+            s = sub_df['Ta'].copy()
         elif weighting == 'soil':
-            s = sub_df[internal_names['soil_temperature']].copy()
+            s = sub_df['Ts'].copy()
         elif isinstance(weighting, (int, float)):
             s = ((sub_df['Ta'] * weighting + sub_df['Ts']) / (weighting + 1))
         s.name = 'TC'
