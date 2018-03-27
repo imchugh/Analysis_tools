@@ -4,7 +4,6 @@ Created on Mon Aug 17 14:37:38 2015
 
 @author: imchugh
 """
-import pdb
 import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 import numpy as np
