@@ -228,8 +228,8 @@ class random_error(object):
     #--------------------------------------------------------------------------
     def get_configs_dict(self):
 
-        return {'flux_name': 'Fc',
                 'mean_flux_name': 'Fc_SOLO',
+        return {'flux_name': 'Fc',
                 'windspeed_name': 'Ws',
                 'temperature_name': 'Ta',
                 'insolation_name': 'Fsd',

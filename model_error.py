@@ -5,26 +5,54 @@ Created on Mon Aug 17 14:37:38 2015
 @author: imchugh
 """
 import pdb
+import matplotlib.mlab as mlab
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 import utils
+reload(utils)
 
 class model_error(object):
     
-    def __init__(self, dataframe):
+    def __init__(self, dataframe, scaling_coefficient = 1, minimum_pct = 20, 
+                 names_dict = None):
 
-        interval = int(filter(lambda x: x.isdigit(), 
-                              pd.infer_freq(dataframe.index)))
-        assert interval % 30 == 0
-        self.interval = interval
-        self.df = dataframe
+        if names_dict:
+            self.external_names = names_dict
+        else:
+            self.external_names = self._define_default_external_names()
+        self.internal_names = self._define_default_internal_names()
+        self.df = utils.rename_df(dataframe, self.external_names, 
+                                  self.internal_names)
+        self.scaling_coefficient = scaling_coefficient
+        self.minimum_pct = minimum_pct
+        self._get_stats_and_qc()
 
-    def est_model_error(self, noct_threshold = 10):
+    #--------------------------------------------------------------------------
+    def best_estimate(self):
         
-        pass
+        return (self.df.Observations.where(~np.isnan(self.df.Observations), 
+                                      self.df.Model).sum() *
+                self.interval * 60 * self.scaling_coefficient)
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def estimate_model_error(self, subsample_n = 1000, noct_threshold = 10):
         
+        sub_df = self.df.dropna()
+        retain_obs_n = int(self.pct_available / 100 * subsample_n)
+        random_index = np.random.randint(0, len(sub_df), subsample_n)
+        temp_df = sub_df.iloc[random_index]
+        observational_sum = (temp_df.Observations.sum() * self.interval * 60 *
+                             self.scaling_coefficient)
+        spliced_sum = (pd.concat([temp_df['Observations'].iloc[: retain_obs_n], 
+                                  temp_df['Model'].iloc[retain_obs_n:]]).sum() * 
+                       self.interval * 60 * self.scaling_coefficient)
+        return (observational_sum - spliced_sum) / observational_sum * 100
+    #--------------------------------------------------------------------------    
+    
     #--------------------------------------------------------------------------
     def _define_default_internal_names(self):
 
@@ -38,52 +66,81 @@ class model_error(object):
         return {'Observations': 'Fc',
                 'Model': 'Fc_SOLO'}
     #--------------------------------------------------------------------------
-
-
-def estimate_model_error(data_dict, configs_dict):
-
-    # Create data arrays, then count all
-    obs_array = data_dict['NEE_series']
-    mod_array = data_dict['NEE_model']
-    total_records = len(obs_array)
-
-    # Rescale to gC m-2
-    for arr in [obs_array, mod_array]:
-        arr[...] = arr * configs_dict['measurement_interval'] * 60 * 12 * 10 ** -6
-
-    # Calculate annual sum for obs and model combined
-    annual_sum = np.where(np.isnan(obs_array), mod_array, obs_array).sum()
-
-    # Subset arrays to remove nans and calculate proportion remaining
-    nan_index = ~np.isnan(obs_array)
-    obs_array = obs_array[nan_index]
-    mod_array = mod_array[nan_index]
-    avail_records = len(obs_array)
     
-    # Get the amount of data that will be removed from the sample (based on the 
-    # proportion missing from the complete dataset)
-    sample_missing = 1000 - int(1000 * (avail_records / float(total_records)))
-    
-    # Draw a random sample of 1000 data from the timeseries, then calculate the
-    # difference between the observed and model-spliced series (appropriately 
-    # scaled to gC m-2)
-    random_index = np.random.randint(0, len(obs_array), 1000)
-    subset_obs_array = obs_array[random_index]
-    subset_mod_array = mod_array[random_index]
-    subset_splice_array = np.concatenate([subset_mod_array[:sample_missing],
-                                          subset_obs_array[sample_missing:]])
-    obs_sum = subset_obs_array.sum()
-    splice_sum = subset_splice_array.sum()
-    return (obs_sum - splice_sum) / obs_sum * annual_sum
-
-def propagate_model_error(data_dict, configs_dict):
-
-    # Calculate critical t-statistic for p = 0.095
-    crit_t = stats.t.isf(0.025, configs_dict['num_trials'])
-
-    # Create arrayn to hold results then iterate over num_trials
-    error_array = np.empty(configs_dict['num_trials'])        
-    for this_trial in xrange(configs_dict['num_trials']):
-        error_array[this_trial] = estimate_model_error(data_dict, configs_dict)
+    #--------------------------------------------------------------------------
+    def _get_stats_and_qc(self):
         
-    return np.round(error_array.std() * crit_t, 2)    
+        interval = int(filter(lambda x: x.isdigit(), 
+                              pd.infer_freq(self.df.index)))
+        if not interval % 30 == 0:
+            raise RuntimeError('Dataset datetime index is non-contiguous - '
+                               'exiting')
+        df_length = len(self.df)
+        model_length = len(self.df.loc[pd.isnull(self.df.Model) == 0])
+        obs_length = len(self.df.loc[pd.isnull(self.df.Observations) == 0])
+        pct_available = obs_length / float(df_length) * 100
+        if model_length != df_length:
+            raise RuntimeError('{} missing values in model series... aborting'
+                               .format(str(df_length - model_length)))
+        if pct_available < self.minimum_pct:
+            raise RuntimeError('Insufficient data to proceed (minimum % '
+                               'set to {0}, encountered only {1}%)... '
+                               'returning'
+                               .format(str(self.minimum_pct), 
+                                       round(str(pct_available), 1)))
+        self.interval = interval
+        self.pct_available = pct_available
+        return
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def propagate_model_error(self, n_trials = 1000, return_trials = False):
+        
+        crit_t = stats.t.isf(0.025, n_trials)
+        error_list = []
+        for this_trial in xrange(n_trials):
+            error_list.append(self.estimate_model_error())
+        if not return_trials:
+            np.array(error_list).std() * crit_t
+        else:
+            return np.array(error_list).std() * crit_t, error_list
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def plot_pdf(self, n_trials = 1000, 
+                 units = '$Uncertainty\/(gC\/m^{-2}\/a^{-1})$'):
+        
+        pct_error, trials = self.propagate_model_error(n_trials = n_trials,
+                                                       return_trials = True)
+        summed_estimate = self.best_estimate()
+        trials = np.array(trials) / 100 * summed_estimate + summed_estimate
+
+        x_lo = summed_estimate - stats.norm.ppf(.999) * trials.std()
+        x_hi = summed_estimate + stats.norm.ppf(.999) * trials.std()
+        x = np.linspace(x_lo, x_hi, 100)
+        mu = summed_estimate
+        sig = trials.std()
+        y = mlab.normpdf(x, mu, sig) 
+        crit_t = stats.t.isf(0.025, len(trials))
+
+        fig, ax = plt.subplots(1, figsize = (12, 8))
+        x_min = x_lo - abs(x_lo * 0.025)
+        x_max = x_hi + abs(x_hi * 0.025)
+        ax.set_xlim([x_min, x_max])
+        ax.set_xlabel(units, fontsize = 16)
+        ax.set_ylabel('Relative frequency', fontsize = 16)
+        ax.tick_params(axis = 'x', labelsize = 14)
+        ax.tick_params(axis = 'y', labelsize = 14)
+        ax.yaxis.set_ticks_position('left')
+        ax.xaxis.set_ticks_position('bottom')    
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.hist(trials, bins = 100, normed = True)
+        ax.plot(x, y, color = 'red', linewidth = 2.5, label = 'Gaussian PDF')
+        ax.axvline(mu, color = 'black', lw = 0.75)
+        ax.axvline(mu - sig * crit_t, color = 'black', ls = '-.', lw = 0.75)
+        ax.axvline(mu + sig * crit_t, color = 'black', ls = '-.', lw = 0.75)
+        ax.text(0.05, 0.9, 
+                '$\mu\/=\/{0}$\n$\sigma\/=\/{1}$'.format
+                (str(round(mu, 1)), str(round(sig, 1))),
+                transform = ax.transAxes, fontsize = 14)
