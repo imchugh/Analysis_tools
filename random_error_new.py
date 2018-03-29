@@ -13,6 +13,7 @@ from scipy import stats
 from statsmodels.formula.api import ols
 
 import DataIO as io
+import utils
 reload(io)
 
 #------------------------------------------------------------------------------
@@ -28,10 +29,9 @@ class random_error(object):
           (minimum of: turbulent flux, temperature, wind speed, insolation)
     
     Kwargs:
-        * configs_dict (dict): a dictionary containing the required 
+        * names_dict (dict): a dictionary containing the required 
           configuration items (default uses OzFluxQC nomenclature and is 
-          compatible with a standard L5 dataset); example dictionary can be 
-          extracted as a method of class random_error class 
+          compatible with a standard L5 dataset)
           (random_error.get_configs_dict())
         * num_bins (int): number of bins to use for the averaging of the errors
         * noct_threshold (int or float): the threshold (in Wm-2 insolation) below which
@@ -41,28 +41,24 @@ class random_error(object):
         * k_threshold (int or float): the difference threshold for insolation
     """
     
-    def __init__(self, dataframe, configs_dict = False, num_bins = 50,
+    def __init__(self, dataframe, names_dict = False, num_bins = 50,
                  noct_threshold = 10,
                  t_threshold = 3, ws_threshold = 1, k_threshold = 35):
         
-        if not configs_dict:
-            configs_dict = self.get_configs_dict()
-        
-        # Get and check the interval
-        interval = int(filter(lambda x: x.isdigit(), 
-                              pd.infer_freq(dataframe.index)))
-        assert interval % 30 == 0
-        recs_per_day = 1440 / interval
-        self.recs_per_day = recs_per_day
-        self.df = dataframe
-        self.configs_dict = configs_dict
+        if not names_dict: 
+            self.external_names = self._define_default_external_names()
+        else:
+            self.external_names = names_dict
+        self.internal_names = self._define_default_internal_names()
+        self.df = utils.rename_df(dataframe, self.external_names, 
+                                  self.internal_names)
+        self._QC()
         self.num_bins = num_bins
         self.noct_threshold = noct_threshold
         self.t_threshold = t_threshold
         self.ws_threshold = ws_threshold
         self.k_threshold = k_threshold
         self.binned_error = self.get_flux_binned_sigma_delta()
-
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -70,35 +66,35 @@ class random_error(object):
 #------------------------------------------------------------------------------
         
     #--------------------------------------------------------------------------
-    def _convert_names_and_QC(self):
+    def _QC(self):
         
-        """ Converts the external dataset naming convention to the internal 
-        scheme, and excludes data on the basis of QC code (if requested)"""
-        
-        new_names_dict = {'flux_name': 'flux',
-                          'mean_flux_name': 'flux_mean',
-                          'QC_name': 'QC',
-                          'windspeed_name': 'Ws',
-                          'temperature_name': 'Ta',
-                          'insolation_name': 'Fsd'}
+        interval = int(filter(lambda x: x.isdigit(), 
+                              pd.infer_freq(self.df.index)))
+        assert interval % 30 == 0
+        recs_per_day = 1440 / interval
+        self.recs_per_day = recs_per_day
 
-        internal_dict = self.configs_dict.copy()
-        try:
-            QC_code = internal_dict.pop('QC_code')
-            assert 'QC_name' in internal_dict.keys()
-        except (KeyError, AssertionError):
-            QC_code = None
-            new_names_dict.pop('QC_name')
-        old_names = [internal_dict[name] for name in 
-                     sorted(internal_dict.keys())]
-        new_names = [new_names_dict[name] for name in 
-                     sorted(new_names_dict.keys())]
-        sub_df = self.df[old_names].copy()
-        sub_df.columns = new_names
-        if not QC_code is None:
-            sub_df.loc[sub_df.QC != QC_code, 'flux'] = np.nan
-            sub_df.drop('QC', axis = 1, inplace = True)
-        return sub_df
+        return
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _define_default_external_names(self):
+              
+        return {'flux_name': 'Fc',
+                'mean_flux_name': 'Fc_SOLO',
+                'windspeed_name': 'Ws',
+                'temperature_name': 'Ta',
+                'insolation_name': 'Fsd'}
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _define_default_internal_names(self):
+
+        return {'flux_name': 'flux',
+                'mean_flux_name': 'flux_mean',
+                'windspeed_name': 'Ws',
+                'temperature_name': 'Ta',
+                'insolation_name': 'Fsd'}
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -156,15 +152,15 @@ class random_error(object):
 
         #----------------------------------------------------------------------    
         def difference_time_series():
-            diff_df = pd.DataFrame(index = work_df.index)
+            diff_df = pd.DataFrame(index = self.df.index)
             for var in ['flux', 'Ta', 'Fsd', 'Ws']:
                 var_name = var + '_diff'
-                temp = work_df[var] - work_df[var].shift(self.recs_per_day) 
+                temp = self.df[var] - self.df[var].shift(self.recs_per_day) 
                 diff_df[var_name] = temp if var == 'flux' else abs(temp)
-            diff_df['flux_mean'] = (work_df['flux_mean'] + work_df['flux_mean']
+            diff_df['flux_mean'] = (self.df['flux_mean'] + self.df['flux_mean']
                                     .shift(self.recs_per_day)) / 2
-            diff_df['Fsd_mean'] = (work_df['Fsd'] + 
-                                   work_df['Fsd'].shift(self.recs_per_day)) / 2
+            diff_df['Fsd_mean'] = (self.df['Fsd'] + 
+                                   self.df['Fsd'].shift(self.recs_per_day)) / 2
             return diff_df
         #----------------------------------------------------------------------
         
@@ -182,7 +178,6 @@ class random_error(object):
         # Main routine
         #----------------------------------------------------------------------
 
-        work_df = self._convert_names_and_QC()
         diff_df = difference_time_series()
         filter_df = filter_time_series()
         day_df, noct_df = bin_time_series()
@@ -205,7 +200,7 @@ class random_error(object):
         
         """Calculates sigma_delta value for each member of a time series"""
         
-        work_df = self._convert_names_and_QC()
+        work_df = self.df.copy()
         stats_dict = self.get_regression_statistics()
         work_df.loc[np.isnan(work_df.flux), 'flux_mean'] = np.nan
         work_df['sigma_delta'] = np.nan
@@ -226,23 +221,11 @@ class random_error(object):
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def get_configs_dict(self):
-
-                'mean_flux_name': 'Fc_SOLO',
-        return {'flux_name': 'Fc',
-                'windspeed_name': 'Ws',
-                'temperature_name': 'Ta',
-                'insolation_name': 'Fsd',
-                'QC_name': 'Fc_QCFlag',
-                'QC_code': 0}
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
     # Calculate basic regression statistics
     def get_regression_statistics(self):
         
         regression_dict = {}
-        data_dict = self.binned_error
+        data_dict = self.get_flux_binned_sigma_delta()
         for state in data_dict:
             df = data_dict[state].copy()
             regression = ols("data ~ x", data = dict(data = df['sigma_delta'], 

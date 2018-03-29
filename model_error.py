@@ -35,6 +35,20 @@ class model_error(object):
         return (self.df.Observations.where(~np.isnan(self.df.Observations), 
                                       self.df.Model).sum() *
                 self.interval * 60 * self.scaling_coefficient)
+    #--------------------------------------------------------------------------    
+    
+    #--------------------------------------------------------------------------
+    def _define_default_external_names(self):
+
+        return {'Observations': 'Fc',
+                'Model': 'Fc_SOLO'}
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def _define_default_internal_names(self):
+
+        return {'Observations': 'Observations',
+                'Model': 'Model'}
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
@@ -50,20 +64,6 @@ class model_error(object):
                                   temp_df['Model'].iloc[retain_obs_n:]]).sum() * 
                        self.interval * 60 * self.scaling_coefficient)
         return (observational_sum - spliced_sum) / observational_sum * 100
-    #--------------------------------------------------------------------------    
-    
-    #--------------------------------------------------------------------------
-    def _define_default_internal_names(self):
-
-        return {'Observations': 'Observations',
-                'Model': 'Model'}
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def _define_default_external_names(self):
-
-        return {'Observations': 'Fc',
-                'Model': 'Fc_SOLO'}
     #--------------------------------------------------------------------------
     
     #--------------------------------------------------------------------------
@@ -91,20 +91,7 @@ class model_error(object):
         self.pct_available = pct_available
         return
     #--------------------------------------------------------------------------
-    
-    #--------------------------------------------------------------------------
-    def propagate_model_error(self, n_trials = 1000, return_trials = False):
         
-        crit_t = stats.t.isf(0.025, n_trials)
-        error_list = []
-        for this_trial in xrange(n_trials):
-            error_list.append(self.estimate_model_error())
-        if not return_trials:
-            np.array(error_list).std() * crit_t
-        else:
-            return np.array(error_list).std() * crit_t, error_list
-    #--------------------------------------------------------------------------
-    
     #--------------------------------------------------------------------------
     def plot_pdf(self, n_trials = 1000, 
                  units = '$Uncertainty\/(gC\/m^{-2}\/a^{-1})$'):
@@ -143,3 +130,16 @@ class model_error(object):
                 '$\mu\/=\/{0}$\n$\sigma\/=\/{1}$'.format
                 (str(round(mu, 1)), str(round(sig, 1))),
                 transform = ax.transAxes, fontsize = 14)
+
+    #--------------------------------------------------------------------------
+    def propagate_model_error(self, n_trials = 1000, return_trials = False):
+        
+        crit_t = stats.t.isf(0.025, n_trials)
+        error_list = []
+        for this_trial in xrange(n_trials):
+            error_list.append(self.estimate_model_error())
+        if not return_trials:
+            np.array(error_list).std() * crit_t
+        else:
+            return np.array(error_list).std() * crit_t, error_list
+    #--------------------------------------------------------------------------
