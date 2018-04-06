@@ -89,6 +89,7 @@ class respiration(object):
         for date in date_list:
             df = self.get_subset(date, size = window_size)
             if not len(df) > 6: continue
+            if not df.TC.max() - df.TC.min() >= 5: continue
             model = Model(_LT_Eo_long, independent_vars = ['t_series'])
             params = model.make_params(rb = 1, Eo = 100)
             result = model.fit(df.NEE,

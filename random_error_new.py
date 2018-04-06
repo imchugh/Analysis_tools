@@ -42,7 +42,7 @@ class random_error(object):
     """
     
     def __init__(self, dataframe, names_dict = False, num_bins = 50,
-                 noct_threshold = 10,
+                 noct_threshold = 10, scaling_coefficient = 1,
                  t_threshold = 3, ws_threshold = 1, k_threshold = 35):
         
         if not names_dict: 
@@ -55,6 +55,7 @@ class random_error(object):
         self._QC()
         self.num_bins = num_bins
         self.noct_threshold = noct_threshold
+        self.scaling_coefficient = scaling_coefficient
         self.t_threshold = t_threshold
         self.ws_threshold = ws_threshold
         self.k_threshold = k_threshold
@@ -303,7 +304,7 @@ class random_error(object):
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def propagate_random_error(self, n_trials, scaling_coefficient = 1):
+    def propagate_random_error(self, n_trials):
         
         """ Run Monte Carlo-style trials to assess uncertainty due to 
         random error over entire dataset
@@ -325,6 +326,6 @@ class random_error(object):
             results_list.append(pd.Series(np.random.laplace(0, 
                                                             sigma_delta_series / 
                                                             np.sqrt(2))).sum() *
-                                scaling_coefficient)
+                                self.scaling_coefficient)
         return round(float(pd.DataFrame(results_list).std() * crit_t), 2)
     #--------------------------------------------------------------------------

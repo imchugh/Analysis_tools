@@ -33,7 +33,7 @@ class model_error(object):
     def best_estimate(self):
         
         return (self.df.Observations.where(~np.isnan(self.df.Observations), 
-                                      self.df.Model).sum() *
+                                           self.df.Model).sum() *
                 self.interval * 60 * self.scaling_coefficient)
     #--------------------------------------------------------------------------    
     
@@ -130,6 +130,7 @@ class model_error(object):
                 '$\mu\/=\/{0}$\n$\sigma\/=\/{1}$'.format
                 (str(round(mu, 1)), str(round(sig, 1))),
                 transform = ax.transAxes, fontsize = 14)
+        return fig
 
     #--------------------------------------------------------------------------
     def propagate_model_error(self, n_trials = 1000, return_trials = False):
