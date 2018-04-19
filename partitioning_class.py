@@ -186,7 +186,7 @@ class respiration(object):
         try:
             if not len(df) > 4: 
                 raise RuntimeError('insufficient data for fit')
-            f = _rectangular_hyperbola
+            f = _NEE_model
             model = Model(f, independent_vars = ['par_series', 'vpd_series',
                                                  't_series'])
             params = model.make_params(rb = rb_prior, Eo = Eo,
@@ -230,32 +230,35 @@ class respiration(object):
         for date in params_df.index:
             params = params_df.loc[date]
             str_date = dt.datetime.strftime(date, '%Y-%m-%d')
-            t_series = self.df.loc[str_date, 'TC']
+            data = self.df.loc[str_date, 'TC']
             resp_series = resp_series.append(_Lloyd_and_Taylor
-                                             (t_series = t_series, 
+                                             (t_series = data, 
                                               Eo = params.Eo, rb = params.rb))
         return resp_series
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def estimate_gpp_by_parameters(self, params_df = False, output = 'ER'):
+    def estimate_gpp(self, params_df = False):
         
         if not isinstance(params_df, pd.core.frame.DataFrame):
-            params_df = self.nocturnal_rb()
-        nee_series = pd.Series()
+            params_df = self.get_parameters(mode = 'day')
+        gpp_series = pd.Series()
         for date in params_df.index:
             params = params_df.loc[date]
             str_date = dt.datetime.strftime(date, '%Y-%m-%d')
             data = self.df.loc[str_date, ['TC', 'Fsd', 'VPD']]
-            nee_series = nee_series.append(_rectangular_hyperbola
-                                            (t_series = data.TC, 
-                                             par_series = data.Fsd,
-                                             vpd_series = data.vpd,
-                                             Eo = params.Eo, rb = params.rb))
-        if output == 'NEE': return nee_series
-        if output == 'ER': pass
-        if output == 'GPP': 
-        return resp_series
+            gpp_series = gpp_series.append(_rectangular_hyperbola
+                                           (par_series = data.Fsd,
+                                            vpd_series = data.VPD,
+                                            alpha = params.alpha,
+                                            beta = params.beta,
+                                            k = params.k))
+        return gpp_series
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def estimate_nee(self, params_df = False):
+        return self.estimate_gpp(params_df) + self.estimate_er(params_df)
     #--------------------------------------------------------------------------
     
     #--------------------------------------------------------------------------
@@ -313,8 +316,7 @@ def _Lloyd_and_Taylor(t_series, rb, Eo):
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def _rectangular_hyperbola(par_series, vpd_series, t_series,
-                           rb, Eo, alpha, beta, k):
+def _rectangular_hyperbola(par_series, vpd_series, alpha, beta, k):
     
     beta_VPD = beta * np.exp(-k * (vpd_series - 1))
     index = vpd_series <= 1
@@ -323,10 +325,12 @@ def _rectangular_hyperbola(par_series, vpd_series, t_series,
            (alpha * par_series / beta_VPD))    
     index = par_series < 5
     GPP[index] = 0
-    Reco = _Lloyd_and_Taylor(t_series, rb, Eo)
-    return GPP + Reco    
+    return GPP
 #------------------------------------------------------------------------------
-    
+
+#------------------------------------------------------------------------------    
 def _NEE_model(par_series, vpd_series, t_series, rb, Eo, alpha, beta, k):
     
-    pass
+    return (_rectangular_hyperbola(par_series, vpd_series, alpha, beta, k) + 
+            _Lloyd_and_Taylor(t_series, rb, Eo))
+#------------------------------------------------------------------------------
