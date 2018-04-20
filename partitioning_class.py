@@ -8,6 +8,7 @@ Created on Thu Mar 15 13:53:16 2018
 
 import datetime as dt
 from lmfit import Model
+import matplotlib.pyplot as plt
 import numpy as np
 import operator
 import pandas as pd
@@ -20,7 +21,7 @@ import utils
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-class respiration(object):
+class partition(object):
     """
     Class for fitting of respiration parameters and estimation of respiration
     
@@ -53,127 +54,26 @@ class respiration(object):
         else:
             self.external_names = names_dict
         self.internal_names = self._define_default_internal_names()
-
-        self.df = self._make_formatted_df(dataframe, weighting)
-        self.fit_daytime_rb = fit_daytime_rb
-        self.noct_threshold = noct_threshold
         self.convert_to_photons = convert_to_photons
+        self.weighting = weighting
+        self.df = self._make_formatted_df(dataframe)
+        self.fit_daytime_rb = fit_daytime_rb
+        if convert_to_photons:
+            self.noct_threshold = noct_threshold * 0.46 * 4.6
+        else:
+            self.noct_threshold = noct_threshold
 #------------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
     # Methods
     #--------------------------------------------------------------------------
-    
-    #--------------------------------------------------------------------------
-    def get_subset(self, date, size, mode):
-        
-        ops = {">": operator.gt, "<": operator.lt}
-        ref_date = date + dt.timedelta(0.5)
-        date_tuple = (ref_date - dt.timedelta(size / 2.0 - 
-                                              self.interval / 1440.0),
-                      ref_date + dt.timedelta(size / 2.0))
-        sub_df = self.df.loc[date_tuple[0]: date_tuple[1], 
-                             ['NEE', 'Fsd', 'TC', 'VPD']].dropna()
-        return sub_df[ops[mode](sub_df.Fsd, self.noct_threshold)]
-    #--------------------------------------------------------------------------
-    
-    #--------------------------------------------------------------------------
-    def make_date_iterator(self, size, step):
-        
-        start_date = (self.df.index[0].to_pydatetime().date() + 
-                      dt.timedelta(size / 2))
-        end_date = self.df.index[-1].to_pydatetime().date()
-        return pd.date_range(start_date, end_date, 
-                             freq = '{}D'.format(str(step)))
-    #--------------------------------------------------------------------------
-    
-    #--------------------------------------------------------------------------
-    def estimate_Eo(self, window_size = 15, window_step = 5):
-        
-        Eo_list = []
-        for date in self.make_date_iterator(window_size, window_step):
-            df = self.get_subset(date, size = window_size, mode = '<')
-            if not len(df) > 6: continue
-            if not df.TC.max() - df.TC.min() >= 5: continue
-            f = _Lloyd_and_Taylor
-            model = Model(f, independent_vars = ['t_series'])
-            params = model.make_params(rb = 1, 
-                                       Eo = self.get_prior_parameter_estimates()['Eo'])
-            result = model.fit(df.NEE,
-                               t_series = df.TC,
-                               params = params)
-            if not 50 < result.params['Eo'].value < 400: continue
-            se = (result.conf_interval()['Eo'][4][1] - 
-                  result.conf_interval()['Eo'][2][1]) / 2
-            if se > result.params['Eo'].value / 2.0: continue
-            Eo_list.append([result.params['Eo'].value, se])
-        if len(Eo_list) == 0: raise RuntimeError('Could not find any valid '
-                                                 'estimates of Eo! Exiting...')
-        print ('Found {} valid estimates of Eo'.format(str(len(Eo_list))))
-        Eo_array = np.array(Eo_list)
-        Eo = ((Eo_array[:, 0] / (Eo_array[:, 1])).sum() / 
-              (1 / Eo_array[:, 1]).sum())
-        if not 50 < Eo < 400: raise RuntimeError('Eo value {} outside '
-                                                 'acceptable parameter range '
-                                                 '(50-400)! Exiting...'
-                                                 .format(str(round(Eo, 2))))
-        return Eo
-    #--------------------------------------------------------------------------
-        
-    #--------------------------------------------------------------------------
-    def get_parameters(self, mode, Eo = None, window_size = 4, window_step = 4):
-        
-        priors_dict = self.get_prior_parameter_estimates()
-        func = self._get_func()[mode]
-        if not Eo: Eo = self.estimate_Eo()
-        result_list, date_list = [], []
-        print 'Processing the following dates ({} mode): '.format(mode)
-        for date in self.make_date_iterator(window_size, window_step):
-            print date.date(),
-            try:
-                result_list.append(func(date, Eo, window_size, priors_dict))
-                date_list.append(date)
-                print
-            except RuntimeError, e:
-                print '- {}'.format(e)
-                continue
-        out_df = pd.DataFrame(result_list, index = date_list)
-        out_df = out_df.resample('D').interpolate()
-        out_df = out_df.reindex(np.unique(self.df.index.date))
-        out_df.fillna(method = 'bfill', inplace = True)
-        out_df.fillna(method = 'ffill', inplace = True)
-        return out_df
-    #--------------------------------------------------------------------------
-    
-    #--------------------------------------------------------------------------
-    def _get_func(self):
-        
-        return {'night': self.nocturnal_params, 'day': self.daytime_params}
-    #--------------------------------------------------------------------------
-    
-    #--------------------------------------------------------------------------
-    def nocturnal_params(self, date, Eo, window_size, priors_dict):
-        
-        df = self.get_subset(date, size = window_size, mode = '<')
-        if not len(df) > 2: raise RuntimeError
-        f = _Lloyd_and_Taylor
-        model = Model(f, independent_vars = ['t_series'])
-        params = model.make_params(rb = priors_dict['rb'], 
-                                   Eo = Eo)
-        params['Eo'].vary = False
-        result = model.fit(df.NEE,
-                           t_series = df.TC, 
-                           params = params)
-        if result.params['rb'].value < 0: raise RuntimeError
-        return result.best_values
-    #--------------------------------------------------------------------------    
 
     #--------------------------------------------------------------------------
-    def daytime_params(self, date, Eo, window_size, priors_dict):
+    def day_params(self, date, Eo, window_size, priors_dict):
         
         def model_fit(these_params):
             return model.fit(df.NEE,
-                             par_series = df.Fsd, vpd_series = df.Fsd, 
+                             par_series = df.PPFD, vpd_series = df.VPD, 
                              t_series = df.TC, params = these_params)
             
         if self.fit_daytime_rb:
@@ -182,7 +82,7 @@ class respiration(object):
             rb_prior = self.nocturnal_params(date, Eo, window_size, 
                                              priors_dict)['rb']
         beta_prior = priors_dict['beta']
-        df = self.get_subset(date, size = window_size, mode = '>')
+        df = self.get_subset(date, size = window_size, mode = 'day')
         try:
             if not len(df) > 4: 
                 raise RuntimeError('insufficient data for fit')
@@ -222,65 +122,12 @@ class respiration(object):
     #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def estimate_er(self, params_df = False):
-        
-        if not isinstance(params_df, pd.core.frame.DataFrame):
-            params_df = self.get_parameters(mode = 'night')
-        resp_series = pd.Series()
-        for date in params_df.index:
-            params = params_df.loc[date]
-            str_date = dt.datetime.strftime(date, '%Y-%m-%d')
-            data = self.df.loc[str_date, 'TC']
-            resp_series = resp_series.append(_Lloyd_and_Taylor
-                                             (t_series = data, 
-                                              Eo = params.Eo, rb = params.rb))
-        return resp_series
-    #--------------------------------------------------------------------------
-
-    #--------------------------------------------------------------------------
-    def estimate_gpp(self, params_df = False):
-        
-        if not isinstance(params_df, pd.core.frame.DataFrame):
-            params_df = self.get_parameters(mode = 'day')
-        gpp_series = pd.Series()
-        for date in params_df.index:
-            params = params_df.loc[date]
-            str_date = dt.datetime.strftime(date, '%Y-%m-%d')
-            data = self.df.loc[str_date, ['TC', 'Fsd', 'VPD']]
-            gpp_series = gpp_series.append(_rectangular_hyperbola
-                                           (par_series = data.Fsd,
-                                            vpd_series = data.VPD,
-                                            alpha = params.alpha,
-                                            beta = params.beta,
-                                            k = params.k))
-        return gpp_series
-    #--------------------------------------------------------------------------
-    
-    #--------------------------------------------------------------------------
-    def estimate_nee(self, params_df = False):
-        return self.estimate_gpp(params_df) + self.estimate_er(params_df)
-    #--------------------------------------------------------------------------
-    
-    #--------------------------------------------------------------------------
-    def get_prior_parameter_estimates(self):
-        
-        return {'rb': self.df.loc[self.df.Fsd < 10, 'NEE'].mean(),
-                'Eo': 100,
-                'alpha': -0.01,
-                'beta': (self.df.loc[self.df.Fsd > 10, 
-                                     'NEE'].quantile(0.03)-
-                          self.df.loc[self.df.Fsd > 10, 
-                                      'NEE'].quantile(0.97)),
-                'k': 0}
-    #--------------------------------------------------------------------------    
-    
-    #--------------------------------------------------------------------------
     def _define_default_internal_names(self):
 
         return {'Cflux': 'NEE',
                 'air_temperature': 'Ta',
                 'soil_temperature': 'Ts',
-                'insolation': 'Fsd',
+                'insolation': 'PPFD',
                 'vapour_pressure_deficit': 'VPD'}
     #--------------------------------------------------------------------------
 
@@ -293,23 +140,220 @@ class respiration(object):
                 'insolation': 'Fsd',
                 'vapour_pressure_deficit': 'VPD'}
     #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def estimate_Eo(self, window_size = 15, window_step = 5):
+        
+        Eo_list = []
+        for date in self.make_date_iterator(window_size, window_step):
+            df = self.get_subset(date, size = window_size, mode = 'night')
+            if not len(df) > 6: continue
+            if not df.TC.max() - df.TC.min() >= 5: continue
+            f = _Lloyd_and_Taylor
+            model = Model(f, independent_vars = ['t_series'])
+            params = model.make_params(rb = 1, 
+                                       Eo = self.prior_parameter_estimates()['Eo'])
+            result = model.fit(df.NEE,
+                               t_series = df.TC,
+                               params = params)
+            if not 50 < result.params['Eo'].value < 400: continue
+            se = (result.conf_interval()['Eo'][4][1] - 
+                  result.conf_interval()['Eo'][2][1]) / 2
+            if se > result.params['Eo'].value / 2.0: continue
+            Eo_list.append([result.params['Eo'].value, se])
+        if len(Eo_list) == 0: raise RuntimeError('Could not find any valid '
+                                                 'estimates of Eo! Exiting...')
+        print ('Found {} valid estimates of Eo'.format(str(len(Eo_list))))
+        Eo_array = np.array(Eo_list)
+        Eo = ((Eo_array[:, 0] / (Eo_array[:, 1])).sum() / 
+              (1 / Eo_array[:, 1]).sum())
+        if not 50 < Eo < 400: raise RuntimeError('Eo value {} outside '
+                                                 'acceptable parameter range '
+                                                 '(50-400)! Exiting...'
+                                                 .format(str(round(Eo, 2))))
+        return Eo
+    #--------------------------------------------------------------------------
 
     #--------------------------------------------------------------------------
-    def _make_formatted_df(self, df, weighting):
+    def estimate_er_time_series(self, params_df = False):
+        
+        if not isinstance(params_df, pd.core.frame.DataFrame):
+            params_df = self.estimate_parameters(mode = 'night')
+        resp_series = pd.Series()
+        for date in params_df.index:
+            params = params_df.loc[date]
+            str_date = dt.datetime.strftime(date, '%Y-%m-%d')
+            data = self.df.loc[str_date, 'TC']
+            resp_series = resp_series.append(_Lloyd_and_Taylor
+                                             (t_series = data, 
+                                              Eo = params.Eo, rb = params.rb))
+        return resp_series
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def estimate_gpp_time_series(self, params_df = False):
+        
+        if not isinstance(params_df, pd.core.frame.DataFrame):
+            params_df = self.estimate_parameters(mode = 'day')
+        gpp_series = pd.Series()
+        for date in params_df.index:
+            params = params_df.loc[date]
+            str_date = dt.datetime.strftime(date, '%Y-%m-%d')
+            data = self.df.loc[str_date, ['PPFD', 'VPD']]
+            gpp_series = gpp_series.append(_rectangular_hyperbola
+                                           (par_series = data.PPFD,
+                                            vpd_series = data.VPD,
+                                            alpha = params.alpha,
+                                            beta = params.beta,
+                                            k = params.k))
+        return gpp_series
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def estimate_nee_time_series(self, params_df = False):
+        return self.estimate_gpp(params_df) + self.estimate_er(params_df)
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def estimate_parameters(self, mode, Eo = None, window_size = 4, 
+                            window_step = 4):
+        
+        priors_dict = self.prior_parameter_estimates()
+        func = self._get_func()[mode]
+        if not Eo: Eo = self.estimate_Eo()
+        result_list, date_list = [], []
+        print 'Processing the following dates ({} mode): '.format(mode)
+        for date in self.make_date_iterator(window_size, window_step):
+            print date.date(),
+            try:
+                result_list.append(func(date, Eo, window_size, priors_dict))
+                date_list.append(date)
+                print
+            except RuntimeError, e:
+                print '- {}'.format(e)
+                continue
+        out_df = pd.DataFrame(result_list, index = date_list)
+        out_df = out_df.resample('D').interpolate()
+        out_df = out_df.reindex(np.unique(self.df.index.date))
+        out_df.fillna(method = 'bfill', inplace = True)
+        out_df.fillna(method = 'ffill', inplace = True)
+        return out_df
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def _get_func(self):
+        
+        return {'night': self.nocturnal_params, 'day': self.day_params}
+    #--------------------------------------------------------------------------
+
+    #--------------------------------------------------------------------------
+    def get_subset(self, date, size, mode):
+        
+        ops = {"day": operator.gt, "night": operator.lt}
+        ref_date = date + dt.timedelta(0.5)
+        date_tuple = (ref_date - dt.timedelta(size / 2.0 - 
+                                              self.interval / 1440.0),
+                      ref_date + dt.timedelta(size / 2.0))
+        sub_df = self.df.loc[date_tuple[0]: date_tuple[1], 
+                             ['NEE', 'PPFD', 'TC', 'VPD']].dropna()
+        return sub_df[ops[mode](sub_df.PPFD, self.noct_threshold)]
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def make_date_iterator(self, size, step):
+        
+        start_date = (self.df.index[0].to_pydatetime().date() + 
+                      dt.timedelta(size / 2))
+        end_date = self.df.index[-1].to_pydatetime().date()
+        return pd.date_range(start_date, end_date, 
+                             freq = '{}D'.format(str(step)))
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def _make_formatted_df(self, df):
         
         sub_df = utils.rename_df(df, self.external_names,
                                  self.internal_names)
-        if weighting == 'air':
+        if self.convert_to_photons: sub_df['PPFD'] = sub_df['PPFD'] * 0.46 * 4.6
+        if self.weighting == 'air':
             s = sub_df['Ta'].copy()
-        elif weighting == 'soil':
+        elif self.weighting == 'soil':
             s = sub_df['Ts'].copy()
-        elif isinstance(weighting, (int, float)):
-            s = ((sub_df['Ta'] * weighting + sub_df['Ts']) / (weighting + 1))
+        elif isinstance(self.weighting, (int, float)):
+            s = ((sub_df['Ta'] * self.weighting + sub_df['Ts']) / 
+                 (self.weighting + 1))
         s.name = 'TC'
         return sub_df.join(s)
     #--------------------------------------------------------------------------
     
-#--------------------------------------------------------------------------
+    #--------------------------------------------------------------------------
+    def nocturnal_params(self, date, Eo, window_size, priors_dict):
+        
+        df = self.get_subset(date, size = window_size, mode = 'night')
+        if not len(df) > 2: raise RuntimeError('insufficient data for fit')
+        f = _Lloyd_and_Taylor
+        model = Model(f, independent_vars = ['t_series'])
+        params = model.make_params(rb = priors_dict['rb'], 
+                                   Eo = Eo)
+        params['Eo'].vary = False
+        result = model.fit(df.NEE,
+                           t_series = df.TC, 
+                           params = params)
+        if result.params['rb'].value < 0: raise RuntimeError('rb parameter '
+                                                             'out of range')
+        return result.best_values
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def plot_er(self, date, window_size = 15, Eo = None):
+        
+        if not Eo: Eo = self.estimate_Eo()
+        night_rb = (self.nocturnal_params(date, Eo, window_size,
+                                          self.prior_parameter_estimates())
+                                          ['rb'])
+        day_rb = self.day_params(date, Eo, window_size, 
+                                 self.prior_parameter_estimates())['rb']
+        df = self.get_subset(date, size = window_size, mode = 'night')
+        df['TC_alt'] = np.linspace(df.TC.min(), df.TC.max(), len(df))
+        df['NEE_est_night'] = _Lloyd_and_Taylor(t_series = df.TC_alt, 
+                                                rb = night_rb, Eo = Eo)
+        df['NEE_est_day'] = _Lloyd_and_Taylor(t_series = df.TC_alt, 
+                                              rb = day_rb, Eo = Eo)
+        fig, ax = plt.subplots(1, 1, figsize = (14, 8))
+        fig.patch.set_facecolor('white')
+        ax.axhline(0, color = 'black')
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.tick_params(axis = 'y', labelsize = 14)
+        ax.tick_params(axis = 'x', labelsize = 14)
+        ax.set_xlabel('$Temperature\/(^oC)$', fontsize = 18)
+        ax.set_ylabel('$NEE\/(\mu molC\/m^{-2}\/s^{-1})$', fontsize = 18)
+        ax.plot(df.TC, df.NEE, color = 'None', marker = 'o', 
+                mfc = 'grey', mec = 'black', ms = 8, alpha = 0.5,
+                label = 'Observations')
+        ax.plot(df.TC_alt, df.NEE_est_night, color = 'black', ls = '--', 
+                label = 'Night Eo and rb')
+        ax.plot(df.TC_alt, df.NEE_est_day, color = 'black', ls = ':', 
+                label = 'Night Eo, day rb')
+        ax.legend(frameon = False)
+        return df
+    #--------------------------------------------------------------------------
+    
+    #--------------------------------------------------------------------------
+    def prior_parameter_estimates(self):
+        
+        return {'rb': self.df.loc[self.df.PPFD < self.noct_threshold, 
+                                  'NEE'].mean(),
+                'Eo': 100,
+                'alpha': -0.01,
+                'beta': (self.df.loc[self.df.PPFD > self.noct_threshold, 
+                                     'NEE'].quantile(0.03)-
+                          self.df.loc[self.df.PPFD > 10, 
+                                      'NEE'].quantile(0.97)),
+                'k': 0}
+    #--------------------------------------------------------------------------    
+    
+#------------------------------------------------------------------------------
 def _Lloyd_and_Taylor(t_series, rb, Eo):
 
     return rb  * np.exp(Eo * (1 / (10 + 46.02) - 1 / (t_series + 46.02)))
