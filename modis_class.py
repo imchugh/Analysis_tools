@@ -6,10 +6,13 @@ Created on Tue Jan 16 14:38:30 2018
 @author: ian
 """
 from suds.client import Client
-import webbrowser
+
 import datetime as dt
+import matplotlib.pyplot as plt
 import pandas as pd
+import webbrowser
 import xlrd
+
 import pdb
 
 wsdlurl = ('https://modis.ornl.gov/cgi-bin/MODIS/soapservice/'
@@ -58,6 +61,8 @@ class modis_data(object):
         else:
             bands = [self.band] + qc_band
         for i, this_band in enumerate(bands):
+            if i == 0: print 'Fetching primary data from server for dates:'
+            if i == 1: print 'Fetching QC data from server for dates:'
             data_list = []
             for date_pair in chunked_dates:
                 data = get_subset_data(self.latitude, self.longitude, 
@@ -67,9 +72,16 @@ class modis_data(object):
                                        self.subset_width_km)
                 for line in data.subset:
                     data_list.append(int(line.split(',')[-1]))
-                    if i == 0: date_list.append(str(line.split(',')[2]))                        
+                    date = str(line.split(',')[2])
+                    print '{},'.format(date[1:]),
+                    if i == 0: date_list.append(date)
+            print                      
             if i == 0:
-                data_dict[this_band] = map(lambda x: x * data.scale, data_list)
+                if not data.scale == 0: 
+                    data_dict[this_band] = map(lambda x: x * data.scale, 
+                                               data_list)
+                else:
+                    data_dict[this_band] = data_list
                 date_list = map(lambda x: dt.datetime.strptime(x, 'A%Y%j').date(),
                                 date_list)
                 self.xllcorner = data.xllcorner
@@ -83,7 +95,27 @@ class modis_data(object):
                 data_dict[this_band] = _convert_binary(data_list, self.product)
         return pd.DataFrame(data_dict, index = date_list)
     #--------------------------------------------------------------------------
-
+    def plot_data(self):
+        
+        qc_band = ','.join(get_qc_variable_band(self.product, self.band))
+        threshold = get_qc_threshold(self.product)
+        fig, ax = plt.subplots(1, 1, figsize = (14, 8))
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.tick_params(axis = 'y', labelsize = 14)
+        ax.tick_params(axis = 'x', labelsize = 14)
+        ax.set_xlabel('Date', fontsize = 14)
+        ax.set_ylabel('{0} ({1})'.format(self.band, self.units), fontsize = 14)
+        best_df = self.data.loc[self.data[qc_band] == 0]
+        ax.plot(best_df.index, best_df[self.band], marker = 'o', mfc = 'green',
+                ls = '', alpha = 0.5)
+        good_df = self.data.loc[(self.data[qc_band] > 0) &
+                                (self.data[qc_band] <= threshold)]
+        ax.plot(good_df.index, good_df[self.band], marker = 'o', mfc = 'orange',
+                ls = '', alpha = 0.5)
+        bad_df = self.data.loc[self.data[qc_band] > threshold]
+        ax.plot(bad_df.index, bad_df[self.band], marker = 'o', mfc = 'red',
+                ls = '', alpha = 0.5)
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
@@ -203,6 +235,14 @@ def get_qc_definition(product):
     lookup_key = int(filter(lambda x: x.isdigit(), product)[:2])
     idx = filter(lambda x: lookup_key in idx_dict[x], idx_dict.keys())[0]
     return qc_dict[idx]
+#------------------------------------------------------------------------------
+
+#------------------------------------------------------------------------------
+def get_qc_threshold(product):
+    
+    id_num = int(filter(lambda x: x.isdigit(), product)[:2])
+    threshold = 1 if id_num <= 13 else 3 
+    return threshold
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
