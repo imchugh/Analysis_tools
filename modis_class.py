@@ -13,11 +13,8 @@ import pandas as pd
 import webbrowser
 import xlrd
 
-import pdb
-
 wsdlurl = ('https://modis.ornl.gov/cgi-bin/MODIS/soapservice/'
            'MODIS_soapservice.wsdl')
-master_file_path = '/home/ian/Temp/site_master.xls'
 
 class modis_data(object):
     
@@ -281,7 +278,7 @@ def get_subset_data(lat, lon, product, band, start_date, end_date,
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-def get_ozflux_site_list():
+def get_ozflux_site_list(master_file_path):
     
     wb = xlrd.open_workbook(master_file_path)
     sheet = wb.sheet_by_name('Active')
